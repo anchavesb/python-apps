@@ -2,29 +2,18 @@
 
 A simple single-user web app for managing to-dos and notes with JSON file persistence, rolling backups, and WAL-based recovery. Includes a minimal JSON API and a Bootstrap-based modern UI.
 
-## Features
-- To-Dos
-  - Fields: id (UUID), title (required), description (optional), tags (dict; requires category and priority), done (bool), due_date, created_at, updated_at
-  - CRUD + mark done
-- Notes
-  - Fields: id (UUID), title (required), note (optional), tags (dict; requires category and priority), created_at, updated_at
-  - CRUD
-- Tags are string→string, required keys: category, priority
-- Priorities: low, medium, high, urgent
-- Persistence: JSON file with atomic writes and rotating backups
-- Recovery: Append-only WAL (write-ahead log) replay; auto-recovery on startup
-- Minimal JSON API
-- Modern UI with Bootstrap 5
-- Unit tests (pytest)
-
-## Quickstart
+## Quickstart (Monorepo)
 
 Requirements: Python 3.11+ recommended
 
+From the monorepo root:
+
 ```bash
-./scripts/setup.sh
-source .venv/bin/activate
-python run.py
+cd /Users/achaves/repos/personal/python-apps
+scripts/dev.sh                # sets up .venv and installs apps in editable mode
+make run-todo                 # run via console entry point (todo-app)
+# or during development
+make run-todo-dev             # run directly from source
 ```
 
 The app runs on http://localhost:5000/ by default. Configure via environment variables:
@@ -33,7 +22,23 @@ The app runs on http://localhost:5000/ by default. Configure via environment var
 - WAL_FILE (default: ./data/appdata.wal)
 - BACKUP_COUNT (default: 10)
 - PORT (default: 5000)
-- DEBUG (default: 1)
+- DEBUG (default: 0; set DEBUG=1 to enable)
+
+## Container image (GHCR)
+
+Images are built and published by CI to GitHub Container Registry when tests pass on pushes to `main` or tags.
+
+Pull and run (replace OWNER with your GitHub user/org name, lowercase):
+
+```bash
+docker pull ghcr.io/OWNER/todo:latest
+
+docker run --rm -p 5000:5000 \
+  -e PORT=5000 \
+  -e DEBUG=0 \
+  -v "$(pwd)/../../data:/app/data" \
+  ghcr.io/OWNER/todo:latest
+```
 
 ## JSON API
 
@@ -54,43 +59,37 @@ The app runs on http://localhost:5000/ by default. Configure via environment var
 
 Responses are JSON. Errors return {"error": "message"} with appropriate status.
 
-## Web UI
-- Index shows lists of to-dos and notes
-- Filter by text, category, priority, and status (for todos)
-- Create/edit forms enforce category and priority and allow additional key=value tags
-
 ## Architecture
-- app/__init__.py: Flask app factory; registers blueprints; health endpoint
-- app/config.py: configuration via env with defaults
-- app/storage.py: JsonStore handles
+- src/todo_app/__init__.py: Flask app factory; registers blueprints; health endpoint
+- src/todo_app/config.py: configuration via env with defaults
+- src/todo_app/storage.py: JsonStore handles
   - Validation of models
   - Atomic writes and backup rotation
   - WAL append and replay
-  - CRUD for todos and notes
-- app/api.py: JSON API endpoints
-- app/web.py: HTML routes and forms
-- app/templates/: Jinja templates using Bootstrap
-- app/static/: CSS
-- run.py: entrypoint to run the app
-- tests/: pytest suite
+  - CRUD for todos, notes, work items
+- src/todo_app/api.py: JSON API endpoints
+- src/todo_app/web.py: HTML routes and forms
+- src/todo_app/templates/: Jinja templates using Bootstrap
+- src/todo_app/static/: CSS
+- src/todo_app/wsgi.py: WSGI module for gunicorn
+- apps/todo/run.py: dev entrypoint to run from source
+- apps/todo/tests/: pytest suite
 
-### Persistence Details
-- Main data file: DATA_FILE
-- Backups: DATA_FILE.bak.1 .. .bak.N (N=BACKUP_COUNT)
-- WAL: line-delimited JSON entries of operations. On startup, if the main file is invalid, the app restores from latest valid backup and replays WAL; if no backup exists, it replays WAL onto an empty state.
+## Data migration from old repo (optional)
 
-## Testing
+If you had existing data in the old repository, copy it into the monorepo:
 
 ```bash
-source .venv/bin/activate
-pytest -q
+OLD=/Users/achaves/repos/personal/todo/data
+NEW=/Users/achaves/repos/personal/python-apps/data
+mkdir -p "$NEW"
+cp -v "$OLD/appdata.json" "$NEW/appdata.json"
+cp -v "$OLD/appdata.wal" "$NEW/appdata.wal" 2>/dev/null || true
+for b in "$OLD"/appdata.json.bak.*; do [ -f "$b" ] && cp -v "$b" "$NEW/"; done
 ```
 
-## Optional: Docker
-A Dockerfile can be added on request to run the app in a container.
+Alternatively, set absolute paths when running:
 
-## Notes
-- Single-user; no authentication enabled. Consider adding HTTP Basic Auth behind a reverse proxy if needed.
-- Dates
-  - due_date accepts YYYY-MM-DD or ISO string; stored as string
-  - created_at/updated_at stored as UTC ISO (YYYY-MM-DDTHH:MM:SSZ)
+```bash
+DATA_FILE=/abs/path/appdata.json WAL_FILE=/abs/path/appdata.wal make run-todo
+```
