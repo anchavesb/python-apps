@@ -1,0 +1,220 @@
+{% from 'base.html' import base_head %}
+{% call base_head('Home') %}
+<div class="row g-4">
+  <div class="col-12">
+    <form class="row gy-2 gx-3 align-items-end">
+      <input type="hidden" name="tab" value="{{ tab or 'todos' }}" />
+      <div class="col-md-3">
+        <label class="form-label">Search</label>
+        <input type="text" class="form-control" name="q" value="{{ q or '' }}" placeholder="title, description, note..."/>
+      </div>
+      <div class="col-md-2">
+        <label class="form-label">Priority</label>
+        <select class="form-select" name="priority">
+          <option value="">Any</option>
+          {% for p in priorities %}
+          <option value="{{ p }}" {% if priority == p %}selected{% endif %}>{{ p|capitalize }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-2">
+        <label class="form-label">Category</label>
+        <select class="form-select" name="category">
+          <option value="">Any</option>
+          {% for c in categories %}
+          <option value="{{ c }}" {% if category == c %}selected{% endif %}>{{ c }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-2">
+        <label class="form-label">Status</label>
+        <select class="form-select" name="status">
+          <option value="all" {% if status == '' or status == 'all' %}selected{% endif %}>All</option>
+          <option value="open" {% if status == 'open' %}selected{% endif %}>Open</option>
+          <option value="done" {% if status == 'done' %}selected{% endif %}>Done</option>
+        </select>
+      </div>
+      <div class="col-md-3">
+        <label class="form-label">Sort</label>
+        <div class="input-group">
+          <select class="form-select" name="sort">
+            <option value="default" {% if sort == 'default' %}selected{% endif %}>Default</option>
+            <option value="due_date" {% if sort == 'due_date' %}selected{% endif %}>Due date</option>
+            <option value="priority" {% if sort == 'priority' %}selected{% endif %}>Priority</option>
+            <option value="status" {% if sort == 'status' %}selected{% endif %}>Status</option>
+            <option value="updated_at" {% if sort == 'updated_at' %}selected{% endif %}>Updated</option>
+            <option value="created_at" {% if sort == 'created_at' %}selected{% endif %}>Created</option>
+            <option value="title" {% if sort == 'title' %}selected{% endif %}>Title</option>
+          </select>
+          <select class="form-select" name="order">
+            <option value="asc" {% if order == 'asc' %}selected{% endif %}>Asc</option>
+            <option value="desc" {% if order == 'desc' %}selected{% endif %}>Desc</option>
+          </select>
+        </div>
+      </div>
+      <div class="col-12">
+        <button class="btn btn-outline-primary" type="submit">Apply</button>
+        <a class="btn btn-outline-secondary" href="/">Reset</a>
+      </div>
+    </form>
+  </div>
+
+  <div class="col-12">
+    <ul class="nav nav-tabs" id="mainTabs" role="tablist">
+      <li class="nav-item" role="presentation">
+        <a class="nav-link {% if (tab or 'todos') == 'todos' %}active{% endif %}"
+           href="{{ url_for('web.index', q=q, priority=priority, category=category, status=status, sort=sort, order=order, tab='todos') }}"
+           role="tab" aria-controls="todos" aria-selected="{{ (tab or 'todos') == 'todos' }}">To-Dos</a>
+      </li>
+      <li class="nav-item" role="presentation">
+        <a class="nav-link {% if tab == 'notes' %}active{% endif %}"
+           href="{{ url_for('web.index', q=q, priority=priority, category=category, status=status, sort=sort, order=order, tab='notes') }}"
+           role="tab" aria-controls="notes" aria-selected="{{ tab == 'notes' }}">Notes</a>
+      </li>
+      <li class="nav-item" role="presentation">
+        <a class="nav-link {% if tab == 'work' %}active{% endif %}"
+           href="{{ url_for('web.index', q=q, priority=priority, category=category, status=status, sort=sort, order=order, tab='work') }}"
+           role="tab" aria-controls="work" aria-selected="{{ tab == 'work' }}">Work Context</a>
+      </li>
+    </ul>
+    <div class="tab-content border-start border-end border-bottom p-3">
+      <div class="tab-pane fade {% if (tab or 'todos') == 'todos' %}show active{% endif %}" id="todos" role="tabpanel">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+          <h3 class="m-0">To-Dos</h3>
+          <a class="btn btn-primary btn-sm" href="{{ url_for('web.new_todo') }}">New To-Do</a>
+        </div>
+        {% if todos %}
+          <div class="list-group">
+            {% for t in todos %}
+              <div class="list-group-item d-flex justify-content-between align-items-start">
+                <div class="ms-2 me-auto">
+                  <div class="fw-bold">
+                    {% if t.done %}<span class="badge bg-success me-2">Done</span>{% endif %}
+                    {{ t.title }}
+                    <span class="badge bg-info text-dark ms-2">{{ t.tags.priority|capitalize }}</span>
+                    <span class="badge bg-secondary ms-1">{{ t.tags.category }}</span>
+                  </div>
+                  {% if t.description %}<div class="text-body-secondary small">{{ t.description }}</div>{% endif %}
+                  {% if t.due_date %}<div class="small {{ t._due_color }}">Due: {{ t._due_label }}</div>{% else %}<div class="small {{ t._due_color }}">Due: No due date</div>{% endif %}
+                </div>
+                <div class="btn-group btn-group-sm">
+                  {% if not t.done %}
+                  <form method="post" action="{{ url_for('web.done_todo', tid=t.id) }}">
+                    <button class="btn btn-outline-success">Mark done</button>
+                  </form>
+                  {% endif %}
+                  <a class="btn btn-outline-primary" href="{{ url_for('web.edit_todo', tid=t.id) }}">Edit</a>
+                  <form method="post" action="{{ url_for('web.delete_todo', tid=t.id) }}" onsubmit="return confirm('Delete this to-do?')">
+                    <button class="btn btn-outline-danger">Delete</button>
+                  </form>
+                </div>
+              </div>
+            {% endfor %}
+          </div>
+        {% else %}
+          <div class="text-body-secondary">No to-dos yet.</div>
+        {% endif %}
+      </div>
+
+      <div class="tab-pane fade {% if tab == 'notes' %}show active{% endif %}" id="notes" role="tabpanel">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+          <h3 class="m-0">Notes</h3>
+          <a class="btn btn-secondary btn-sm" href="{{ url_for('web.new_note') }}">New Note</a>
+        </div>
+        {% if notes %}
+          <div class="list-group">
+            {% for n in notes %}
+              <div class="list-group-item d-flex justify-content-between align-items-start">
+                <div class="ms-2 me-auto">
+                  <div class="fw-bold">
+                    {{ n.title }}
+                    <span class="badge bg-info text-dark ms-2">{{ n.tags.priority|capitalize }}</span>
+                    <span class="badge bg-secondary ms-1">{{ n.tags.category }}</span>
+                  </div>
+                  {% if n._note_html %}
+                  <div class="text-body-secondary small note-html">
+                    {{ n._note_html | safe }}
+                  </div>
+                  {% endif %}
+                </div>
+                <div class="btn-group btn-group-sm">
+                  <a class="btn btn-outline-primary" href="{{ url_for('web.edit_note', nid=n.id) }}">Edit</a>
+                  <form method="post" action="{{ url_for('web.delete_note', nid=n.id) }}" onsubmit="return confirm('Delete this note?')">
+                    <button class="btn btn-outline-danger">Delete</button>
+                  </form>
+                </div>
+              </div>
+            {% endfor %}
+          </div>
+        {% else %}
+          <div class="text-body-secondary">No notes yet.</div>
+        {% endif %}
+      </div>
+
+      <div class="tab-pane fade {% if tab == 'work' %}show active{% endif %}" id="work" role="tabpanel">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+          <h3 class="m-0">Work Context</h3>
+          <a class="btn btn-secondary btn-sm" href="{{ url_for('web.new_work') }}">New Work Item</a>
+        </div>
+        <form class="row gy-2 gx-3 align-items-end mb-3">
+          <input type="hidden" name="tab" value="work" />
+          <div class="col-md-3">
+            <label class="form-label">Start on/after</label>
+            <input type="date" class="form-control" name="ws_from" value="{{ ws_from or '' }}" />
+          </div>
+          <div class="col-md-3">
+            <label class="form-label">End on/before</label>
+            <input type="date" class="form-control" name="ws_to" value="{{ ws_to or '' }}" />
+          </div>
+          <div class="col-md-3">
+            <label class="form-label">Search</label>
+            <input type="text" class="form-control" name="wq" value="{{ wq or '' }}" placeholder="name, description, why" />
+          </div>
+          <div class="col-md-3">
+            <label class="form-label">Sort</label>
+            <div class="input-group">
+              <select class="form-select" name="wsort">
+                <option value="start" {% if wsort == 'start' %}selected{% endif %}>Start date</option>
+                <option value="end" {% if wsort == 'end' %}selected{% endif %}>End date</option>
+                <option value="updated" {% if wsort == 'updated' %}selected{% endif %}>Updated</option>
+                <option value="name" {% if wsort == 'name' %}selected{% endif %}>Name</option>
+              </select>
+              <select class="form-select" name="worder">
+                <option value="asc" {% if worder == 'asc' %}selected{% endif %}>Asc</option>
+                <option value="desc" {% if worder == 'desc' %}selected{% endif %}>Desc</option>
+              </select>
+            </div>
+          </div>
+          <div class="col-12">
+            <button class="btn btn-outline-primary" type="submit">Apply</button>
+            <a class="btn btn-outline-secondary" href="{{ url_for('web.index', tab='work') }}">Reset</a>
+          </div>
+        </form>
+        {% if work_items %}
+          <div class="list-group">
+            {% for w in work_items %}
+              <div class="list-group-item d-flex justify-content-between align-items-start">
+                <div class="ms-2 me-auto">
+                  <div class="fw-bold">{{ w.name }}</div>
+                  <div class="small text-body-secondary">{{ w.start_date }}{% if w.end_date %} → {{ w.end_date }}{% endif %}</div>
+                  {% if w.description %}<div class="small">{{ w.description }}</div>{% endif %}
+                  {% if w.why %}<div class="small"><em>Why:</em> {{ w.why }}</div>{% endif %}
+                </div>
+                <div class="btn-group btn-group-sm">
+                  <a class="btn btn-outline-primary" href="{{ url_for('web.edit_work', wid=w.id) }}">Edit</a>
+                  <form method="post" action="{{ url_for('web.delete_work', wid=w.id) }}" onsubmit="return confirm('Delete this work item?')">
+                    <button class="btn btn-outline-danger">Delete</button>
+                  </form>
+                </div>
+              </div>
+            {% endfor %}
+          </div>
+        {% else %}
+          <div class="text-body-secondary">No work items yet.</div>
+        {% endif %}
+      </div>
+
+    </div>
+  </div>
+</div>
+{% endcall %}

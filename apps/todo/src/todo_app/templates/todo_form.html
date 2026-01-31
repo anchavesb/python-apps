@@ -1,0 +1,44 @@
+{% from 'base.html' import base_head %}
+{% call base_head(item and 'Edit To-Do' or 'New To-Do') %}
+<h3 class="mb-3">{{ item and 'Edit To-Do' or 'New To-Do' }}</h3>
+<form method="post" class="vstack gap-3">
+  <div>
+    <label class="form-label">Title</label>
+    <input class="form-control" name="title" value="{{ item.title if item else '' }}" required />
+  </div>
+  <div>
+    <label class="form-label">Description</label>
+    <textarea class="form-control" name="description">{{ item.description if item else '' }}</textarea>
+  </div>
+  <div class="row g-3">
+    <div class="col-md-4">
+      <label class="form-label">Category</label>
+      <input class="form-control" name="category" value="{{ item.tags.category if item else '' }}" required />
+    </div>
+    <div class="col-md-4">
+      <label class="form-label">Priority</label>
+      <select class="form-select" name="priority" required>
+        {% for p in priorities %}
+        <option value="{{ p }}" {% if item and item.tags.priority == p %}selected{% endif %}>{{ p|capitalize }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="col-md-4">
+      <label class="form-label" for="dueDate">Due date</label>
+      <input type="date" class="form-control" id="dueDate" name="due_date" value="{{ (item.due_date[:10]) if item and item.due_date else '' }}" />
+    </div>
+  </div>
+  <div class="form-check">
+    <input class="form-check-input" type="checkbox" name="done" id="doneCheck" {% if item and item.done %}checked{% endif %}>
+    <label class="form-check-label" for="doneCheck">Done</label>
+  </div>
+  <div>
+    <label class="form-label">Additional tags (key=value per line)</label>
+    <textarea class="form-control" name="tags_text" placeholder="context=work\nproject=alpha">{{ tags_text or '' }}</textarea>
+  </div>
+  <div>
+    <button class="btn btn-primary">Save</button>
+    <a class="btn btn-secondary" href="{{ url_for('web.index') }}">Cancel</a>
+  </div>
+</form>
+{% endcall %}

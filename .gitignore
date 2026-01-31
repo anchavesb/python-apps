@@ -1,0 +1,23 @@
+# Python
+__pycache__/
+*.py[cod]
+*.so
+.venv/
+venv/
+.env
+.env.*
+*.egg-info/
+.dist/
+.build/
+.pytest_cache/
+.mypy_cache/
+coverage.xml
+htmlcov/
+.coverage*
+
+# macOS
+.DS_Store
+
+# Local data
+**/data/
+**/var/

@@ -1,0 +1,36 @@
+{% from 'base.html' import base_head %}
+{% call base_head(item and 'Edit Note' or 'New Note') %}
+<h3 class="mb-3">{{ item and 'Edit Note' or 'New Note' }}</h3>
+<form method="post" class="vstack gap-3">
+  <div>
+    <label class="form-label">Title</label>
+    <input class="form-control" name="title" value="{{ item.title if item else '' }}" required />
+  </div>
+  <div>
+    <label class="form-label">Note</label>
+    <textarea class="form-control" name="note" rows="6">{{ item.note if item else '' }}</textarea>
+  </div>
+  <div class="row g-3">
+    <div class="col-md-6">
+      <label class="form-label">Category</label>
+      <input class="form-control" name="category" value="{{ item.tags.category if item else '' }}" required />
+    </div>
+    <div class="col-md-6">
+      <label class="form-label">Priority</label>
+      <select class="form-select" name="priority" required>
+        {% for p in priorities %}
+        <option value="{{ p }}" {% if item and item.tags.priority == p %}selected{% endif %}>{{ p|capitalize }}</option>
+        {% endfor %}
+      </select>
+    </div>
+  </div>
+  <div>
+    <label class="form-label">Additional tags (key=value per line)</label>
+    <textarea class="form-control" name="tags_text" placeholder="context=personal\nproject=beta">{{ tags_text or '' }}</textarea>
+  </div>
+  <div>
+    <button class="btn btn-primary">Save</button>
+    <a class="btn btn-secondary" href="{{ url_for('web.index') }}">Cancel</a>
+  </div>
+</form>
+{% endcall %}

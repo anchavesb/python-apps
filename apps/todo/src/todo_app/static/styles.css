@@ -1,0 +1,6 @@
+/* Minimal custom styles */
+.list-group-item form { display: inline; }
+.badge + .badge { margin-left: .25rem; }
+.note-html p { margin-bottom: .5rem; }
+.note-html pre { background: #f8f9fa; padding: .5rem; border-radius: .25rem; overflow: auto; }
+.note-html code { background: #f1f3f5; padding: .1rem .25rem; border-radius: .25rem; }

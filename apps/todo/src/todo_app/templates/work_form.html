@@ -1,0 +1,32 @@
+{% from 'base.html' import base_head %}
+{% call base_head(item and 'Edit Work Item' or 'New Work Item') %}
+<h3 class="mb-3">{{ item and 'Edit Work Item' or 'New Work Item' }}</h3>
+<form method="post" class="vstack gap-3">
+  <div>
+    <label class="form-label">Name of the job</label>
+    <input class="form-control" name="name" value="{{ item.name if item else '' }}" required />
+  </div>
+  <div class="row g-3">
+    <div class="col-md-6">
+      <label class="form-label">Start date</label>
+      <input type="date" class="form-control" name="start_date" value="{{ (item.start_date[:10]) if item and item.start_date else '' }}" required />
+    </div>
+    <div class="col-md-6">
+      <label class="form-label">End date</label>
+      <input type="date" class="form-control" name="end_date" value="{{ (item.end_date[:10]) if item and item.end_date else '' }}" />
+    </div>
+  </div>
+  <div>
+    <label class="form-label">Description</label>
+    <textarea class="form-control" name="description" rows="4">{{ item.description if item else '' }}</textarea>
+  </div>
+  <div>
+    <label class="form-label">Why (how it adds value)</label>
+    <textarea class="form-control" name="why" rows="4">{{ item.why if item else '' }}</textarea>
+  </div>
+  <div>
+    <button class="btn btn-primary">Save</button>
+    <a class="btn btn-secondary" href="{{ url_for('web.index', tab='work') }}">Cancel</a>
+  </div>
+</form>
+{% endcall %}
