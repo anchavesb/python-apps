@@ -1,5 +1,9 @@
 # python-apps Monorepo
 
+[![CI](https://github.com/OWNER/REPO/actions/workflows/ci.yml/badge.svg)](https://github.com/OWNER/REPO/actions/workflows/ci.yml)
+[![GHCR - todo](https://img.shields.io/badge/GHCR-todo-blue?logo=github)](https://ghcr.io/OWNER/todo)
+
+
 A lightweight Python monorepo for applications and (future) shared libraries.
 
 Structure:

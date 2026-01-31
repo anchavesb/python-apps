@@ -35,3 +35,38 @@ run-todo-dev:
 
 clean:
 	rm -rf $(VENV) .pytest_cache **/__pycache__
+
+# Docker local build/push (GHCR)
+APP?=todo
+TAG?=dev
+GHCR_OWNER?=$(shell git config --get remote.origin.url | sed -E 's#.*[:/](.+)/[^/]+(\.git)?#\1#' | tr '[:upper:]' '[:lower:]')
+IMAGE=ghcr.io/$(GHCR_OWNER)/$(APP):$(TAG)
+
+.PHONY: docker-info docker-build docker-push docker-build-all docker-push-all
+
+docker-info:
+	@echo "APP=$(APP)" && echo "TAG=$(TAG)" && echo "GHCR_OWNER=$(GHCR_OWNER)" && echo "IMAGE=$(IMAGE)"
+
+docker-build:
+	docker build -t $(IMAGE) apps/$(APP)
+
+docker-push:
+	docker push $(IMAGE)
+
+docker-build-all:
+	@for app in apps/*; do \
+	  if [ -f "$$app/Dockerfile" ]; then \
+	    name=$$(basename "$$app"); \
+	    echo "Building $$name"; \
+	    docker build -t ghcr.io/$(GHCR_OWNER)/$$name:$(TAG) "$$app"; \
+	  fi; \
+	done
+
+docker-push-all:
+	@for app in apps/*; do \
+	  if [ -f "$$app/Dockerfile" ]; then \
+	    name=$$(basename "$$app"); \
+	    echo "Pushing $$name"; \
+	    docker push ghcr.io/$(GHCR_OWNER)/$$name:$(TAG); \
+	  fi; \
+	done
