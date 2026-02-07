@@ -2,6 +2,7 @@ from __future__ import annotations
 from flask import Blueprint, current_app, render_template, request, redirect, url_for, flash
 from datetime import date
 from .storage import PRIORITIES, ValidationError
+from .auth import login_required, get_current_user
 
 # Optional Markdown/sanitizer; fall back gracefully if unavailable
 try:
@@ -84,6 +85,7 @@ def render_markdown_safe(text: str | None) -> str:
 
 
 @web_bp.route("/")
+@login_required
 def index():
     q = request.args.get("q", "").lower()
     priority = request.args.get("priority")
@@ -284,6 +286,7 @@ def index():
 
 
 @web_bp.route("/todos/new", methods=["GET", "POST"])
+@login_required
 def new_todo():
     if request.method == "POST":
         data = {
@@ -303,6 +306,7 @@ def new_todo():
 
 
 @web_bp.route("/todos/<tid>/edit", methods=["GET", "POST"])
+@login_required
 def edit_todo(tid):
     item = store().get_todo(tid)
     if not item:
@@ -327,6 +331,7 @@ def edit_todo(tid):
 
 
 @web_bp.post("/todos/<tid>/delete")
+@login_required
 def delete_todo(tid):
     store().delete_todo(tid)
     flash("To-do deleted", "info")
@@ -334,6 +339,7 @@ def delete_todo(tid):
 
 
 @web_bp.post("/todos/<tid>/done")
+@login_required
 def done_todo(tid):
     store().update_todo(tid, {"done": True})
     flash("Marked as done", "success")
@@ -341,6 +347,7 @@ def done_todo(tid):
 
 
 @web_bp.route("/notes/new", methods=["GET", "POST"])
+@login_required
 def new_note():
     if request.method == "POST":
         data = {
@@ -358,6 +365,7 @@ def new_note():
 
 
 @web_bp.route("/notes/<nid>/edit", methods=["GET", "POST"])
+@login_required
 def edit_note(nid):
     item = store().get_note(nid)
     if not item:
@@ -380,12 +388,14 @@ def edit_note(nid):
 
 
 @web_bp.post("/notes/<nid>/delete")
+@login_required
 def delete_note(nid):
     store().delete_note(nid)
     flash("Note deleted", "info")
     return redirect(url_for("web.index"))
 
 @web_bp.route("/work/new", methods=["GET", "POST"])
+@login_required
 def new_work():
     if request.method == "POST":
         data = {
@@ -405,6 +415,7 @@ def new_work():
 
 
 @web_bp.route("/work/<wid>/edit", methods=["GET", "POST"])
+@login_required
 def edit_work(wid):
     item = store().get_work(wid)
     if not item:
@@ -428,6 +439,7 @@ def edit_work(wid):
 
 
 @web_bp.post("/work/<wid>/delete")
+@login_required
 def delete_work(wid):
     store().delete_work(wid)
     flash("Work item deleted", "info")

@@ -27,6 +27,11 @@ def create_app(test_config: dict | None = None) -> Flask:
     # Attach store to app for access in blueprints
     app.extensions["store"] = store
 
+    # Initialize OIDC authentication
+    from .auth import auth_bp, init_oauth
+    init_oauth(app)
+    app.register_blueprint(auth_bp, url_prefix="/auth")
+
     from .api import api_bp
     from .web import web_bp
 
