@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="mono">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Andres Chaves</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>👨‍💻</text></svg>">
+</head>
+<body>
+  <!-- Theme Switcher -->
+  <nav class="theme-switcher" aria-label="Theme selection">
+    <button data-theme="mono" class="theme-btn active" title="Monochrome">⚫</button>
+    <button data-theme="synthwave" class="theme-btn" title="Synthwave">🌆</button>
+    <button data-theme="paper" class="theme-btn" title="Paper">📄</button>
+    <button data-theme="nord" class="theme-btn" title="Nord">❄️</button>
+    <button data-theme="catppuccin" class="theme-btn" title="Catppuccin">🐱</button>
+    <button data-theme="gruvbox" class="theme-btn" title="Gruvbox">🍂</button>
+  </nav>
+
+  <main class="container">
+    <!-- Hero -->
+    <section class="hero">
+      <h1 class="name">Andres Chaves</h1>
+      <p class="tagline">Distributed Systems Engineer</p>
+    </section>
+
+    <!-- About Section -->
+    <section class="section" id="about">
+      <h2 class="section-title">about.json</h2>
+      <div class="code-block">
+        <pre><code>{
+  <span class="key">"name"</span>: <span class="string">"Andres Chaves"</span>,
+  <span class="key">"location"</span>: <span class="string">"🇦🇺 Melbourne, Australia"</span>,
+  <span class="key">"occupation"</span>: <span class="string">"Distributed Systems Engineer"</span>,
+  <span class="key">"interests"</span>: [
+    <span class="string">"Distributed Systems"</span>,
+    <span class="string">"Kubernetes"</span>,
+    <span class="string">"Self-Hosted Infrastructure"</span>,
+    <span class="string">"Open Source"</span>,
+    <span class="string">"Automation"</span>
+  ],
+  <span class="key">"currentFocus"</span>: <span class="string">"Building cool stuff"</span>,
+  <span class="key">"coffeeLevel"</span>: <span class="number">∞</span>
+}</code></pre>
+      </div>
+    </section>
+
+    <!-- Skills Section -->
+    <section class="section" id="skills">
+      <h2 class="section-title">skills.sh</h2>
+      <div class="skills-grid">
+        <div class="skill-category">
+          <h3 class="category-title">Languages</h3>
+          <ul class="skill-list">
+            <li><span class="skill-icon">🐍</span> Python</li>
+            <li><span class="skill-icon">🦀</span> Rust</li>
+            <li><span class="skill-icon">🟨</span> JavaScript/TypeScript</li>
+            <li><span class="skill-icon">🐹</span> Go</li>
+            <li><span class="skill-icon">🐚</span> Bash</li>
+          </ul>
+        </div>
+        <div class="skill-category">
+          <h3 class="category-title">Infrastructure</h3>
+          <ul class="skill-list">
+            <li><span class="skill-icon">☸️</span> Kubernetes</li>
+            <li><span class="skill-icon">🐳</span> Docker</li>
+            <li><span class="skill-icon">🏗️</span> Terraform</li>
+            <li><span class="skill-icon">📦</span> Ansible</li>
+            <li><span class="skill-icon">🔄</span> ArgoCD</li>
+          </ul>
+        </div>
+        <div class="skill-category">
+          <h3 class="category-title">Cloud</h3>
+          <ul class="skill-list">
+            <li><span class="skill-icon">☁️</span> AWS</li>
+            <li><span class="skill-icon">🔷</span> Azure</li>
+            <li><span class="skill-icon">🌐</span> GCP</li>
+            <li><span class="skill-icon">🏠</span> Home Lab</li>
+          </ul>
+        </div>
+        <div class="skill-category">
+          <h3 class="category-title">Tools</h3>
+          <ul class="skill-list">
+            <li><span class="skill-icon">🔀</span> Git</li>
+            <li><span class="skill-icon">🐧</span> Linux</li>
+            <li><span class="skill-icon">📊</span> Prometheus/Grafana</li>
+            <li><span class="skill-icon">🔐</span> Vault</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <!-- Projects Section -->
+    <section class="section" id="projects">
+      <h2 class="section-title">~/projects</h2>
+      <div class="projects-grid">
+        <article class="project-card">
+          <div class="project-header">
+            <span class="project-icon">☸️</span>
+            <h3 class="project-name">Dalmura Infrastructure</h3>
+          </div>
+          <p class="project-desc">Self-hosted Kubernetes cluster running on bare metal at home. Fully GitOps-driven with ArgoCD, complete with Prometheus monitoring, cert-manager, external-dns, and Traefik ingress.</p>
+          <div class="project-tags">
+            <span class="project-tag">Kubernetes</span>
+            <span class="project-tag">ArgoCD</span>
+            <span class="project-tag">Terraform</span>
+            <span class="project-tag">Helm</span>
+          </div>
+          <a href="https://github.com/dalmura/infrastructure" class="project-link">→ View on GitHub</a>
+        </article>
+        <article class="project-card">
+          <div class="project-header">
+            <span class="project-icon">📝</span>
+            <h3 class="project-name">Todo & Notes App</h3>
+          </div>
+          <p class="project-desc">A vibe-coded Python Flask application for managing todos and notes. Features OIDC authentication via Authentik, persistent storage, and runs containerized on my home cluster.</p>
+          <div class="project-tags">
+            <span class="project-tag">Python</span>
+            <span class="project-tag">Flask</span>
+            <span class="project-tag">Docker</span>
+            <span class="project-tag">OIDC</span>
+          </div>
+          <a href="https://github.com/anchavesb/python-apps" class="project-link">→ View on GitHub</a>
+        </article>
+        <article class="project-card">
+          <div class="project-header">
+            <span class="project-icon">🎨</span>
+            <h3 class="project-name">This Portfolio</h3>
+          </div>
+          <p class="project-desc">A geeky personal portfolio with multiple switchable themes. Vibe-coded with terminal aesthetics, easter eggs, and vim-style navigation. You're looking at it right now!</p>
+          <div class="project-tags">
+            <span class="project-tag">HTML/CSS</span>
+            <span class="project-tag">JavaScript</span>
+            <span class="project-tag">Nginx</span>
+          </div>
+          <a href="https://github.com/anchavesb/python-apps" class="project-link">→ View Source</a>
+        </article>
+      </div>
+    </section>
+
+    <!-- Contact Section -->
+    <section class="section" id="contact">
+      <h2 class="section-title">contact.yaml</h2>
+      <div class="code-block contact-block">
+        <pre><code><span class="key">social</span>:
+  <span class="key">github</span>: <a href="https://github.com/anchavesb" class="link">"github.com/anchavesb"</a>
+  <span class="key">linkedin</span>: <a href="https://www.linkedin.com/in/andres-felipe-chaves-3827327/" class="link">"linkedin.com/in/andres-felipe-chaves"</a></code></pre>
+      </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="footer">
+      <p class="footer-text">Built with ☕ and late nights</p>
+    </footer>
+  </main>
+
+  <script src="script.js"></script>
+</body>
+</html>
