@@ -13,16 +13,28 @@ def create_app(test_config: dict | None = None) -> Flask:
     if test_config:
         app.config.update(test_config)
 
-    # Ensure data directories exist
-    os.makedirs(os.path.dirname(app.config["DATA_FILE"]), exist_ok=True)
-
     global store
-    store = JsonStore(
-        data_file=app.config["DATA_FILE"],
-        backups=app.config["BACKUP_COUNT"],
-        wal_file=app.config["WAL_FILE"],
-    )
-    store.load_or_recover()
+    backend = app.config.get("STORAGE_BACKEND", "json")
+
+    if backend == "postgres":
+        # PostgreSQL with multiuser support
+        from .db_store import PostgresStore
+        database_url = app.config["DATABASE_URL"]
+        if not database_url:
+            raise ValueError("DATABASE_URL is required when STORAGE_BACKEND=postgres")
+        store = PostgresStore(database_url)
+        store.init_db()
+        app.config["MULTIUSER"] = True
+    else:
+        # JSON file storage (dev mode, single-user)
+        os.makedirs(os.path.dirname(app.config["DATA_FILE"]), exist_ok=True)
+        store = JsonStore(
+            data_file=app.config["DATA_FILE"],
+            backups=app.config["BACKUP_COUNT"],
+            wal_file=app.config["WAL_FILE"],
+        )
+        store.load_or_recover()
+        app.config["MULTIUSER"] = False
 
     # Attach store to app for access in blueprints
     app.extensions["store"] = store

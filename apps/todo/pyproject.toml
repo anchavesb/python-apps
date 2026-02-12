@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "todo-app"
-version = "0.1.0"
-description = "Simple Flask ToDo/Notes app"
+version = "0.2.0"
+description = "Simple Flask ToDo/Notes app with multiuser PostgreSQL support"
 readme = "README.md"
 authors = [{ name = "Achaves" }]
 requires-python = ">=3.11"
@@ -14,6 +14,8 @@ dependencies = [
   "python-dotenv>=1.0,<2.0",
   "Authlib>=1.3,<2.0",
   "requests>=2.31,<3.0",
+  "SQLAlchemy>=2.0,<3.0",
+  "psycopg2-binary>=2.9,<3.0",
 ]
 
 [project.scripts]

@@ -8,9 +8,18 @@ def env(key: str, default: str) -> str:
 
 @dataclass
 class Config:
+    # Storage backend: "json" (default for dev) or "postgres" (production with multiuser)
+    # When DATABASE_URL is set, defaults to "postgres"; otherwise defaults to "json"
+    STORAGE_BACKEND: str = env("STORAGE_BACKEND", "postgres" if os.getenv("DATABASE_URL") else "json")
+
+    # JSON file storage (used when STORAGE_BACKEND=json, single-user dev mode)
     DATA_FILE: str = env("DATA_FILE", os.path.abspath("data/appdata.json"))
     WAL_FILE: str = env("WAL_FILE", os.path.abspath("data/appdata.wal"))
     BACKUP_COUNT: int = int(env("BACKUP_COUNT", "10"))
+
+    # PostgreSQL storage (used when STORAGE_BACKEND=postgres, multiuser production)
+    DATABASE_URL: str = env("DATABASE_URL", "")
+
     SECRET_KEY: str = env("SECRET_KEY", "dev-secret-key")
 
     # UI

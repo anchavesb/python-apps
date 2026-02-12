@@ -1,8 +1,17 @@
 from __future__ import annotations
-from flask import Blueprint, current_app, render_template, request, redirect, url_for, flash
+from flask import Blueprint, current_app, render_template, request, redirect, url_for, flash, session
 from datetime import date
 from .storage import PRIORITIES, ValidationError
-from .auth import login_required, get_current_user
+from .auth import login_required
+
+
+def get_user_id():
+    """Get user_id for multiuser mode, or None for single-user JSON mode."""
+    if current_app.config.get("MULTIUSER"):
+        user = session.get("user")
+        if user:
+            return user.get("sub")
+    return None
 
 # Optional Markdown/sanitizer; fall back gracefully if unavailable
 try:
@@ -100,9 +109,10 @@ def index():
     wsort = request.args.get("wsort", "start")
     worder = request.args.get("worder", "asc")
 
-    todos = store().list_todos()
-    notes = store().list_notes()
-    work_items = store().list_work()
+    user_id = get_user_id()
+    todos = store().list_todos(user_id=user_id)
+    notes = store().list_notes(user_id=user_id)
+    work_items = store().list_work(user_id=user_id)
 
     def match_item(it):
         text = (it.get("title", "") + " " + (it.get("description") or it.get("note") or "")).lower()
@@ -297,7 +307,7 @@ def new_todo():
             "tags": parse_tags(request.form),
         }
         try:
-            store().create_todo(data)
+            store().create_todo(data, user_id=get_user_id())
             flash("To-do created", "success")
             return redirect(url_for("web.index"))
         except ValidationError as e:
@@ -308,7 +318,8 @@ def new_todo():
 @web_bp.route("/todos/<tid>/edit", methods=["GET", "POST"])
 @login_required
 def edit_todo(tid):
-    item = store().get_todo(tid)
+    user_id = get_user_id()
+    item = store().get_todo(tid, user_id=user_id)
     if not item:
         flash("To-do not found", "warning")
         return redirect(url_for("web.index"))
@@ -321,7 +332,7 @@ def edit_todo(tid):
             "tags": parse_tags(request.form),
         }
         try:
-            store().update_todo(tid, data)
+            store().update_todo(tid, data, user_id=user_id)
             flash("To-do updated", "success")
             return redirect(url_for("web.index"))
         except ValidationError as e:
@@ -333,7 +344,7 @@ def edit_todo(tid):
 @web_bp.post("/todos/<tid>/delete")
 @login_required
 def delete_todo(tid):
-    store().delete_todo(tid)
+    store().delete_todo(tid, user_id=get_user_id())
     flash("To-do deleted", "info")
     return redirect(url_for("web.index"))
 
@@ -341,7 +352,7 @@ def delete_todo(tid):
 @web_bp.post("/todos/<tid>/done")
 @login_required
 def done_todo(tid):
-    store().update_todo(tid, {"done": True})
+    store().update_todo(tid, {"done": True}, user_id=get_user_id())
     flash("Marked as done", "success")
     return redirect(url_for("web.index"))
 
@@ -356,7 +367,7 @@ def new_note():
             "tags": parse_tags(request.form),
         }
         try:
-            store().create_note(data)
+            store().create_note(data, user_id=get_user_id())
             flash("Note created", "success")
             return redirect(url_for("web.index"))
         except ValidationError as e:
@@ -367,7 +378,8 @@ def new_note():
 @web_bp.route("/notes/<nid>/edit", methods=["GET", "POST"])
 @login_required
 def edit_note(nid):
-    item = store().get_note(nid)
+    user_id = get_user_id()
+    item = store().get_note(nid, user_id=user_id)
     if not item:
         flash("Note not found", "warning")
         return redirect(url_for("web.index"))
@@ -378,7 +390,7 @@ def edit_note(nid):
             "tags": parse_tags(request.form),
         }
         try:
-            store().update_note(nid, data)
+            store().update_note(nid, data, user_id=user_id)
             flash("Note updated", "success")
             return redirect(url_for("web.index"))
         except ValidationError as e:
@@ -390,7 +402,7 @@ def edit_note(nid):
 @web_bp.post("/notes/<nid>/delete")
 @login_required
 def delete_note(nid):
-    store().delete_note(nid)
+    store().delete_note(nid, user_id=get_user_id())
     flash("Note deleted", "info")
     return redirect(url_for("web.index"))
 
@@ -406,7 +418,7 @@ def new_work():
             "why": request.form.get("why"),
         }
         try:
-            store().create_work(data)
+            store().create_work(data, user_id=get_user_id())
             flash("Work item created", "success")
             return redirect(url_for("web.index", tab="work"))
         except ValidationError as e:
@@ -417,7 +429,8 @@ def new_work():
 @web_bp.route("/work/<wid>/edit", methods=["GET", "POST"])
 @login_required
 def edit_work(wid):
-    item = store().get_work(wid)
+    user_id = get_user_id()
+    item = store().get_work(wid, user_id=user_id)
     if not item:
         flash("Work item not found", "warning")
         return redirect(url_for("web.index", tab="work"))
@@ -430,7 +443,7 @@ def edit_work(wid):
             "why": request.form.get("why"),
         }
         try:
-            store().update_work(wid, data)
+            store().update_work(wid, data, user_id=user_id)
             flash("Work item updated", "success")
             return redirect(url_for("web.index", tab="work"))
         except ValidationError as e:
@@ -441,6 +454,6 @@ def edit_work(wid):
 @web_bp.post("/work/<wid>/delete")
 @login_required
 def delete_work(wid):
-    store().delete_work(wid)
+    store().delete_work(wid, user_id=get_user_id())
     flash("Work item deleted", "info")
     return redirect(url_for("web.index", tab="work"))

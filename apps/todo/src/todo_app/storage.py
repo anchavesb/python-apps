@@ -248,13 +248,15 @@ class JsonStore:
         return str(uuid.uuid4())
 
     # Todos
-    def list_todos(self) -> List[Dict[str, Any]]:
+    # Note: user_id parameter is accepted but ignored in single-user JSON mode
+    # This allows the same calling convention as PostgresStore for multiuser mode
+    def list_todos(self, user_id: str | None = None) -> List[Dict[str, Any]]:
         return list(self.state["todos"])  # shallow copy
 
-    def get_todo(self, tid: str) -> Optional[Dict[str, Any]]:
+    def get_todo(self, tid: str, user_id: str | None = None) -> Optional[Dict[str, Any]]:
         return next((t for t in self.state["todos"] if t["id"] == tid), None)
 
-    def create_todo(self, data: Dict[str, Any]) -> Dict[str, Any]:
+    def create_todo(self, data: Dict[str, Any], user_id: str | None = None) -> Dict[str, Any]:
         self._validate_todo(data)
         now = now_iso()
         item = {
@@ -272,7 +274,7 @@ class JsonStore:
         self._flush()
         return item
 
-    def update_todo(self, tid: str, data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    def update_todo(self, tid: str, data: Dict[str, Any], user_id: str | None = None) -> Optional[Dict[str, Any]]:
         idx = next((i for i, t in enumerate(self.state["todos"]) if t["id"] == tid), None)
         if idx is None:
             return None
@@ -288,7 +290,7 @@ class JsonStore:
         self._flush()
         return merged
 
-    def delete_todo(self, tid: str) -> bool:
+    def delete_todo(self, tid: str, user_id: str | None = None) -> bool:
         before = len(self.state["todos"])
         self.state["todos"] = [t for t in self.state["todos"] if t["id"] != tid]
         deleted = len(self.state["todos"]) < before
@@ -298,13 +300,13 @@ class JsonStore:
         return deleted
 
     # Notes
-    def list_notes(self) -> List[Dict[str, Any]]:
+    def list_notes(self, user_id: str | None = None) -> List[Dict[str, Any]]:
         return list(self.state["notes"])  
 
-    def get_note(self, nid: str) -> Optional[Dict[str, Any]]:
+    def get_note(self, nid: str, user_id: str | None = None) -> Optional[Dict[str, Any]]:
         return next((n for n in self.state["notes"] if n["id"] == nid), None)
 
-    def create_note(self, data: Dict[str, Any]) -> Dict[str, Any]:
+    def create_note(self, data: Dict[str, Any], user_id: str | None = None) -> Dict[str, Any]:
         self._validate_note(data)
         now = now_iso()
         item = {
@@ -320,7 +322,7 @@ class JsonStore:
         self._flush()
         return item
 
-    def update_note(self, nid: str, data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    def update_note(self, nid: str, data: Dict[str, Any], user_id: str | None = None) -> Optional[Dict[str, Any]]:
         idx = next((i for i, n in enumerate(self.state["notes"]) if n["id"] == nid), None)
         if idx is None:
             return None
@@ -336,7 +338,7 @@ class JsonStore:
         self._flush()
         return merged
 
-    def delete_note(self, nid: str) -> bool:
+    def delete_note(self, nid: str, user_id: str | None = None) -> bool:
         before = len(self.state["notes"])
         self.state["notes"] = [n for n in self.state["notes"] if n["id"] != nid]
         deleted = len(self.state["notes"]) < before
@@ -345,13 +347,13 @@ class JsonStore:
             self._flush()
         return deleted
     # Work Items
-    def list_work(self) -> List[Dict[str, Any]]:
+    def list_work(self, user_id: str | None = None) -> List[Dict[str, Any]]:
         return list(self.state["work_items"])  # shallow copy
 
-    def get_work(self, wid: str) -> Optional[Dict[str, Any]]:
+    def get_work(self, wid: str, user_id: str | None = None) -> Optional[Dict[str, Any]]:
         return next((w for w in self.state["work_items"] if w["id"] == wid), None)
 
-    def create_work(self, data: Dict[str, Any]) -> Dict[str, Any]:
+    def create_work(self, data: Dict[str, Any], user_id: str | None = None) -> Dict[str, Any]:
         self._validate_work(data)
         now = now_iso()
         item = {
@@ -369,7 +371,7 @@ class JsonStore:
         self._flush()
         return item
 
-    def update_work(self, wid: str, data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    def update_work(self, wid: str, data: Dict[str, Any], user_id: str | None = None) -> Optional[Dict[str, Any]]:
         idx = next((i for i, w in enumerate(self.state["work_items"]) if w["id"] == wid), None)
         if idx is None:
             return None
@@ -385,7 +387,7 @@ class JsonStore:
         self._flush()
         return merged
 
-    def delete_work(self, wid: str) -> bool:
+    def delete_work(self, wid: str, user_id: str | None = None) -> bool:
         before = len(self.state["work_items"])
         self.state["work_items"] = [w for w in self.state["work_items"] if w["id"] != wid]
         deleted = len(self.state["work_items"]) < before
