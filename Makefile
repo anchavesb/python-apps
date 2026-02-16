@@ -39,7 +39,7 @@ clean:
 # Docker local build/push (GHCR)
 APP?=todo
 TAG?=dev
-GHCR_OWNER?=$(shell git config --get remote.origin.url | sed -E 's#.*[:/](.+)/[^/]+(\.git)?#\1#' | tr '[:upper:]' '[:lower:]')
+GHCR_OWNER?=$(shell git config --get remote.origin.url | sed -E 's|.*[:/](.+)/[^/]+(\.git)?|\1|' | tr '[:upper:]' '[:lower:]')
 IMAGE=ghcr.io/$(GHCR_OWNER)/$(APP):$(TAG)
 
 .PHONY: docker-info docker-build docker-push docker-build-all docker-push-all
