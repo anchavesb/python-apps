@@ -44,6 +44,10 @@ def create_app(test_config: dict | None = None) -> Flask:
     init_oauth(app)
     app.register_blueprint(auth_bp, url_prefix="/auth")
 
+    # Initialize JWT bearer token validation (for mobile/API clients)
+    from .jwt_auth import init_jwt_auth
+    init_jwt_auth(app)
+
     from .api import api_bp
     from .web import web_bp
 
