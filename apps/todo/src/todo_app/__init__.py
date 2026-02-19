@@ -1,4 +1,6 @@
+import logging
 import os
+
 from flask import Flask
 from .config import Config
 from .storage import JsonStore
@@ -9,6 +11,13 @@ store: JsonStore | None = None
 def create_app(test_config: dict | None = None) -> Flask:
     app = Flask(__name__)
     app.config.from_object(Config)
+
+    # Configure logging
+    log_level = getattr(logging, app.config.get("LOG_LEVEL", "INFO").upper(), logging.INFO)
+    logging.basicConfig(
+        level=log_level,
+        format="%(asctime)s [%(name)s] %(levelname)s: %(message)s",
+    )
 
     if test_config:
         app.config.update(test_config)
