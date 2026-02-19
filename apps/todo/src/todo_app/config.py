@@ -26,6 +26,7 @@ class Config:
     APP_NAME: str = env("APP_NAME", "ToDo & Notes")
     PORT: int = int(env("PORT", "5000"))
     DEBUG: bool = env("DEBUG", "0") == "1"
+    LOG_LEVEL: str = env("LOG_LEVEL", "INFO")
 
     # OIDC / Authentik
     OIDC_ENABLED: bool = env("OIDC_ENABLED", "0") == "1"
@@ -33,3 +34,6 @@ class Config:
     OIDC_CLIENT_SECRET: str = env("OIDC_CLIENT_SECRET", "")
     OIDC_ISSUER: str = env("OIDC_ISSUER", "")  # e.g., https://auth.example.com/application/o/todo-app/
     OIDC_SCOPES: str = env("OIDC_SCOPES", "openid profile email")
+
+    # Additional JWT issuers for mobile/API clients (comma-separated "issuer_url|client_id" pairs)
+    OIDC_JWT_ISSUERS: str = env("OIDC_JWT_ISSUERS", "")
