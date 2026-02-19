@@ -33,7 +33,7 @@ def init_jwt_auth(app) -> None:
         return
 
     # Primary provider (the web OIDC provider)
-    primary_issuer = app.config.get("OIDC_ISSUER", "").rstrip("/")
+    primary_issuer = app.config.get("OIDC_ISSUER", "").strip()
     primary_client_id = app.config.get("OIDC_CLIENT_ID", "")
 
     if primary_issuer and primary_client_id:
@@ -47,7 +47,7 @@ def init_jwt_auth(app) -> None:
             entry = entry.strip()
             if "|" in entry:
                 issuer, client_id = entry.split("|", 1)
-                _add_provider(issuer.strip().rstrip("/"), client_id.strip())
+                _add_provider(issuer.strip(), client_id.strip())
 
     if _trusted_providers:
         logger.info("JWT auth enabled — %d trusted provider(s)", len(_trusted_providers))
@@ -56,8 +56,13 @@ def init_jwt_auth(app) -> None:
 
 
 def _add_provider(issuer: str, client_id: str) -> None:
-    """Register a trusted OIDC provider."""
-    jwks_uri = f"{issuer}/jwks/"
+    """Register a trusted OIDC provider.
+
+    The issuer URL is stored as-is (including any trailing slash) so that
+    it matches the ``iss`` claim in JWTs issued by the provider.
+    Only the JWKS URI strips a trailing slash to avoid double-slashes.
+    """
+    jwks_uri = f"{issuer.rstrip('/')}/jwks/"
     logger.info("JWT: trusting issuer %s (audience: %s, JWKS: %s)", issuer, client_id, jwks_uri)
     client = PyJWKClient(jwks_uri, cache_keys=True, lifespan=3600)
     _trusted_providers.append((client, client_id, issuer))
