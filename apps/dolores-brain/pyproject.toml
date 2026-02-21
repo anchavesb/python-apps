@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "dolores-brain"
+version = "0.1.0"
+description = "Dolores AI Brain service (multi-provider LLM routing)"
+authors = [{ name = "Achaves" }]
+requires-python = ">=3.12"
+dependencies = [
+    "dolores-common",
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.34.0",
+    "litellm==1.63.2",
+    "aiosqlite>=0.20.0",
+]
+
+[project.scripts]
+"dolores-brain" = "dolores_brain.__main__:main"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["dolores_brain*"]

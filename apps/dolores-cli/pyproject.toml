@@ -1,0 +1,26 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "dolores-cli"
+version = "0.1.0"
+description = "Dolores CLI client for text and voice chat"
+authors = [{ name = "Achaves" }]
+requires-python = ">=3.12"
+dependencies = [
+    "dolores-common",
+    "websockets>=14.0",
+    "prompt-toolkit>=3.0.0",
+    "rich>=13.0.0",
+]
+
+[project.scripts]
+"dolores-cli" = "dolores_cli.__main__:main"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["dolores_cli*"]

@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "dolores-stt"
+version = "0.1.0"
+description = "Dolores Speech-to-Text service (faster-whisper)"
+authors = [{ name = "Achaves" }]
+requires-python = ">=3.12"
+dependencies = [
+    "dolores-common",
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.34.0",
+    "faster-whisper>=1.2.1",
+    "python-multipart>=0.0.20",
+]
+
+[project.scripts]
+"dolores-stt" = "dolores_stt.__main__:main"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["dolores_stt*"]
