@@ -3,7 +3,7 @@ name: CI
 on:
   push:
     branches: [ main ]
-    tags: [ 'v*.*.*' ]
+    tags: [ '*-v*.*.*' ]   # e.g. todo-v1.0.0, portfolio-v2.1.0
   pull_request:
     branches: [ main ]
 
@@ -65,16 +65,32 @@ jobs:
       - id: set-matrix
         run: |
           python - << 'PY'
-          import json, os, glob
-          apps = []
-          for path in glob.glob('apps/*/pyproject.toml'):
-            name = os.path.basename(os.path.dirname(path))
-            # Only include apps that have a Dockerfile
-            dockerfile = os.path.join('apps', name, 'Dockerfile')
+          import json, os, glob, re
+
+          ref = os.environ.get('GITHUB_REF', '')
+
+          # If this is a tag push (e.g. todo-v1.0.0), only build that app
+          tag_match = re.match(r'refs/tags/(.+)-v\d+\.\d+\.\d+', ref)
+          if tag_match:
+            app_name = tag_match.group(1)
+            dockerfile = os.path.join('apps', app_name, 'Dockerfile')
             if os.path.exists(dockerfile):
-              apps.append(name)
+              apps = [app_name]
+              print(f'Tag push for app: {app_name}')
+            else:
+              print(f'WARNING: Tag references {app_name} but no Dockerfile found')
+              apps = []
+          else:
+            # Branch push — build all apps with Dockerfiles
+            apps = []
+            for path in glob.glob('apps/*/pyproject.toml'):
+              name = os.path.basename(os.path.dirname(path))
+              dockerfile = os.path.join('apps', name, 'Dockerfile')
+              if os.path.exists(dockerfile):
+                apps.append(name)
+            print('Branch push — building all apps:', apps)
+
           matrix = {"app": apps}
-          print('Found apps with Dockerfiles:', apps)
           with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
             f.write(f"matrix={json.dumps(matrix)}\n")
           PY
@@ -101,6 +117,18 @@ jobs:
           username: ${{ github.repository_owner }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Extract version from tag
+        id: version
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/* ]]; then
+            # Extract version: todo-v1.0.0 → v1.0.0
+            VERSION="${GITHUB_REF#refs/tags/${{ matrix.app }}-}"
+            echo "tag=${VERSION}" >> $GITHUB_OUTPUT
+            echo "is_tag=true" >> $GITHUB_OUTPUT
+          else
+            echo "is_tag=false" >> $GITHUB_OUTPUT
+          fi
+
       - name: Extract Docker metadata
         id: meta
         uses: docker/metadata-action@v5
@@ -110,7 +138,7 @@ jobs:
           tags: |
             type=sha
             type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
-            type=ref,event=tag
+            type=raw,value=${{ steps.version.outputs.tag }},enable=${{ steps.version.outputs.is_tag == 'true' }}
 
       - name: Determine build context
         id: ctx
