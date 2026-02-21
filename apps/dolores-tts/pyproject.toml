@@ -15,6 +15,10 @@ dependencies = [
     "python-multipart>=0.0.20",
     "aiosqlite>=0.20.0",
     "numpy>=1.26.0",
+]
+
+[project.optional-dependencies]
+gpu = [
     "TTS>=0.22.0",
     "torch>=2.0.0",
 ]
