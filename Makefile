@@ -17,6 +17,12 @@ install: venv
 	$(PIP) install -e apps/todo
 
 install-all: venv
+	@for lib in libs/*; do \
+	  if [ -f "$$lib/pyproject.toml" ]; then \
+	    echo "Installing $$lib"; \
+	    $(PIP) install -e "$$lib"; \
+	  fi; \
+	done
 	@for app in apps/*; do \
 	  if [ -f "$$app/pyproject.toml" ]; then \
 	    echo "Installing $$app"; \
@@ -48,7 +54,11 @@ docker-info:
 	@echo "APP=$(APP)" && echo "TAG=$(TAG)" && echo "GHCR_OWNER=$(GHCR_OWNER)" && echo "IMAGE=$(IMAGE)"
 
 docker-build:
-	docker build -t $(IMAGE) apps/$(APP)
+	@if echo "$(APP)" | grep -q '^dolores-'; then \
+	  docker build -t $(IMAGE) -f apps/$(APP)/Dockerfile .; \
+	else \
+	  docker build -t $(IMAGE) apps/$(APP); \
+	fi
 
 docker-push:
 	docker push $(IMAGE)
@@ -58,7 +68,11 @@ docker-build-all:
 	  if [ -f "$$app/Dockerfile" ]; then \
 	    name=$$(basename "$$app"); \
 	    echo "Building $$name"; \
-	    docker build -t ghcr.io/$(GHCR_OWNER)/$$name:$(TAG) "$$app"; \
+	    if echo "$$name" | grep -q '^dolores-'; then \
+	      docker build -t ghcr.io/$(GHCR_OWNER)/$$name:$(TAG) -f "$$app/Dockerfile" .; \
+	    else \
+	      docker build -t ghcr.io/$(GHCR_OWNER)/$$name:$(TAG) "$$app"; \
+	    fi; \
 	  fi; \
 	done
 

@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "dolores-assistant"
+version = "0.1.0"
+description = "Dolores Assistant Orchestrator (pipeline coordinator)"
+authors = [{ name = "Achaves" }]
+requires-python = ">=3.12"
+dependencies = [
+    "dolores-common",
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.34.0",
+    "httpx>=0.28.0",
+    "websockets>=14.0",
+]
+
+[project.scripts]
+"dolores-assistant" = "dolores_assistant.__main__:main"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["dolores_assistant*"]
