@@ -1,0 +1,43 @@
+FROM nvidia/cuda:11.8.0-runtime-ubuntu22.04
+
+ENV DEBIAN_FRONTEND=noninteractive
+ENV PYTHONUNBUFFERED=1
+
+# Install Python 3.12
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    software-properties-common && \
+    add-apt-repository ppa:deadsnakes/ppa && \
+    apt-get update && apt-get install -y --no-install-recommends \
+    python3.12 python3.12-venv python3.12-dev python3-pip \
+    ffmpeg libsndfile1 && \
+    rm -rf /var/lib/apt/lists/*
+
+# Make python3.12 the default
+RUN update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.12 1 && \
+    update-alternatives --install /usr/bin/python python /usr/bin/python3.12 1
+
+RUN groupadd -r appuser && useradd -r -g appuser appuser
+
+WORKDIR /app
+
+# Install dolores-common first (shared lib)
+COPY libs/dolores-common /app/libs/dolores-common
+RUN python -m pip install --no-cache-dir /app/libs/dolores-common
+
+# Install the TTS service with GPU dependencies (TTS + torch)
+COPY apps/dolores-tts/pyproject.toml /app/
+COPY apps/dolores-tts/src /app/src
+RUN python -m pip install --no-cache-dir ".[gpu]"
+
+# Create data directories
+RUN mkdir -p /app/data/voices /app/models && chown -R appuser:appuser /app
+
+USER appuser
+
+ENV NVIDIA_VISIBLE_DEVICES=all
+ENV NVIDIA_DRIVER_CAPABILITIES=compute,utility
+
+EXPOSE 8002
+
+# MUST use single worker due to CUDA/torch multiprocessing issues
+CMD ["python", "-m", "uvicorn", "dolores_tts.main:app", "--host", "0.0.0.0", "--port", "8002", "--workers", "1"]
