@@ -19,8 +19,8 @@ dependencies = [
 
 [project.optional-dependencies]
 gpu = [
-    "TTS>=0.22.0",
-    "torch>=2.0.0",
+    "coqui-tts>=0.24.0",
+    "torch>=2.2.0",
 ]
 
 [project.scripts]
