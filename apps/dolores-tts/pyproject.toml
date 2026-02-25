@@ -20,6 +20,7 @@ dependencies = [
 [project.optional-dependencies]
 gpu = [
     "coqui-tts>=0.24.0",
+    "transformers>=4.33.0,<4.41.0",
     "torch>=2.2.0",
     "torchaudio>=2.2.0",
 ]
