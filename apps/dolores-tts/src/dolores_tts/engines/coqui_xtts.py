@@ -70,8 +70,12 @@ class CoquiXTTSEngine(TTSEngine):
         self._model = TTS("tts_models/multilingual/multi-dataset/xtts_v2").to(device)
         self._voices_dir.mkdir(parents=True, exist_ok=True)
 
+        # Pick the first available built-in speaker for default voice
+        speakers = getattr(self._model, "speakers", None) or []
+        self._default_speaker = speakers[0] if speakers else "Ana Florence"
+
         elapsed = round(time.monotonic() - start, 2)
-        log.info("tts_model_loaded", engine="coqui_xtts", device=device, elapsed_seconds=elapsed)
+        log.info("tts_model_loaded", engine="coqui_xtts", device=device, elapsed_seconds=elapsed, default_speaker=self._default_speaker)
 
     def synthesize(
         self,
@@ -87,11 +91,13 @@ class CoquiXTTSEngine(TTSEngine):
         speaker_wav = self._resolve_voice(voice_id)
 
         start = time.monotonic()
-        wav_list = self._model.tts(
-            text=text,
-            speaker_wav=speaker_wav,
-            language="en",
-        )
+        tts_kwargs: dict = {"text": text, "language": "en"}
+        if speaker_wav:
+            tts_kwargs["speaker_wav"] = speaker_wav
+        else:
+            tts_kwargs["speaker"] = self._default_speaker
+
+        wav_list = self._model.tts(**tts_kwargs)
 
         # Convert float list to 16-bit PCM WAV bytes
         import numpy as np
