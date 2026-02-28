@@ -7,7 +7,7 @@ name = "dolores-tts"
 version = "0.1.0"
 description = "Dolores Text-to-Speech service (Coqui XTTS v2)"
 authors = [{ name = "Achaves" }]
-requires-python = ">=3.12"
+requires-python = ">=3.10"
 dependencies = [
     "dolores-common",
     "fastapi>=0.115.0",
