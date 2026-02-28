@@ -7,7 +7,7 @@ name = "dolores-brain"
 version = "0.1.0"
 description = "Dolores AI Brain service (multi-provider LLM routing)"
 authors = [{ name = "Achaves" }]
-requires-python = ">=3.12"
+requires-python = ">=3.10"
 dependencies = [
     "dolores-common",
     "fastapi>=0.115.0",
