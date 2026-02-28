@@ -25,6 +25,10 @@ def create_health_router(
     router = APIRouter()
     start_time = time.time()
 
+    @router.get("/livez")
+    async def livez() -> dict:
+        return {"status": "ok"}
+
     @router.get("/health")
     async def health() -> dict:
         result = {
