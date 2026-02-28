@@ -161,7 +161,7 @@ class ServiceClient:
     async def check_service(self, name: str, url: str) -> str:
         """Check health of a downstream service. Returns 'healthy' or 'unhealthy'."""
         try:
-            resp = await self.client.get(f"{url}/health", timeout=5)
+            resp = await self.client.get(f"{url}/health", timeout=2)
             if resp.status_code == 200:
                 return "healthy"
         except Exception:
