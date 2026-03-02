@@ -143,7 +143,7 @@ jobs:
       - name: Determine build context
         id: ctx
         run: |
-          if [[ "${{ matrix.app }}" == dolores-* ]]; then
+          if [[ "${{ matrix.app }}" == dolores-* ]] && grep -q "dolores-common" "apps/${{ matrix.app }}/Dockerfile"; then
             echo "context=." >> $GITHUB_OUTPUT
           else
             echo "context=apps/${{ matrix.app }}" >> $GITHUB_OUTPUT
