@@ -1,11 +1,12 @@
-"""Assistant API routes: WS /v1/conversation, POST /v1/chat."""
+"""Assistant API routes: WS /v1/conversation, POST /v1/chat, voice management."""
 
 from __future__ import annotations
 
 import json
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, WebSocket, WebSocketDisconnect
+from fastapi.responses import Response
 
 from dolores_common.auth import ClientAPIKey, validate_ws_token
 from dolores_common.logging import get_logger
@@ -50,6 +51,68 @@ async def text_chat(
         message=result.get("message", ""),
         conversation_id=result.get("conversation_id", ""),
     )
+
+
+# --- Voice management (proxy to TTS service) ---
+
+
+@router.get("/voices")
+async def list_voices(
+    _auth: ClientAPIKey = None,
+    client: ServiceClient = Depends(get_service_client),
+):
+    """List available voice profiles (proxies to TTS service)."""
+    return await client.list_voices()
+
+
+@router.get("/voices/{voice_id}")
+async def get_voice(
+    voice_id: str,
+    _auth: ClientAPIKey = None,
+    client: ServiceClient = Depends(get_service_client),
+):
+    """Get a voice profile (proxies to TTS service)."""
+    result = await client.get_voice(voice_id)
+    if result is None:
+        raise HTTPException(status_code=404, detail="Voice not found")
+    return result
+
+
+@router.post("/voices")
+async def create_voice(
+    name: str,
+    file: UploadFile,
+    description: str = "",
+    _auth: ClientAPIKey = None,
+    client: ServiceClient = Depends(get_service_client),
+):
+    """Create a voice profile (proxies to TTS service)."""
+    audio_data = await file.read()
+    result = await client.create_voice(
+        name=name,
+        audio_data=audio_data,
+        content_type=file.content_type or "audio/wav",
+        description=description,
+    )
+    if result is None:
+        raise HTTPException(status_code=502, detail="Failed to create voice profile")
+    return result
+
+
+@router.delete("/voices/{voice_id}", status_code=204)
+async def delete_voice(
+    voice_id: str,
+    _auth: ClientAPIKey = None,
+    client: ServiceClient = Depends(get_service_client),
+):
+    """Delete a voice profile (proxies to TTS service)."""
+    success = await client.delete_voice(voice_id)
+    if not success:
+        raise HTTPException(status_code=404, detail="Voice not found")
+    return Response(status_code=204)
+
+
+# --- WebSocket conversation ---
 
 
 @router.websocket("/conversation")

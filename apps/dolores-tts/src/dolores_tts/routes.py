@@ -1,6 +1,8 @@
-"""TTS API routes: POST /v1/synthesize, GET/POST /v1/voices."""
+"""TTS API routes: POST /v1/synthesize, GET/POST/DELETE /v1/voices."""
 
 from __future__ import annotations
+
+import asyncio
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile
 from fastapi.responses import Response
@@ -43,6 +45,23 @@ def set_voice_store(store: VoiceProfileStore) -> None:
     _voice_store = store
 
 
+async def _convert_to_wav(audio_data: bytes) -> bytes:
+    """Convert any audio format to 16-bit PCM WAV 22050Hz mono using ffmpeg."""
+    proc = await asyncio.create_subprocess_exec(
+        "ffmpeg", "-i", "pipe:0",
+        "-f", "wav", "-acodec", "pcm_s16le", "-ar", "22050", "-ac", "1",
+        "pipe:1",
+        stdin=asyncio.subprocess.PIPE,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+    )
+    stdout, stderr = await proc.communicate(input=audio_data)
+    if proc.returncode != 0:
+        log.error("ffmpeg_conversion_failed", stderr=stderr.decode(errors="replace"))
+        raise HTTPException(status_code=422, detail="Failed to convert audio to WAV format")
+    return stdout
+
+
 @router.post("/synthesize")
 async def synthesize(
     req: SynthesizeRequest,
@@ -77,6 +96,19 @@ async def list_voices(
     return [VoiceProfile(**p) for p in profiles]
 
 
+@router.get("/voices/{voice_id}", response_model=VoiceProfile)
+async def get_voice(
+    voice_id: str,
+    _auth: ServicePSK = None,
+    store: VoiceProfileStore = Depends(get_voice_store),
+) -> VoiceProfile:
+    """Get a single voice profile by ID."""
+    profile = await store.get_profile(voice_id)
+    if profile is None:
+        raise HTTPException(status_code=404, detail="Voice not found")
+    return VoiceProfile(**profile)
+
+
 @router.post("/voices", response_model=VoiceCreateResponse)
 async def create_voice(
     name: str,
@@ -97,6 +129,9 @@ async def create_voice(
     if len(audio_data) > 10 * 1024 * 1024:
         raise HTTPException(status_code=413, detail="Reference audio too large. Maximum: 10 MB")
 
+    # Convert to 16-bit PCM WAV 22050Hz mono for XTTS compatibility
+    audio_data = await _convert_to_wav(audio_data)
+
     result = await store.create(
         name=name,
         audio_data=audio_data,
@@ -104,3 +139,16 @@ async def create_voice(
         description=description,
     )
     return VoiceCreateResponse(**result)
+
+
+@router.delete("/voices/{voice_id}", status_code=204)
+async def delete_voice(
+    voice_id: str,
+    _auth: ServicePSK = None,
+    store: VoiceProfileStore = Depends(get_voice_store),
+) -> Response:
+    """Delete a voice profile."""
+    deleted = await store.delete(voice_id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Voice not found")
+    return Response(status_code=204)

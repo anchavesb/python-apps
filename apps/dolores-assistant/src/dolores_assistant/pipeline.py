@@ -156,6 +156,54 @@ class ServiceClient:
                 log.error("tts_call_failed", error=str(e))
                 return None
 
+    # --- Voice management ---
+
+    async def list_voices(self) -> list[dict]:
+        """Get voice profiles from TTS service."""
+        try:
+            resp = await self.client.get(f"{settings.tts_url}/v1/voices", timeout=10)
+            resp.raise_for_status()
+            return resp.json()
+        except Exception as e:
+            log.error("tts_list_voices_failed", error=str(e))
+            return []
+
+    async def get_voice(self, voice_id: str) -> dict | None:
+        """Get a single voice profile from TTS service."""
+        try:
+            resp = await self.client.get(f"{settings.tts_url}/v1/voices/{voice_id}", timeout=10)
+            if resp.status_code == 404:
+                return None
+            resp.raise_for_status()
+            return resp.json()
+        except Exception as e:
+            log.error("tts_get_voice_failed", error=str(e))
+            return None
+
+    async def create_voice(self, name: str, audio_data: bytes, content_type: str, description: str = "") -> dict | None:
+        """Create a voice profile via TTS service."""
+        try:
+            resp = await self.client.post(
+                f"{settings.tts_url}/v1/voices",
+                data={"name": name, "description": description},
+                files={"file": ("reference.wav", audio_data, content_type)},
+                timeout=30,
+            )
+            resp.raise_for_status()
+            return resp.json()
+        except Exception as e:
+            log.error("tts_create_voice_failed", error=str(e))
+            return None
+
+    async def delete_voice(self, voice_id: str) -> bool:
+        """Delete a voice profile via TTS service."""
+        try:
+            resp = await self.client.delete(f"{settings.tts_url}/v1/voices/{voice_id}", timeout=10)
+            return resp.status_code == 204
+        except Exception as e:
+            log.error("tts_delete_voice_failed", error=str(e))
+            return False
+
     # --- Health checks ---
 
     async def check_service(self, name: str, url: str) -> str:
