@@ -65,6 +65,17 @@ class VoiceProfileStore:
         log.info("voice_profile_created", id=profile_id, name=name)
         return {"id": profile_id, "name": name, "engine": engine}
 
+    async def get_profile(self, profile_id: str) -> dict | None:
+        """Get a single voice profile by ID."""
+        cursor = await self._db.execute(
+            "SELECT id, name, description, engine, created_at FROM voice_profiles WHERE id = ?",
+            (profile_id,),
+        )
+        row = await cursor.fetchone()
+        if row is None:
+            return None
+        return {"id": row[0], "name": row[1], "description": row[2], "engine": row[3], "created_at": row[4]}
+
     async def list_profiles(self) -> list[dict]:
         """List all voice profiles."""
         cursor = await self._db.execute(

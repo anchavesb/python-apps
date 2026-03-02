@@ -29,7 +29,12 @@ class DoloresClient:
     def conversation_id(self) -> str | None:
         return self._conversation_id
 
-    async def connect(self, conversation_id: str | None = None) -> None:
+    async def connect(
+        self,
+        conversation_id: str | None = None,
+        mode: str = "text",
+        voice_id: str = "default",
+    ) -> None:
         """Connect to the assistant and start a session."""
         ws_url = f"{self._server_url}/v1/conversation"
         if self._api_key:
@@ -40,8 +45,9 @@ class DoloresClient:
         # Send session.start
         session_msg = {
             "type": "session.start",
-            "mode": "text",
+            "mode": mode,
             "token": self._api_key,
+            "voice_id": voice_id,
         }
         if self._provider:
             session_msg["provider"] = self._provider
@@ -56,8 +62,8 @@ class DoloresClient:
         if resp.get("type") == "session.created":
             self._conversation_id = resp.get("conversation_id")
 
-    async def send_text(self, text: str) -> AsyncGenerator[dict, None]:
-        """Send a text message and yield response events."""
+    async def send_text(self, text: str) -> AsyncGenerator[dict | bytes, None]:
+        """Send a text message and yield response events (including binary audio)."""
         if not self._ws:
             raise RuntimeError("Not connected. Call connect() first.")
 
@@ -66,7 +72,32 @@ class DoloresClient:
         while True:
             raw = await self._ws.recv()
             if isinstance(raw, bytes):
-                # Audio data — skip in text mode
+                yield raw  # TTS audio chunk
+                continue
+
+            event = json.loads(raw)
+            yield event
+
+            if event.get("type") in ("response.end", "error"):
+                break
+
+    async def send_audio(self, audio_data: bytes) -> AsyncGenerator[dict | bytes, None]:
+        """Send audio data and yield response events (including binary audio)."""
+        if not self._ws:
+            raise RuntimeError("Not connected. Call connect() first.")
+
+        # Signal audio start
+        await self._ws.send(json.dumps({"type": "audio.start"}))
+        # Send audio as binary
+        await self._ws.send(audio_data)
+        # Signal audio end
+        await self._ws.send(json.dumps({"type": "audio.end"}))
+
+        # Yield response events
+        while True:
+            raw = await self._ws.recv()
+            if isinstance(raw, bytes):
+                yield raw  # TTS audio chunk
                 continue
 
             event = json.loads(raw)
