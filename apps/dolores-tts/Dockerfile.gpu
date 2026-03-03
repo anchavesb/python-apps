@@ -30,6 +30,10 @@ COPY apps/dolores-tts/pyproject.toml /app/
 COPY apps/dolores-tts/src /app/src
 RUN pip install --no-cache-dir ".[gpu]"
 
+# Patch coqui-tts to fix ImportError: cannot import name 'isin_mps_friendly' from 'transformers.pytorch_utils'
+# This is a known issue with newer transformers versions and coqui-tts
+RUN sed -i 's/from transformers.pytorch_utils import isin_mps_friendly as isin/import torch; isin = lambda x: torch.backends.mps.is_available() and x.device.type == "mps"/' /usr/local/lib/python3.12/dist-packages/TTS/tts/layers/tortoise/autoregressive.py
+
 # Create data directories
 RUN mkdir -p /app/data/voices /app/models && chown -R appuser:appuser /app
 
