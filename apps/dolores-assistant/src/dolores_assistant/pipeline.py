@@ -185,12 +185,15 @@ class ServiceClient:
         try:
             resp = await self.client.post(
                 f"{settings.tts_url}/v1/voices",
-                data={"name": name, "description": description},
+                params={"name": name, "description": description},
                 files={"file": ("reference.wav", audio_data, content_type)},
                 timeout=30,
             )
             resp.raise_for_status()
             return resp.json()
+        except httpx.HTTPStatusError as e:
+            log.error("tts_create_voice_failed", status=e.response.status_code, detail=e.response.text)
+            return None
         except Exception as e:
             log.error("tts_create_voice_failed", error=str(e))
             return None
