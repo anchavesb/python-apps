@@ -1,7 +1,7 @@
 <script lang="ts">
   import ChatView from './lib/components/ChatView.svelte';
   import Settings from './lib/components/Settings.svelte';
-  import { app } from './lib/stores';
+  import { app } from './lib/stores.svelte';
 </script>
 
 <main>

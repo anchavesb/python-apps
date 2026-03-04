@@ -1,7 +1,7 @@
 <script lang="ts">
   import ChatMessage from './ChatMessage.svelte';
   import VoiceButton from './VoiceButton.svelte';
-  import { app } from '../stores';
+  import { app } from '../stores.svelte';
 
   let inputText = $state('');
   let messagesEl: HTMLDivElement;
