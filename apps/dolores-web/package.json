@@ -1,14 +1,21 @@
 {
   "name": "dolores-web",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.2.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "cap:sync": "npx cap sync",
+    "cap:ios": "npx cap open ios",
+    "cap:android": "npx cap open android"
+  },
+  "dependencies": {
+    "@capacitor/core": "^6.0.0"
   },
   "devDependencies": {
+    "@capacitor/cli": "^6.0.0",
     "@sveltejs/vite-plugin-svelte": "^5.0.0",
     "svelte": "^5.0.0",
     "svelte-check": "^4.0.0",

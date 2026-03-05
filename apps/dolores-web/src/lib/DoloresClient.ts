@@ -2,6 +2,7 @@ export type MessageEvent =
   | { type: 'session.created'; session_id: string; conversation_id: string }
   | { type: 'transcription.partial'; text: string }
   | { type: 'transcription.final'; text: string }
+  | { type: 'response.emotion'; emotion: string }
   | { type: 'response.text'; content: string }
   | { type: 'response.end'; full_text: string }
   | { type: 'error'; code: string; message: string };

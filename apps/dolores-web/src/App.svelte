@@ -1,13 +1,26 @@
 <script lang="ts">
   import ChatView from './lib/components/ChatView.svelte';
+  import AvatarView from './lib/components/AvatarView.svelte';
   import Settings from './lib/components/Settings.svelte';
   import { app } from './lib/stores.svelte';
+
+  // Support ?view=avatar URL param for kiosk mode
+  const params = new URLSearchParams(window.location.search);
+  if (params.get('view') === 'avatar') {
+    app.setViewMode('avatar');
+  }
 </script>
 
 <main>
-  <header>
+  <header class:avatar-header={app.state.viewMode === 'avatar'}>
     <h1>Dolores</h1>
     <div class="header-actions">
+      <button
+        class="view-toggle"
+        onclick={() => app.setViewMode(app.state.viewMode === 'chat' ? 'avatar' : 'chat')}
+      >
+        {app.state.viewMode === 'chat' ? 'Avatar' : 'Chat'}
+      </button>
       {#if app.state.connected}
         <span class="status connected">Connected</span>
         <button onclick={() => app.disconnect()}>Disconnect</button>
@@ -19,7 +32,11 @@
     </div>
   </header>
 
-  <ChatView />
+  {#if app.state.viewMode === 'avatar'}
+    <AvatarView />
+  {:else}
+    <ChatView />
+  {/if}
 
   {#if app.state.settingsOpen}
     <Settings />
