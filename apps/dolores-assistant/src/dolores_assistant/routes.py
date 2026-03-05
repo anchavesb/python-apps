@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, WebSocket, WebSocketDisconnect
@@ -246,6 +247,10 @@ async def conversation_ws(websocket: WebSocket) -> None:
             pass
 
 
+_EMOTION_TAG_RE = re.compile(r"^\[emotion:(\w+)\]\s*")
+_VALID_EMOTIONS = {"neutral", "curious", "happy", "sad", "surprised", "empathetic"}
+
+
 async def _process_and_respond(
     websocket: WebSocket,
     client: ServiceClient,
@@ -257,6 +262,8 @@ async def _process_and_respond(
 ) -> None:
     """Send user text to brain, stream response text, and optionally TTS audio."""
     full_text = ""
+    emotion_parsed = False
+    emotion_buffer = ""  # Buffer initial tokens to detect emotion tag
 
     async for event in client.chat_stream(
         message=user_text,
@@ -265,11 +272,36 @@ async def _process_and_respond(
     ):
         if event.get("type") == "token":
             content = event.get("content", "")
-            full_text += content
-            await websocket.send_json({"type": "response.text", "content": content})
+
+            if not emotion_parsed:
+                # Buffer tokens until we can check for emotion tag
+                emotion_buffer += content
+                match = _EMOTION_TAG_RE.match(emotion_buffer)
+                if match:
+                    emotion = match.group(1)
+                    if emotion in _VALID_EMOTIONS:
+                        await websocket.send_json({"type": "response.emotion", "emotion": emotion})
+                    # Strip the tag and send the remainder
+                    remainder = emotion_buffer[match.end():]
+                    emotion_parsed = True
+                    if remainder:
+                        full_text += remainder
+                        await websocket.send_json({"type": "response.text", "content": remainder})
+                elif len(emotion_buffer) > 30:
+                    # No tag found within first 30 chars, flush buffer
+                    emotion_parsed = True
+                    full_text += emotion_buffer
+                    await websocket.send_json({"type": "response.text", "content": emotion_buffer})
+            else:
+                full_text += content
+                await websocket.send_json({"type": "response.text", "content": content})
 
         elif event.get("type") == "done":
             full_text = event.get("content", full_text)
+            # Strip emotion tag from final text if present
+            m = _EMOTION_TAG_RE.match(full_text)
+            if m:
+                full_text = full_text[m.end():]
 
         elif event.get("type") == "error":
             await websocket.send_json({
@@ -278,6 +310,21 @@ async def _process_and_respond(
                 "message": event.get("error", "Unknown error"),
             })
             return
+
+    # Flush any remaining buffer (short responses)
+    if not emotion_parsed and emotion_buffer:
+        match = _EMOTION_TAG_RE.match(emotion_buffer)
+        if match:
+            emotion = match.group(1)
+            if emotion in _VALID_EMOTIONS:
+                await websocket.send_json({"type": "response.emotion", "emotion": emotion})
+            remainder = emotion_buffer[match.end():]
+            if remainder:
+                full_text = remainder
+                await websocket.send_json({"type": "response.text", "content": remainder})
+        else:
+            full_text = emotion_buffer
+            await websocket.send_json({"type": "response.text", "content": emotion_buffer})
 
     # TTS: synthesize sentences and send audio
     if mode != "text" and full_text.strip():
