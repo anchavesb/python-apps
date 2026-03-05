@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { app } from '../stores';
+  import { app } from '../stores.svelte';
 
   function handlePointerDown() {
     if (!app.state.connected) return;
