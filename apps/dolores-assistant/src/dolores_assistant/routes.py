@@ -169,12 +169,12 @@ async def conversation_ws(websocket: WebSocket) -> None:
         voice_id = msg.get("voice_id", voice_id)
         provider = msg.get("provider", provider)
         mode = msg.get("mode", mode)
-        conversation_id = msg.get("conversation_id")
+        conversation_id = msg.get("conversation_id") or str(uuid.uuid4())
 
         await websocket.send_json({
             "type": "session.created",
             "session_id": session_id,
-            "conversation_id": conversation_id or "",
+            "conversation_id": conversation_id,
         })
 
         log.info("session_started", session_id=session_id, mode=mode, provider=provider)
