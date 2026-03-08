@@ -2,14 +2,25 @@ export class AudioRecorder {
   private mediaRecorder: MediaRecorder | null = null;
   private chunks: Blob[] = [];
   private stream: MediaStream | null = null;
+  private _mimeType = '';
+
+  /** Acquire mic permission and keep stream alive to avoid re-prompting. */
+  async init(): Promise<void> {
+    if (this.stream) return;
+    this.stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    this._mimeType = this.getSupportedMimeType();
+  }
 
   async start(): Promise<void> {
-    this.stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    await this.init();
     this.chunks = [];
 
-    this.mediaRecorder = new MediaRecorder(this.stream, {
-      mimeType: this.getSupportedMimeType(),
-    });
+    const options: MediaRecorderOptions = {};
+    if (this._mimeType) {
+      options.mimeType = this._mimeType;
+    }
+
+    this.mediaRecorder = new MediaRecorder(this.stream!, options);
 
     this.mediaRecorder.ondataavailable = (e) => {
       if (e.data.size > 0) {
@@ -17,7 +28,7 @@ export class AudioRecorder {
       }
     };
 
-    this.mediaRecorder.start(250); // 250ms chunks
+    this.mediaRecorder.start(250);
   }
 
   stop(): Promise<Blob> {
@@ -28,8 +39,10 @@ export class AudioRecorder {
       }
 
       this.mediaRecorder.onstop = () => {
-        const blob = new Blob(this.chunks, { type: this.mediaRecorder!.mimeType });
-        this.cleanup();
+        const type = this.mediaRecorder?.mimeType || this._mimeType || 'audio/webm';
+        const blob = new Blob(this.chunks, { type });
+        this.mediaRecorder = null;
+        this.chunks = [];
         resolve(blob);
       };
 
@@ -37,7 +50,8 @@ export class AudioRecorder {
     });
   }
 
-  private cleanup(): void {
+  /** Release mic stream entirely (call on disconnect). */
+  destroy(): void {
     if (this.stream) {
       this.stream.getTracks().forEach((t) => t.stop());
       this.stream = null;
@@ -50,8 +64,18 @@ export class AudioRecorder {
     return this.mediaRecorder?.state === 'recording';
   }
 
+  get mimeType(): string {
+    return this._mimeType;
+  }
+
   private getSupportedMimeType(): string {
-    const types = ['audio/webm;codecs=opus', 'audio/webm', 'audio/ogg;codecs=opus'];
+    const types = [
+      'audio/webm;codecs=opus',
+      'audio/webm',
+      'audio/mp4',             // iOS Safari
+      'audio/ogg;codecs=opus',
+      'audio/aac',             // iOS fallback
+    ];
     for (const type of types) {
       if (MediaRecorder.isTypeSupported(type)) return type;
     }

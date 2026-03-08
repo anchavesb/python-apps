@@ -21,6 +21,7 @@ SUPPORTED_FORMATS = {
     "audio/mpeg": ".mp3",
     "audio/mp3": ".mp3",
     "audio/mp4": ".m4a",
+    "audio/aac": ".aac",
     "audio/flac": ".flac",
     "application/octet-stream": ".wav",  # fallback
 }

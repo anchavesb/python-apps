@@ -82,9 +82,9 @@ export class DoloresClient {
     this.ws.send(data);
   }
 
-  sendAudioEnd(): void {
+  sendAudioEnd(contentType?: string): void {
     if (!this.ws) throw new Error('Not connected');
-    this.ws.send(JSON.stringify({ type: 'audio.end' }));
+    this.ws.send(JSON.stringify({ type: 'audio.end', content_type: contentType }));
   }
 
   disconnect(): void {

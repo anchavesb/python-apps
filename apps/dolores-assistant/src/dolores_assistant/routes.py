@@ -204,14 +204,28 @@ async def conversation_ws(websocket: WebSocket) -> None:
                 # Grab buffer and reset immediately to avoid stale data
                 audio_data = bytes(audio_buffer)
                 audio_buffer = bytearray()
+                content_type = data.get("content_type", "audio/webm")
 
                 if not audio_data:
                     await websocket.send_json({"type": "error", "code": "no_audio", "message": "No audio data received"})
                     continue
 
-                # Validate WebM magic bytes (EBML header: 0x1A45DFA3)
-                if len(audio_data) < 4 or audio_data[:4] != b'\x1a\x45\xdf\xa3':
-                    log.warning("invalid_audio_data", size=len(audio_data), header=audio_data[:4].hex() if audio_data else "empty")
+                # Validate audio magic bytes
+                valid = False
+                if len(audio_data) >= 4:
+                    header = audio_data[:4]
+                    # WebM/MKV (EBML): 0x1A45DFA3
+                    if header == b'\x1a\x45\xdf\xa3':
+                        valid = True
+                    # MP4/M4A (ftyp): bytes 4-7 are 'ftyp' but byte 0-3 is box size
+                    elif len(audio_data) >= 8 and audio_data[4:8] == b'ftyp':
+                        valid = True
+                    # OGG: 'OggS'
+                    elif header == b'OggS':
+                        valid = True
+
+                if not valid:
+                    log.warning("invalid_audio_data", size=len(audio_data), header=audio_data[:8].hex() if len(audio_data) >= 8 else audio_data.hex(), content_type=content_type)
                     await websocket.send_json({
                         "type": "error",
                         "code": "invalid_audio",
@@ -220,7 +234,7 @@ async def conversation_ws(websocket: WebSocket) -> None:
                     continue
 
                 # STT
-                transcription = await client.transcribe(audio_data)
+                transcription = await client.transcribe(audio_data, content_type=content_type)
 
                 if transcription is None:
                     await websocket.send_json({
