@@ -201,13 +201,26 @@ async def conversation_ws(websocket: WebSocket) -> None:
                 audio_buffer = bytearray()
 
             elif msg_type == "audio.end":
-                if not audio_buffer:
+                # Grab buffer and reset immediately to avoid stale data
+                audio_data = bytes(audio_buffer)
+                audio_buffer = bytearray()
+
+                if not audio_data:
                     await websocket.send_json({"type": "error", "code": "no_audio", "message": "No audio data received"})
                     continue
 
+                # Validate WebM magic bytes (EBML header: 0x1A45DFA3)
+                if len(audio_data) < 4 or audio_data[:4] != b'\x1a\x45\xdf\xa3':
+                    log.warning("invalid_audio_data", size=len(audio_data), header=audio_data[:4].hex() if audio_data else "empty")
+                    await websocket.send_json({
+                        "type": "error",
+                        "code": "invalid_audio",
+                        "message": "Invalid audio data, please try again",
+                    })
+                    continue
+
                 # STT
-                transcription = await client.transcribe(bytes(audio_buffer))
-                audio_buffer = bytearray()
+                transcription = await client.transcribe(audio_data)
 
                 if transcription is None:
                     await websocket.send_json({
