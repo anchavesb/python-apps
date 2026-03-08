@@ -27,6 +27,7 @@ interface AppState {
   audioPlaying: boolean;
   emotion: AvatarEmotion;
   viewMode: 'chat' | 'avatar';
+  conversationId: string;
 }
 
 function getAvatarPhase(s: AppState): AvatarPhase {
@@ -54,6 +55,7 @@ function createAppState() {
     audioPlaying: false,
     emotion: 'neutral',
     viewMode: (saved.viewMode as 'chat' | 'avatar') || 'chat',
+    conversationId: saved.conversationId || '',
   });
 
   const client = new DoloresClient();
@@ -72,6 +74,12 @@ function createAppState() {
     const msg = event as MessageEvent;
 
     switch (msg.type) {
+      case 'session.created':
+        if (msg.conversation_id) {
+          state.conversationId = msg.conversation_id;
+          saveSettings();
+        }
+        break;
       case 'transcription.final':
         state.transcription = msg.text;
         state.messages = [...state.messages, { role: 'user', content: msg.text, timestamp: new Date() }];
@@ -120,6 +128,7 @@ function createAppState() {
         voiceId: state.voiceId,
         provider: state.provider,
         mode: 'both',
+        conversationId: state.conversationId || undefined,
       });
       state.connected = true;
     } catch (e) {
@@ -173,6 +182,7 @@ function createAppState() {
       voiceId: state.voiceId,
       provider: state.provider,
       viewMode: state.viewMode,
+      conversationId: state.conversationId,
     }));
   }
 
