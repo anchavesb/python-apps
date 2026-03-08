@@ -122,6 +122,8 @@ function createAppState() {
 
   async function connect() {
     try {
+      // Acquire mic permission early and keep stream alive to avoid re-prompting on iOS
+      await recorder.init();
       await client.connect({
         serverUrl: state.serverUrl,
         apiKey: state.apiKey,
@@ -142,6 +144,7 @@ function createAppState() {
 
   function disconnect() {
     client.disconnect();
+    recorder.destroy();
     state.connected = false;
   }
 
@@ -169,10 +172,10 @@ function createAppState() {
     state.streamingText = '';
     state.emotion = 'neutral'; // reset for new response
 
-    // Send audio data
+    // Send audio data with content type for iOS compatibility
     const buffer = await blob.arrayBuffer();
     client.sendAudioChunk(buffer);
-    client.sendAudioEnd();
+    client.sendAudioEnd(recorder.mimeType || undefined);
   }
 
   function saveSettings() {

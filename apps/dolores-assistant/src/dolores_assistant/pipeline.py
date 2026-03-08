@@ -58,13 +58,24 @@ class ServiceClient:
 
     # --- STT ---
 
+    _EXT_MAP = {
+        "audio/webm": ".webm",
+        "audio/webm;codecs=opus": ".webm",
+        "audio/mp4": ".mp4",
+        "audio/aac": ".aac",
+        "audio/ogg": ".ogg",
+        "audio/ogg;codecs=opus": ".ogg",
+    }
+
     async def transcribe(self, audio_data: bytes, content_type: str = "audio/webm") -> dict | None:
         """Send audio to STT service. Returns transcription dict or None on failure."""
+        ext = self._EXT_MAP.get(content_type, ".webm")
+        filename = f"audio{ext}"
         async with _stt_semaphore:
             try:
                 resp = await self.client.post(
                     f"{settings.stt_url}/v1/transcribe",
-                    files={"file": ("audio.webm", audio_data, content_type)},
+                    files={"file": (filename, audio_data, content_type)},
                     timeout=settings.stt_timeout,
                 )
                 resp.raise_for_status()
