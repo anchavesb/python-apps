@@ -70,7 +70,7 @@ class ServiceClient:
                 resp.raise_for_status()
                 return resp.json()
             except Exception as e:
-                log.error("stt_call_failed", error=str(e))
+                log.error("stt_call_failed", error=str(e), audio_size=len(audio_data), content_type=content_type)
                 return None
 
     # --- Brain ---
