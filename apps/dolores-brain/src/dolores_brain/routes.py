@@ -41,6 +41,16 @@ DEFAULT_SYSTEM_PROMPT = (
 )
 
 
+def _trim_history(messages: list[dict], max_messages: int) -> list[dict]:
+    """Keep system prompt + last N messages to avoid unbounded context growth."""
+    if len(messages) <= max_messages:
+        return messages
+    # Preserve system prompt if present, then take last max_messages
+    if messages and messages[0].get("role") == "system":
+        return [messages[0]] + messages[-(max_messages - 1):]
+    return messages[-max_messages:]
+
+
 def get_store() -> ConversationStore:
     if _store is None:
         raise HTTPException(status_code=503, detail="Conversation store not initialized")
@@ -80,6 +90,9 @@ async def chat(
     # Append user message
     messages.append({"role": "user", "content": req.message})
     await store.append(conv_id, "user", req.message)
+
+    # Trim to sliding window to avoid unbounded context growth
+    messages = _trim_history(messages, settings.max_history_messages)
 
     # Call LiteLLM
     kwargs: dict = {
@@ -167,6 +180,9 @@ async def chat_stream(
 
     messages.append({"role": "user", "content": req.message})
     await store.append(conv_id, "user", req.message)
+
+    # Trim to sliding window to avoid unbounded context growth
+    messages = _trim_history(messages, settings.max_history_messages)
 
     kwargs: dict = {
         "model": model_str,
