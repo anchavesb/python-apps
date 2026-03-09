@@ -15,6 +15,7 @@ from dolores_common.logging import get_logger
 from .config import settings
 from .pipeline import ServiceClient, run_tool_loop, split_sentences
 from .schemas import TextChatRequest, TextChatResponse
+from .tools.registry import get_tool_definitions
 
 log = get_logger(__name__)
 
@@ -282,10 +283,57 @@ async def _process_and_respond(
     voice_id: str,
     mode: str,
 ) -> None:
-    """Send user text to brain, stream response text, and optionally TTS audio."""
+    """Send user text to brain (with tool support), stream response, and TTS."""
+    tools = get_tool_definitions()
+
+    if tools:
+        # Use non-streaming tool loop — handles tool calls, returns final text
+        result = await run_tool_loop(
+            client=client,
+            initial_message=user_text,
+            conversation_id=conversation_id,
+            provider=provider,
+        )
+        raw_text = result.get("message", "")
+
+        # Parse emotion tag from response
+        full_text = raw_text
+        match = _EMOTION_TAG_RE.match(raw_text)
+        if match:
+            emotion = match.group(1)
+            if emotion in _VALID_EMOTIONS:
+                await websocket.send_json({"type": "response.emotion", "emotion": emotion})
+            full_text = raw_text[match.end():]
+
+        # Send full text to client
+        if full_text:
+            await websocket.send_json({"type": "response.text", "content": full_text})
+    else:
+        # No tools — stream tokens directly
+        full_text = await _stream_response(websocket, client, user_text, conversation_id, provider)
+
+    # TTS: synthesize sentences and send audio
+    if mode != "text" and full_text.strip():
+        sentences = split_sentences(full_text)
+        for sentence in sentences:
+            audio = await client.synthesize(sentence, voice_id=voice_id)
+            if audio:
+                await websocket.send_bytes(audio)
+
+    await websocket.send_json({"type": "response.end", "full_text": full_text})
+
+
+async def _stream_response(
+    websocket: WebSocket,
+    client: ServiceClient,
+    user_text: str,
+    conversation_id: str | None,
+    provider: str,
+) -> str:
+    """Stream tokens from brain to WebSocket. Returns the full response text."""
     full_text = ""
     emotion_parsed = False
-    emotion_buffer = ""  # Buffer initial tokens to detect emotion tag
+    emotion_buffer = ""
 
     async for event in client.chat_stream(
         message=user_text,
@@ -296,21 +344,18 @@ async def _process_and_respond(
             content = event.get("content", "")
 
             if not emotion_parsed:
-                # Buffer tokens until we can check for emotion tag
                 emotion_buffer += content
                 match = _EMOTION_TAG_RE.match(emotion_buffer)
                 if match:
                     emotion = match.group(1)
                     if emotion in _VALID_EMOTIONS:
                         await websocket.send_json({"type": "response.emotion", "emotion": emotion})
-                    # Strip the tag and send the remainder
                     remainder = emotion_buffer[match.end():]
                     emotion_parsed = True
                     if remainder:
                         full_text += remainder
                         await websocket.send_json({"type": "response.text", "content": remainder})
                 elif len(emotion_buffer) > 30:
-                    # No tag found within first 30 chars, flush buffer
                     emotion_parsed = True
                     full_text += emotion_buffer
                     await websocket.send_json({"type": "response.text", "content": emotion_buffer})
@@ -320,7 +365,6 @@ async def _process_and_respond(
 
         elif event.get("type") == "done":
             full_text = event.get("content", full_text)
-            # Strip emotion tag from final text if present
             m = _EMOTION_TAG_RE.match(full_text)
             if m:
                 full_text = full_text[m.end():]
@@ -331,9 +375,9 @@ async def _process_and_respond(
                 "code": "brain_error",
                 "message": event.get("error", "Unknown error"),
             })
-            return
+            return ""
 
-    # Flush any remaining buffer (short responses)
+    # Flush remaining buffer
     if not emotion_parsed and emotion_buffer:
         match = _EMOTION_TAG_RE.match(emotion_buffer)
         if match:
@@ -348,12 +392,4 @@ async def _process_and_respond(
             full_text = emotion_buffer
             await websocket.send_json({"type": "response.text", "content": emotion_buffer})
 
-    # TTS: synthesize sentences and send audio
-    if mode != "text" and full_text.strip():
-        sentences = split_sentences(full_text)
-        for sentence in sentences:
-            audio = await client.synthesize(sentence, voice_id=voice_id)
-            if audio:
-                await websocket.send_bytes(audio)
-
-    await websocket.send_json({"type": "response.end", "full_text": full_text})
+    return full_text

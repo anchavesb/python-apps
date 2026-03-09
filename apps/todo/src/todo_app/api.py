@@ -22,13 +22,17 @@ def get_user_from_bearer() -> dict | None:
 
 
 def get_user_id():
-    """Get user_id supporting both session auth (web) and bearer auth (mobile).
+    """Get user_id supporting service key, bearer token, and session auth.
 
-    Priority: Bearer token > session cookie.
+    Priority: Service key > Bearer token > session cookie.
     Returns user sub (str) or None for single-user JSON mode.
     """
     if not current_app.config.get("MULTIUSER"):
         return None
+
+    # Internal service key uses a configured user identity
+    if _check_service_key():
+        return current_app.config.get("INTERNAL_SERVICE_USER_ID")
 
     # Try bearer token first (mobile/API clients)
     bearer_user = get_user_from_bearer()
@@ -51,12 +55,25 @@ def get_user_id():
     return None
 
 
+def _check_service_key() -> bool:
+    """Check if request has a valid internal service API key."""
+    key = current_app.config.get("INTERNAL_SERVICE_KEY")
+    if not key:
+        return False
+    auth = request.headers.get("X-Service-Key", "")
+    return auth == key
+
+
 def require_auth():
     """Return error response if auth is required but user not authenticated.
 
-    Supports both session cookies and bearer tokens.
+    Supports service keys, session cookies, and bearer tokens.
     """
     if not current_app.config.get("MULTIUSER"):
+        return None
+
+    # Check internal service key (for Dolores and other internal services)
+    if _check_service_key():
         return None
 
     # Check bearer token

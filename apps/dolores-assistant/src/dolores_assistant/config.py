@@ -21,6 +21,10 @@ class AssistantConfig:
     # WebSocket
     max_session_seconds: int = get_env_int("MAX_SESSION_SECONDS", 300)
 
+    # Integrations
+    todo_url: str = get_env("DOLORES_TODO_URL", "http://localhost:5000")
+    todo_service_key: str = get_env("DOLORES_TODO_SERVICE_KEY", "")
+
     # Defaults
     default_voice_id: str = get_env("DEFAULT_VOICE_ID", "default")
     default_provider: str = get_env("DEFAULT_PROVIDER", "ollama")

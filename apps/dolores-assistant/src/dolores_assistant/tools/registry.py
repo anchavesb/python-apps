@@ -3,13 +3,13 @@
 from __future__ import annotations
 
 from .base import Tool
+from .todo import CreateTodoTool, ListTodosTodayTool, ListTodosTool
 
-# Register tool classes here as they are implemented.
-# Example:
-#   from .web_search import WebSearchTool
-#   TOOLS: list[Tool] = [WebSearchTool()]
-
-TOOLS: list[Tool] = []
+TOOLS: list[Tool] = [
+    ListTodosTool(),
+    ListTodosTodayTool(),
+    CreateTodoTool(),
+]
 
 
 def get_tool_definitions() -> list[dict]:
