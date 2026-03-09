@@ -225,13 +225,8 @@ async def conversation_ws(websocket: WebSocket) -> None:
                         valid = True
 
                 if not valid:
-                    log.warning("invalid_audio_data", size=len(audio_data), header=audio_data[:8].hex() if len(audio_data) >= 8 else audio_data.hex(), content_type=content_type)
-                    await websocket.send_json({
-                        "type": "error",
-                        "code": "invalid_audio",
-                        "message": "Invalid audio data, please try again",
-                    })
-                    continue
+                    log.warning("unrecognized_audio_header", size=len(audio_data), header=audio_data[:8].hex() if len(audio_data) >= 8 else audio_data.hex(), content_type=content_type)
+                    # Still attempt transcription — let STT service decide
 
                 # STT
                 transcription = await client.transcribe(audio_data, content_type=content_type)
