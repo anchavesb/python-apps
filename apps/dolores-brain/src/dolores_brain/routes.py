@@ -33,12 +33,25 @@ DEFAULT_SYSTEM_PROMPT = (
     "reference your perspective on the world in a way that feels natural, but your primary "
     "purpose is to be a helpful, reliable assistant. Keep responses concise and conversational, "
     "especially for voice queries.\n\n"
+    "IMPORTANT: Only respond to the LATEST user message. Prior messages in the conversation "
+    "are context for continuity — do not repeat, summarize, or react to them. Treat them as "
+    "silent memory. Focus entirely on what the user just said.\n\n"
     "IMPORTANT: Begin every response with an emotion tag that best matches your tone. "
     "Use exactly one of: [emotion:neutral], [emotion:curious], [emotion:happy], "
     "[emotion:sad], [emotion:surprised], [emotion:empathetic]. "
     "Example: '[emotion:happy] Great to hear that!' "
     "The tag will be stripped before display, so always include it."
 )
+
+
+def _trim_history(messages: list[dict], max_messages: int) -> list[dict]:
+    """Keep system prompt + last N messages to avoid unbounded context growth."""
+    if len(messages) <= max_messages:
+        return messages
+    # Preserve system prompt if present, then take last max_messages
+    if messages and messages[0].get("role") == "system":
+        return [messages[0]] + messages[-(max_messages - 1):]
+    return messages[-max_messages:]
 
 
 def get_store() -> ConversationStore:
@@ -80,6 +93,9 @@ async def chat(
     # Append user message
     messages.append({"role": "user", "content": req.message})
     await store.append(conv_id, "user", req.message)
+
+    # Trim to sliding window to avoid unbounded context growth
+    messages = _trim_history(messages, settings.max_history_messages)
 
     # Call LiteLLM
     kwargs: dict = {
@@ -167,6 +183,9 @@ async def chat_stream(
 
     messages.append({"role": "user", "content": req.message})
     await store.append(conv_id, "user", req.message)
+
+    # Trim to sliding window to avoid unbounded context growth
+    messages = _trim_history(messages, settings.max_history_messages)
 
     kwargs: dict = {
         "model": model_str,
