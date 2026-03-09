@@ -157,23 +157,36 @@ function createAppState() {
     client.sendText(text);
   }
 
+  let recordingReady: Promise<void> | null = null;
+
   async function startRecording() {
-    if (!client.connected) return;
-    await recorder.start();
+    if (!client.connected || state.recording) return;
+    player.stop(); // Stop TTS playback to prevent echo/feedback
     state.recording = true;
-    client.sendAudioStart();
+    recordingReady = recorder.start().then(() => {
+      client.sendAudioStart();
+    });
   }
 
   async function stopRecording() {
-    if (!recorder.recording) return;
+    if (!state.recording) return;
+    // Wait for start to fully complete before stopping
+    if (recordingReady) {
+      await recordingReady;
+      recordingReady = null;
+    }
+
     const blob = await recorder.stop();
     state.recording = false;
+
+    const buffer = await blob.arrayBuffer();
+    if (buffer.byteLength === 0) return; // Nothing recorded (too short)
+
     state.thinking = true;
     state.streamingText = '';
     state.emotion = 'neutral'; // reset for new response
 
     // Send audio data with content type for iOS compatibility
-    const buffer = await blob.arrayBuffer();
     client.sendAudioChunk(buffer);
     client.sendAudioEnd(recorder.mimeType || undefined);
   }
