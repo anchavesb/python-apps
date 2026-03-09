@@ -40,8 +40,8 @@ async def transcribe(
     engine: STTEngine = Depends(get_engine),
 ) -> TranscribeResponse:
     """Transcribe an uploaded audio file."""
-    # Validate content type
-    content_type = file.content_type or "application/octet-stream"
+    # Validate content type (strip codec params like ";codecs=opus")
+    content_type = (file.content_type or "application/octet-stream").split(";")[0].strip()
     if content_type not in SUPPORTED_FORMATS:
         raise HTTPException(
             status_code=415,
