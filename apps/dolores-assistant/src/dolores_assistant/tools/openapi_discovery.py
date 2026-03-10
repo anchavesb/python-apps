@@ -33,6 +33,7 @@ class OpenAPITool(Tool):
         base_url: str,
         has_body: bool,
         auth_header: dict[str, str] | None = None,
+        http_client: httpx.AsyncClient | None = None,
     ) -> None:
         self._name = op_name
         self._description = op_description
@@ -42,6 +43,7 @@ class OpenAPITool(Tool):
         self._base_url = base_url.rstrip("/")
         self._has_body = has_body
         self._auth_header = auth_header or {}
+        self._http_client = http_client
 
     @property
     def name(self) -> str:
@@ -63,40 +65,42 @@ class OpenAPITool(Tool):
                 path = path.replace(f"{{{key}}}", str(kwargs.pop(key)))
 
         url = f"{self._base_url}{path}"
+        client = self._http_client
+        if not client:
+            raise RuntimeError("HTTP client not set on OpenAPITool")
 
-        async with httpx.AsyncClient(timeout=15) as client:
-            if self._has_body:
-                resp = await client.request(
-                    self._method,
-                    url,
-                    json=kwargs if kwargs else None,
-                    headers=self._auth_header,
-                )
-            else:
-                resp = await client.request(
-                    self._method,
-                    url,
-                    params=kwargs if kwargs else None,
-                    headers=self._auth_header,
-                )
+        if self._has_body:
+            resp = await client.request(
+                self._method,
+                url,
+                json=kwargs if kwargs else None,
+                headers=self._auth_header,
+            )
+        else:
+            resp = await client.request(
+                self._method,
+                url,
+                params=kwargs if kwargs else None,
+                headers=self._auth_header,
+            )
 
-            if resp.status_code == 204:
-                return "Done."
-            try:
-                data = resp.json()
-            except Exception:
-                data = resp.text
+        if resp.status_code == 204:
+            return "Done."
+        try:
+            data = resp.json()
+        except Exception:
+            data = resp.text
 
-            if resp.status_code >= 400:
-                return f"Error {resp.status_code}: {json.dumps(data) if isinstance(data, (dict, list)) else data}"
+        if resp.status_code >= 400:
+            return f"Error {resp.status_code}: {json.dumps(data) if isinstance(data, (dict, list)) else data}"
 
-            if isinstance(data, list):
-                if not data:
-                    return "No items found."
-                return json.dumps(data, indent=2)
-            if isinstance(data, dict):
-                return json.dumps(data, indent=2)
-            return str(data)
+        if isinstance(data, list):
+            if not data:
+                return "No items found."
+            return json.dumps(data, indent=2)
+        if isinstance(data, dict):
+            return json.dumps(data, indent=2)
+        return str(data)
 
 
 def _resolve_ref(spec: dict, ref: str) -> dict:
@@ -151,6 +155,7 @@ def _build_tools_from_spec(
     base_url: str,
     prefix: str,
     auth_header: dict[str, str] | None,
+    http_client: httpx.AsyncClient | None = None,
 ) -> list[Tool]:
     """Parse an OpenAPI spec and return Tool instances for each operation."""
     tools: list[Tool] = []
@@ -213,14 +218,21 @@ def _build_tools_from_spec(
                     base_url=base_url,
                     has_body=has_body,
                     auth_header=auth_header,
+                    http_client=http_client,
                 )
             )
 
     return tools
 
 
-async def discover_tools(integrations: list[dict]) -> list[Tool]:
+async def discover_tools(
+    integrations: list[dict],
+    http_client: httpx.AsyncClient,
+) -> list[Tool]:
     """Fetch OpenAPI specs from configured integration URLs and build tools.
+
+    Uses the provided http_client for both spec fetching and tool execution
+    (connection pooling).
 
     Each integration dict:
         {
@@ -239,15 +251,15 @@ async def discover_tools(integrations: list[dict]) -> list[Tool]:
         auth = integration.get("auth")
 
         try:
-            async with httpx.AsyncClient(timeout=10) as client:
-                resp = await client.get(
-                    f"{base_url}{spec_path}",
-                    headers=auth or {},
-                )
-                resp.raise_for_status()
-                spec = resp.json()
+            resp = await http_client.get(
+                f"{base_url}{spec_path}",
+                headers=auth or {},
+                timeout=10,
+            )
+            resp.raise_for_status()
+            spec = resp.json()
 
-            tools = _build_tools_from_spec(spec, base_url, name, auth)
+            tools = _build_tools_from_spec(spec, base_url, name, auth, http_client)
             log.info("openapi_discovered", service=name, tools=len(tools),
                      tool_names=[t.name for t in tools])
             all_tools.extend(tools)

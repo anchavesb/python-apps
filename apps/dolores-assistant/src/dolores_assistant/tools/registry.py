@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import httpx
+
 from dolores_common.logging import get_logger
 
 from .base import Tool
@@ -11,7 +13,7 @@ log = get_logger(__name__)
 TOOLS: list[Tool] = []
 
 
-async def load_tools(integrations: list[dict]) -> None:
+async def load_tools(integrations: list[dict], http_client: httpx.AsyncClient) -> None:
     """Fetch OpenAPI specs and populate the global TOOLS list."""
     global TOOLS
     if not integrations:
@@ -19,7 +21,7 @@ async def load_tools(integrations: list[dict]) -> None:
 
     from .openapi_discovery import discover_tools
 
-    discovered = await discover_tools(integrations)
+    discovered = await discover_tools(integrations, http_client)
     TOOLS = discovered
     log.info("tools_loaded", count=len(TOOLS), names=[t.name for t in TOOLS])
 
