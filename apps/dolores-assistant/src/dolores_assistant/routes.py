@@ -15,6 +15,7 @@ from dolores_common.logging import get_logger
 from .config import settings
 from .pipeline import ServiceClient, run_tool_loop, split_sentences
 from .schemas import TextChatRequest, TextChatResponse
+from .tools.registry import get_tool_definitions
 
 log = get_logger(__name__)
 
@@ -283,6 +284,41 @@ async def _process_and_respond(
     mode: str,
 ) -> None:
     """Send user text to brain, stream response text, and optionally TTS audio."""
+
+    # When tools are available, use the non-streaming tool loop
+    # so the LLM can call tools before producing a final response.
+    if get_tool_definitions():
+        result = await run_tool_loop(
+            client=client,
+            initial_message=user_text,
+            conversation_id=conversation_id,
+            provider=provider,
+        )
+        full_text = result.get("message", "")
+
+        # Parse and strip emotion tag
+        m = _EMOTION_TAG_RE.match(full_text)
+        if m:
+            emotion = m.group(1)
+            if emotion in _VALID_EMOTIONS:
+                await websocket.send_json({"type": "response.emotion", "emotion": emotion})
+            full_text = full_text[m.end():]
+
+        if full_text:
+            await websocket.send_json({"type": "response.text", "content": full_text})
+
+        # TTS
+        if mode != "text" and full_text.strip():
+            sentences = split_sentences(full_text)
+            for sentence in sentences:
+                audio = await client.synthesize(sentence, voice_id=voice_id)
+                if audio:
+                    await websocket.send_bytes(audio)
+
+        await websocket.send_json({"type": "response.end", "full_text": full_text})
+        return
+
+    # No tools — use streaming path for faster response
     full_text = ""
     emotion_parsed = False
     emotion_buffer = ""  # Buffer initial tokens to detect emotion tag

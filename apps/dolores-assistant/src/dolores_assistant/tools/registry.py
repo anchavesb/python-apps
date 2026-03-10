@@ -1,15 +1,27 @@
-"""Tool registry — hardcoded list for MVP."""
+"""Tool registry — loads tools from OpenAPI auto-discovery at startup."""
 
 from __future__ import annotations
 
+from dolores_common.logging import get_logger
+
 from .base import Tool
 
-# Register tool classes here as they are implemented.
-# Example:
-#   from .web_search import WebSearchTool
-#   TOOLS: list[Tool] = [WebSearchTool()]
+log = get_logger(__name__)
 
 TOOLS: list[Tool] = []
+
+
+async def load_tools(integrations: list[dict]) -> None:
+    """Fetch OpenAPI specs and populate the global TOOLS list."""
+    global TOOLS
+    if not integrations:
+        return
+
+    from .openapi_discovery import discover_tools
+
+    discovered = await discover_tools(integrations)
+    TOOLS = discovered
+    log.info("tools_loaded", count=len(TOOLS), names=[t.name for t in TOOLS])
 
 
 def get_tool_definitions() -> list[dict]:
