@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+
 from dolores_common.config import get_env, get_env_int, get_env_bool
 
 
@@ -28,6 +30,18 @@ class AssistantConfig:
     # Logging
     log_level: str = get_env("LOG_LEVEL", "INFO")
     log_format: str = get_env("LOG_FORMAT", "console")
+
+    # Integrations — JSON array of {name, url, spec_path?, auth?}
+    # Example: [{"name":"todo","url":"http://todo:5000","spec_path":"/api/openapi.json"}]
+    @property
+    def integrations(self) -> list[dict]:
+        raw = get_env("DOLORES_INTEGRATIONS", "")
+        if not raw:
+            return []
+        try:
+            return json.loads(raw)
+        except json.JSONDecodeError:
+            return []
 
 
 settings = AssistantConfig()

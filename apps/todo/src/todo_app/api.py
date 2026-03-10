@@ -1,8 +1,14 @@
 from flask import Blueprint, current_app, jsonify, request, session
 from .storage import ValidationError
 from .jwt_auth import validate_bearer_token
+from .openapi_spec import OPENAPI_SPEC
 
 api_bp = Blueprint("api", __name__)
+
+
+@api_bp.get("/openapi.json")
+def openapi_spec():
+    return jsonify(OPENAPI_SPEC)
 
 
 def store():

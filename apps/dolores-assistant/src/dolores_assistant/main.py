@@ -13,6 +13,7 @@ from dolores_common.middleware import add_common_middleware
 from .config import settings
 from .pipeline import ServiceClient
 from .routes import router as assistant_router, set_service_client
+from .tools.registry import load_tools
 
 _service_client = ServiceClient()
 
@@ -22,6 +23,7 @@ async def lifespan(app: FastAPI):
     setup_logging("dolores-assistant", settings.log_level, json_output=settings.log_format == "json")
     await _service_client.start()
     set_service_client(_service_client)
+    await load_tools(settings.integrations, _service_client.client)
     yield
     await _service_client.close()
 
