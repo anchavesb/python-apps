@@ -37,3 +37,6 @@ class Config:
 
     # Additional JWT issuers for mobile/API clients (comma-separated "issuer_url|client_id" pairs)
     OIDC_JWT_ISSUERS: str = env("OIDC_JWT_ISSUERS", "")
+
+    # Service key for internal service-to-service calls (e.g., from dolores-assistant)
+    SERVICE_KEY: str = env("SERVICE_KEY", "")

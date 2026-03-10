@@ -60,9 +60,14 @@ def get_user_id():
 def require_auth():
     """Return error response if auth is required but user not authenticated.
 
-    Supports both session cookies and bearer tokens.
+    Supports service keys, bearer tokens, and session cookies.
     """
     if not current_app.config.get("MULTIUSER"):
+        return None
+
+    # Check service key (internal service-to-service calls)
+    service_key = current_app.config.get("SERVICE_KEY")
+    if service_key and request.headers.get("X-Service-Key") == service_key:
         return None
 
     # Check bearer token
