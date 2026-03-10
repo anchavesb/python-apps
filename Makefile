@@ -1,4 +1,4 @@
-.PHONY: help venv install install-all test run-todo run-todo-dev clean
+.PHONY: help venv install install-all test run-todo run-todo-dev clean gpu-base gpu-build gpu-build-all
 
 PY?=python3
 VENV=.venv
@@ -82,5 +82,23 @@ docker-push-all:
 	    name=$$(basename "$$app"); \
 	    echo "Pushing $$name"; \
 	    docker push ghcr.io/$(GHCR_OWNER)/$$name:$(TAG); \
+	  fi; \
+	done
+
+# GPU image builds (local only, not pushed to registry)
+GPU_BASE_IMAGE=dolores-gpu-base:latest
+
+gpu-base:
+	docker build -t $(GPU_BASE_IMAGE) -f docker/Dockerfile.gpu-base .
+
+gpu-build: gpu-base
+	docker build -t dolores-$(APP)-gpu:$(TAG) -f apps/dolores-$(APP)/Dockerfile.gpu .
+
+gpu-build-all: gpu-base
+	@for app in apps/dolores-*; do \
+	  if [ -f "$$app/Dockerfile.gpu" ]; then \
+	    name=$$(basename "$$app"); \
+	    echo "Building $$name (GPU)"; \
+	    docker build -t $$name-gpu:$(TAG) -f "$$app/Dockerfile.gpu" .; \
 	  fi; \
 	done
