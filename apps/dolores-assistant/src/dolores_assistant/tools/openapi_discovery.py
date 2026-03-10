@@ -3,12 +3,17 @@
 At startup, fetches OpenAPI specs from configured URLs and generates
 Tool instances that make HTTP calls to those services. The LLM sees
 these as regular function-calling tools.
+
+User auth is handled via JWT passthrough: the caller sets
+``current_user_token`` before executing tools, and OpenAPITool forwards
+it as a Bearer token to the downstream service.
 """
 
 from __future__ import annotations
 
 import json
 import re
+from contextvars import ContextVar
 
 import httpx
 
@@ -17,6 +22,10 @@ from dolores_common.logging import get_logger
 from .base import Tool
 
 log = get_logger(__name__)
+
+# Set by the caller (routes.py) before running the tool loop.
+# OpenAPITool reads this to forward the user's JWT to downstream services.
+current_user_token: ContextVar[str | None] = ContextVar("current_user_token", default=None)
 
 
 class OpenAPITool(Tool):
@@ -69,19 +78,25 @@ class OpenAPITool(Tool):
         if not client:
             raise RuntimeError("HTTP client not set on OpenAPITool")
 
+        # Build headers: static auth + user JWT passthrough
+        headers = dict(self._auth_header)
+        token = current_user_token.get()
+        if token:
+            headers["Authorization"] = f"Bearer {token}"
+
         if self._has_body:
             resp = await client.request(
                 self._method,
                 url,
                 json=kwargs if kwargs else None,
-                headers=self._auth_header,
+                headers=headers,
             )
         else:
             resp = await client.request(
                 self._method,
                 url,
                 params=kwargs if kwargs else None,
-                headers=self._auth_header,
+                headers=headers,
             )
 
         if resp.status_code == 204:

@@ -6,7 +6,7 @@ import json
 import re
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile, WebSocket, WebSocketDisconnect
 from fastapi.responses import Response
 
 from dolores_common.auth import ClientAPIKey, validate_ws_token
@@ -15,6 +15,7 @@ from dolores_common.logging import get_logger
 from .config import settings
 from .pipeline import ServiceClient, run_tool_loop, split_sentences
 from .schemas import TextChatRequest, TextChatResponse
+from .tools.openapi_discovery import current_user_token
 from .tools.registry import get_tool_definitions
 
 log = get_logger(__name__)
@@ -38,10 +39,16 @@ def set_service_client(client: ServiceClient) -> None:
 @router.post("/chat", response_model=TextChatResponse)
 async def text_chat(
     req: TextChatRequest,
+    request: Request,
     _auth: ClientAPIKey = None,
     client: ServiceClient = Depends(get_service_client),
 ) -> TextChatResponse:
     """Text-only chat endpoint (simpler alternative to WebSocket)."""
+    # Forward user's JWT to downstream services (e.g. todo API)
+    auth_header = request.headers.get("authorization", "")
+    if auth_header.lower().startswith("bearer "):
+        current_user_token.set(auth_header[7:])
+
     result = await run_tool_loop(
         client=client,
         initial_message=req.message,
@@ -171,6 +178,12 @@ async def conversation_ws(websocket: WebSocket) -> None:
         provider = msg.get("provider", provider)
         mode = msg.get("mode", mode)
         conversation_id = msg.get("conversation_id") or str(uuid.uuid4())
+
+        # Capture user's OIDC JWT for forwarding to downstream services (e.g. todo API)
+        # Separate from "token" which is the API key for assistant auth
+        user_token = msg.get("user_token")
+        if user_token:
+            current_user_token.set(user_token)
 
         await websocket.send_json({
             "type": "session.created",

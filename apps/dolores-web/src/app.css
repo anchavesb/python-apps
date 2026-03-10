@@ -297,6 +297,39 @@ textarea::placeholder {
   background: var(--accent);
 }
 
+.user-name {
+  font-size: 0.8rem;
+  color: var(--text-dim);
+  padding: 0 4px;
+}
+
+.modal fieldset {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 12px;
+  margin: 4px 0;
+}
+
+.modal fieldset legend {
+  font-size: 0.85rem;
+  color: var(--text-dim);
+  padding: 0 6px;
+}
+
+.auth-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.85rem;
+  margin-top: 4px;
+}
+
+.hint {
+  font-size: 0.8rem;
+  color: var(--text-dim);
+  margin: 4px 0 0;
+}
+
 /* View toggle */
 .view-toggle {
   background: var(--bg-input);
