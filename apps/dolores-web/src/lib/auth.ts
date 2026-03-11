@@ -29,6 +29,7 @@ interface TokenResponse {
 
 export interface AuthState {
   accessToken: string | null;
+  refreshToken: string | null;
   userName: string | null;
   userEmail: string | null;
   expiresAt: number | null;
@@ -148,7 +149,9 @@ export async function handleCallback(config: OIDCConfig): Promise<AuthState | nu
   let userEmail: string | null = null;
   if (tokens.id_token) {
     try {
-      const payload = JSON.parse(atob(tokens.id_token.split('.')[1]));
+      // JWT uses base64url encoding — convert to standard base64 for atob
+      const b64 = tokens.id_token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
+      const payload = JSON.parse(atob(b64));
       userName = payload.name || payload.preferred_username || null;
       userEmail = payload.email || null;
     } catch { /* ignore decode errors */ }
@@ -156,6 +159,7 @@ export async function handleCallback(config: OIDCConfig): Promise<AuthState | nu
 
   const authState: AuthState = {
     accessToken: tokens.access_token,
+    refreshToken: tokens.refresh_token || null,
     userName,
     userEmail,
     expiresAt: tokens.expires_in ? Date.now() + tokens.expires_in * 1000 : null,
@@ -206,4 +210,38 @@ export function isTokenExpired(state: AuthState): boolean {
   if (!state.expiresAt) return false;
   // Consider expired 60s before actual expiry
   return Date.now() > state.expiresAt - 60_000;
+}
+
+export async function refreshAccessToken(config: OIDCConfig): Promise<AuthState | null> {
+  const current = loadAuth();
+  if (!current?.refreshToken) return null;
+
+  const endpoints = await discoverEndpoints(config.issuer);
+
+  try {
+    const resp = await fetch(endpoints.token_endpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        grant_type: 'refresh_token',
+        client_id: config.clientId,
+        refresh_token: current.refreshToken,
+      }),
+    });
+
+    if (!resp.ok) return null;
+
+    const tokens: TokenResponse = await resp.json();
+    const authState: AuthState = {
+      ...current,
+      accessToken: tokens.access_token,
+      refreshToken: tokens.refresh_token || current.refreshToken,
+      expiresAt: tokens.expires_in ? Date.now() + tokens.expires_in * 1000 : null,
+    };
+
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(authState));
+    return authState;
+  } catch {
+    return null;
+  }
 }

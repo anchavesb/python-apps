@@ -2,7 +2,7 @@ import { DoloresClient, type MessageEvent } from './DoloresClient';
 import { AudioRecorder } from './AudioRecorder';
 import { AudioPlayer } from './AudioPlayer';
 import { detectEmotion } from './avatar/EmotionDetector';
-import { handleCallback, loadAuth, login, logout, type OIDCConfig } from './auth';
+import { handleCallback, loadAuth, login, logout, isTokenExpired, refreshAccessToken, type OIDCConfig } from './auth';
 import type { AvatarPhase, AvatarEmotion } from './avatar/types';
 
 export type { AvatarPhase, AvatarEmotion };
@@ -133,6 +133,29 @@ function createAppState() {
 
   async function connect() {
     try {
+      // Refresh expired OIDC token before connecting
+      if (state.userToken) {
+        const auth = loadAuth();
+        if (auth && isTokenExpired(auth)) {
+          const config = getOIDCConfig();
+          if (config) {
+            const refreshed = await refreshAccessToken(config);
+            if (refreshed?.accessToken) {
+              state.userToken = refreshed.accessToken;
+            } else {
+              state.userToken = '';
+              state.oidcUser = null;
+              state.messages = [...state.messages, {
+                role: 'assistant',
+                content: 'Your session has expired. Please login again in Settings.',
+                timestamp: new Date(),
+              }];
+              return;
+            }
+          }
+        }
+      }
+
       // Acquire mic permission early and keep stream alive to avoid re-prompting on iOS
       await recorder.init();
       await client.connect({

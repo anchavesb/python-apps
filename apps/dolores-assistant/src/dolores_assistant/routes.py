@@ -44,22 +44,24 @@ async def text_chat(
     client: ServiceClient = Depends(get_service_client),
 ) -> TextChatResponse:
     """Text-only chat endpoint (simpler alternative to WebSocket)."""
-    # Forward user's JWT to downstream services (e.g. todo API)
-    auth_header = request.headers.get("authorization", "")
-    if auth_header.lower().startswith("bearer "):
-        current_user_token.set(auth_header[7:])
+    # Forward user's OIDC JWT to downstream services (e.g. todo API).
+    # Uses X-User-Token to avoid conflict with Authorization (used for API key auth).
+    user_jwt = request.headers.get("x-user-token", "")
+    token = current_user_token.set(user_jwt or None)
+    try:
+        result = await run_tool_loop(
+            client=client,
+            initial_message=req.message,
+            conversation_id=req.conversation_id,
+            provider=req.provider,
+        )
 
-    result = await run_tool_loop(
-        client=client,
-        initial_message=req.message,
-        conversation_id=req.conversation_id,
-        provider=req.provider,
-    )
-
-    return TextChatResponse(
-        message=result.get("message", ""),
-        conversation_id=result.get("conversation_id", ""),
-    )
+        return TextChatResponse(
+            message=result.get("message", ""),
+            conversation_id=result.get("conversation_id", ""),
+        )
+    finally:
+        current_user_token.reset(token)
 
 
 # --- Voice management (proxy to TTS service) ---
@@ -160,6 +162,7 @@ async def conversation_ws(websocket: WebSocket) -> None:
     provider = settings.default_provider
     mode = "both"
     audio_buffer = bytearray()
+    _cv_token = current_user_token.set(None)
 
     try:
         # Wait for session.start
@@ -181,9 +184,7 @@ async def conversation_ws(websocket: WebSocket) -> None:
 
         # Capture user's OIDC JWT for forwarding to downstream services (e.g. todo API)
         # Separate from "token" which is the API key for assistant auth
-        user_token = msg.get("user_token")
-        if user_token:
-            current_user_token.set(user_token)
+        _cv_token = current_user_token.set(msg.get("user_token"))
 
         await websocket.send_json({
             "type": "session.created",
@@ -281,6 +282,8 @@ async def conversation_ws(websocket: WebSocket) -> None:
             await websocket.send_json({"type": "error", "code": "internal_error", "message": str(e)})
         except Exception:
             pass
+    finally:
+        current_user_token.reset(_cv_token)
 
 
 _EMOTION_TAG_RE = re.compile(r"^\[emotion:(\w+)\]\s*")
