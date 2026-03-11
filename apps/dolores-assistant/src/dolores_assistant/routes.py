@@ -6,7 +6,7 @@ import json
 import re
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile, WebSocket, WebSocketDisconnect
 from fastapi.responses import Response
 
 from dolores_common.auth import ClientAPIKey, validate_ws_token
@@ -15,6 +15,7 @@ from dolores_common.logging import get_logger
 from .config import settings
 from .pipeline import ServiceClient, run_tool_loop, split_sentences
 from .schemas import TextChatRequest, TextChatResponse
+from .tools.openapi_discovery import current_user_token
 from .tools.registry import get_tool_definitions
 
 log = get_logger(__name__)
@@ -38,21 +39,29 @@ def set_service_client(client: ServiceClient) -> None:
 @router.post("/chat", response_model=TextChatResponse)
 async def text_chat(
     req: TextChatRequest,
+    request: Request,
     _auth: ClientAPIKey = None,
     client: ServiceClient = Depends(get_service_client),
 ) -> TextChatResponse:
     """Text-only chat endpoint (simpler alternative to WebSocket)."""
-    result = await run_tool_loop(
-        client=client,
-        initial_message=req.message,
-        conversation_id=req.conversation_id,
-        provider=req.provider,
-    )
+    # Forward user's OIDC JWT to downstream services (e.g. todo API).
+    # Uses X-User-Token to avoid conflict with Authorization (used for API key auth).
+    user_jwt = request.headers.get("x-user-token", "")
+    token = current_user_token.set(user_jwt or None)
+    try:
+        result = await run_tool_loop(
+            client=client,
+            initial_message=req.message,
+            conversation_id=req.conversation_id,
+            provider=req.provider,
+        )
 
-    return TextChatResponse(
-        message=result.get("message", ""),
-        conversation_id=result.get("conversation_id", ""),
-    )
+        return TextChatResponse(
+            message=result.get("message", ""),
+            conversation_id=result.get("conversation_id", ""),
+        )
+    finally:
+        current_user_token.reset(token)
 
 
 # --- Voice management (proxy to TTS service) ---
@@ -153,6 +162,7 @@ async def conversation_ws(websocket: WebSocket) -> None:
     provider = settings.default_provider
     mode = "both"
     audio_buffer = bytearray()
+    _cv_token = current_user_token.set(None)
 
     try:
         # Wait for session.start
@@ -171,6 +181,10 @@ async def conversation_ws(websocket: WebSocket) -> None:
         provider = msg.get("provider", provider)
         mode = msg.get("mode", mode)
         conversation_id = msg.get("conversation_id") or str(uuid.uuid4())
+
+        # Capture user's OIDC JWT for forwarding to downstream services (e.g. todo API)
+        # Separate from "token" which is the API key for assistant auth
+        _cv_token = current_user_token.set(msg.get("user_token"))
 
         await websocket.send_json({
             "type": "session.created",
@@ -268,6 +282,8 @@ async def conversation_ws(websocket: WebSocket) -> None:
             await websocket.send_json({"type": "error", "code": "internal_error", "message": str(e)})
         except Exception:
             pass
+    finally:
+        current_user_token.reset(_cv_token)
 
 
 _EMOTION_TAG_RE = re.compile(r"^\[emotion:(\w+)\]\s*")

@@ -2,6 +2,7 @@ import { DoloresClient, type MessageEvent } from './DoloresClient';
 import { AudioRecorder } from './AudioRecorder';
 import { AudioPlayer } from './AudioPlayer';
 import { detectEmotion } from './avatar/EmotionDetector';
+import { handleCallback, loadAuth, login, logout, isTokenExpired, refreshAccessToken, type OIDCConfig } from './auth';
 import type { AvatarPhase, AvatarEmotion } from './avatar/types';
 
 export type { AvatarPhase, AvatarEmotion };
@@ -22,12 +23,17 @@ interface AppState {
   settingsOpen: boolean;
   serverUrl: string;
   apiKey: string;
+  userToken: string;
   voiceId: string;
   provider: string;
   audioPlaying: boolean;
   emotion: AvatarEmotion;
   viewMode: 'chat' | 'avatar';
   conversationId: string;
+  // OIDC
+  oidcIssuer: string;
+  oidcClientId: string;
+  oidcUser: string | null;  // display name from OIDC
 }
 
 function getAvatarPhase(s: AppState): AvatarPhase {
@@ -39,6 +45,7 @@ function getAvatarPhase(s: AppState): AvatarPhase {
 
 function createAppState() {
   const saved = loadSettings();
+  const auth = loadAuth();
 
   let state = $state<AppState>({
     messages: [],
@@ -50,12 +57,16 @@ function createAppState() {
     settingsOpen: false,
     serverUrl: saved.serverUrl || 'http://localhost:8000',
     apiKey: saved.apiKey || '',
+    userToken: auth?.accessToken || '',
     voiceId: saved.voiceId || 'default',
     provider: saved.provider || 'ollama',
     audioPlaying: false,
     emotion: 'neutral',
     viewMode: (saved.viewMode as 'chat' | 'avatar') || 'chat',
     conversationId: saved.conversationId || '',
+    oidcIssuer: saved.oidcIssuer || '',
+    oidcClientId: saved.oidcClientId || '',
+    oidcUser: auth?.userName || null,
   });
 
   const client = new DoloresClient();
@@ -122,6 +133,29 @@ function createAppState() {
 
   async function connect() {
     try {
+      // Refresh expired OIDC token before connecting
+      if (state.userToken) {
+        const auth = loadAuth();
+        if (auth && isTokenExpired(auth)) {
+          const config = getOIDCConfig();
+          if (config) {
+            const refreshed = await refreshAccessToken(config);
+            if (refreshed?.accessToken) {
+              state.userToken = refreshed.accessToken;
+            } else {
+              state.userToken = '';
+              state.oidcUser = null;
+              state.messages = [...state.messages, {
+                role: 'assistant',
+                content: 'Your session has expired. Please login again in Settings.',
+                timestamp: new Date(),
+              }];
+              return;
+            }
+          }
+        }
+      }
+
       // Acquire mic permission early and keep stream alive to avoid re-prompting on iOS
       await recorder.init();
       await client.connect({
@@ -131,6 +165,7 @@ function createAppState() {
         provider: state.provider,
         mode: 'both',
         conversationId: state.conversationId || undefined,
+        userToken: state.userToken || undefined,
       });
       state.connected = true;
     } catch (e) {
@@ -199,12 +234,47 @@ function createAppState() {
       provider: state.provider,
       viewMode: state.viewMode,
       conversationId: state.conversationId,
+      oidcIssuer: state.oidcIssuer,
+      oidcClientId: state.oidcClientId,
     }));
   }
 
   function setViewMode(mode: 'chat' | 'avatar') {
     state.viewMode = mode;
     saveSettings();
+  }
+
+  function getOIDCConfig(): OIDCConfig | null {
+    if (!state.oidcIssuer || !state.oidcClientId) return null;
+    return { issuer: state.oidcIssuer, clientId: state.oidcClientId };
+  }
+
+  async function oidcLogin() {
+    const config = getOIDCConfig();
+    if (!config) return;
+    saveSettings();
+    await login(config);
+  }
+
+  async function oidcLogout() {
+    const config = getOIDCConfig();
+    state.userToken = '';
+    state.oidcUser = null;
+    if (config) {
+      await logout(config);
+    }
+  }
+
+  async function oidcHandleCallback(): Promise<boolean> {
+    const config = getOIDCConfig();
+    if (!config) return false;
+    const auth = await handleCallback(config);
+    if (auth) {
+      state.userToken = auth.accessToken || '';
+      state.oidcUser = auth.userName;
+      return true;
+    }
+    return false;
   }
 
   return {
@@ -218,6 +288,9 @@ function createAppState() {
     stopRecording,
     saveSettings,
     setViewMode,
+    oidcLogin,
+    oidcLogout,
+    oidcHandleCallback,
     stopAudio: () => player.stop(),
   };
 }

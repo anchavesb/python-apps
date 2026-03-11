@@ -14,6 +14,7 @@ export interface SessionConfig {
   provider: string;
   mode: 'voice' | 'text' | 'both';
   conversationId?: string;
+  userToken?: string;  // OIDC access token forwarded to downstream services
 }
 
 export class DoloresClient {
@@ -41,6 +42,7 @@ export class DoloresClient {
           provider: config.provider,
           mode: config.mode,
           token: config.apiKey,
+          user_token: config.userToken,
           conversation_id: config.conversationId,
         }));
       };

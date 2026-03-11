@@ -9,12 +9,22 @@
   if (params.get('view') === 'avatar') {
     app.setViewMode('avatar');
   }
+
+  // Handle OIDC callback (?code=...)
+  if (params.has('code')) {
+    app.oidcHandleCallback().catch((e) => {
+      console.error('OIDC callback failed:', e);
+    });
+  }
 </script>
 
 <main>
   <header class:avatar-header={app.state.viewMode === 'avatar'}>
     <h1>Dolores</h1>
     <div class="header-actions">
+      {#if app.state.oidcUser}
+        <span class="user-name">{app.state.oidcUser}</span>
+      {/if}
       <button
         class="view-toggle"
         onclick={() => app.setViewMode(app.state.viewMode === 'chat' ? 'avatar' : 'chat')}
