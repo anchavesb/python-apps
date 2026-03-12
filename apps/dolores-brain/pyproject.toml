@@ -12,7 +12,7 @@ dependencies = [
     "dolores-common",
     "fastapi>=0.115.0",
     "uvicorn[standard]>=0.34.0",
-    "litellm==1.63.2",
+    "litellm>=1.63.2,<2.0",
     "aiosqlite>=0.20.0",
 ]
 
