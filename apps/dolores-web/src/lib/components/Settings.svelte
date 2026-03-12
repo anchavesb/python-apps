@@ -10,9 +10,17 @@
     app.state.settingsOpen = false;
   }
 
+  let loginError = $state('');
+
   async function handleLogin() {
+    loginError = '';
     app.saveSettings();
-    await app.oidcLogin();
+    try {
+      await app.oidcLogin();
+    } catch (e: any) {
+      loginError = e.message || String(e);
+      console.error('OIDC login failed:', e);
+    }
   }
 
   async function handleLogout() {
@@ -65,6 +73,9 @@
         </div>
       {:else if app.state.oidcIssuer && app.state.oidcClientId}
         <button class="primary" onclick={handleLogin}>Login with OIDC</button>
+        {#if loginError}
+          <p class="error" style="color: #e74c3c; font-size: 0.85em; margin-top: 0.5em;">{loginError}</p>
+        {/if}
       {:else}
         <p class="hint">Configure issuer and client ID to enable login.</p>
       {/if}
