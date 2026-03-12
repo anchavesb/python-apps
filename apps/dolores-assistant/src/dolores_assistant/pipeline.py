@@ -17,6 +17,7 @@ import httpx
 from dolores_common.logging import get_logger
 
 from .config import settings
+from .tools.openapi_discovery import current_user_token
 from .tools.registry import get_tool_by_name, get_tool_definitions
 
 log = get_logger(__name__)
@@ -260,7 +261,10 @@ async def run_tool_loop(
     Sends message to brain, checks for tool_calls, executes tools,
     sends results back, repeats until a text response is returned.
     """
-    tools = get_tool_definitions() or None
+    # Only pass tools if the user has a JWT — without it, downstream
+    # services return 401 and the LLM loops on errors.
+    has_token = current_user_token.get() is not None
+    tools = (get_tool_definitions() or None) if has_token else None
     message = initial_message
 
     for i in range(max_iterations):
