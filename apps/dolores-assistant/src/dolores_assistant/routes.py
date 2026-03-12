@@ -49,13 +49,13 @@ async def text_chat(
     user_jwt = request.headers.get("x-user-token", "")
     token = current_user_token.set(user_jwt or None)
     try:
-        use_tools = bool(user_jwt) and _needs_tools(req.message)
+        tool_filter = _detect_tool_filter(req.message) if user_jwt else None
         result = await run_tool_loop(
             client=client,
             initial_message=req.message,
             conversation_id=req.conversation_id,
             provider=req.provider,
-            use_tools=use_tools,
+            tool_filter=tool_filter,
         )
 
         return TextChatResponse(
@@ -291,23 +291,47 @@ async def conversation_ws(websocket: WebSocket) -> None:
 _EMOTION_TAG_RE = re.compile(r"^\[emotion:(\w+)\]\s*")
 _VALID_EMOTIONS = {"neutral", "curious", "happy", "sad", "surprised", "empathetic"}
 
-# Keywords that suggest the user wants to use a tool (todo, notes, work items).
-# Keep lowercase — matched against lowercased input.
-_TOOL_KEYWORDS = re.compile(
-    r"\b(todo|todos|task|tasks|note|notes|work\s*item|reminder|reminders"
-    r"|add\s+a?\s*(?:todo|task|note|reminder)"
-    r"|show\s+(?:my|the)\s+(?:todo|task|note|list)"
-    r"|create\s+(?:a?\s*)?(?:todo|task|note)"
-    r"|delete|remove|mark\s+(?:as\s+)?done|complete"
-    r"|what.s\s+on\s+my\s+list"
-    r"|check\s+(?:my\s+)?(?:todo|task|list))\b",
+# Intent-to-tool mapping: keywords → tool name substrings to filter by.
+# Tool names from OpenAPI discovery are prefixed: todo_list_todos, todo_create_note, etc.
+_INTENT_PATTERNS: list[tuple[re.Pattern, set[str]]] = [
+    # Todo / task keywords → only todo-related tools
+    (re.compile(
+        r"\b(todo|todos|task|tasks|reminder|reminders"
+        r"|what.s\s+on\s+my\s+list"
+        r"|check\s+(?:my\s+)?(?:todo|task|list))\b",
+        re.IGNORECASE,
+    ), {"todo"}),
+    # Note keywords → only note-related tools
+    (re.compile(
+        r"\b(note|notes|write\s+(?:a\s+)?note|save\s+(?:a\s+)?note)\b",
+        re.IGNORECASE,
+    ), {"note"}),
+    # Work item keywords → only work-related tools
+    (re.compile(
+        r"\b(work\s*item|work\s*log|log\s+work)\b",
+        re.IGNORECASE,
+    ), {"work"}),
+]
+
+# Generic action keywords that need context from other matches
+_ACTION_RE = re.compile(
+    r"\b(add|create|show|list|delete|remove|mark\s+(?:as\s+)?done|complete)\b",
     re.IGNORECASE,
 )
 
 
-def _needs_tools(message: str) -> bool:
-    """Lightweight check: does this message look like it needs tool access?"""
-    return bool(_TOOL_KEYWORDS.search(message))
+def _detect_tool_filter(message: str) -> set[str] | None:
+    """Return tool name substrings to filter by, or None if no tools needed."""
+    matched: set[str] = set()
+    for pattern, tool_filter in _INTENT_PATTERNS:
+        if pattern.search(message):
+            matched.update(tool_filter)
+
+    if matched:
+        return matched
+
+    # If only generic action words with no specific domain, no tools
+    return None
 
 
 async def _process_and_respond(
@@ -321,17 +345,17 @@ async def _process_and_respond(
 ) -> None:
     """Send user text to brain, stream response text, and optionally TTS audio."""
 
-    # Only use tool loop when: user has JWT, tools exist, AND message looks tool-related.
-    # Small models (llama3.1:8b) can't handle tool schemas without trying to call them,
-    # so we avoid sending tools for general conversation.
+    # Only use tool loop when: user has JWT AND message matches a tool intent.
+    # Filter tools to the relevant subset so the LLM doesn't get confused.
     has_user_token = current_user_token.get() is not None
-    use_tools = has_user_token and bool(get_tool_definitions()) and _needs_tools(user_text)
-    if use_tools:
+    tool_filter = _detect_tool_filter(user_text) if has_user_token else None
+    if tool_filter and get_tool_definitions(tool_filter):
         result = await run_tool_loop(
             client=client,
             initial_message=user_text,
             conversation_id=conversation_id,
             provider=provider,
+            tool_filter=tool_filter,
         )
         full_text = result.get("message", "")
 

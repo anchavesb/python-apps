@@ -26,9 +26,19 @@ async def load_tools(integrations: list[dict], http_client: httpx.AsyncClient) -
     log.info("tools_loaded", count=len(TOOLS), names=[t.name for t in TOOLS])
 
 
-def get_tool_definitions() -> list[dict]:
-    """Get OpenAI function-calling format definitions for all tools."""
-    return [tool.to_openai_function() for tool in TOOLS]
+def get_tool_definitions(name_filter: set[str] | None = None) -> list[dict]:
+    """Get OpenAI function-calling format definitions for tools.
+
+    If *name_filter* is provided, only tools whose name contains one of the
+    given substrings are returned (e.g. ``{"todo"}`` matches ``todo_list_todos``).
+    """
+    if name_filter is None:
+        return [tool.to_openai_function() for tool in TOOLS]
+    return [
+        tool.to_openai_function()
+        for tool in TOOLS
+        if any(f in tool.name for f in name_filter)
+    ]
 
 
 def get_tool_by_name(name: str) -> Tool | None:
