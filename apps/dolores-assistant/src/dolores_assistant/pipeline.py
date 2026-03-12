@@ -255,16 +255,16 @@ async def run_tool_loop(
     conversation_id: str | None,
     provider: str | None,
     max_iterations: int = 5,
+    use_tools: bool = True,
 ) -> dict:
     """Run the agent tool-calling loop.
 
     Sends message to brain, checks for tool_calls, executes tools,
     sends results back, repeats until a text response is returned.
     """
-    # Only pass tools if the user has a JWT — without it, downstream
-    # services return 401 and the LLM loops on errors.
+    # Only pass tools when explicitly requested and user has a JWT.
     has_token = current_user_token.get() is not None
-    tools = (get_tool_definitions() or None) if has_token else None
+    tools = (get_tool_definitions() or None) if (use_tools and has_token) else None
     message = initial_message
 
     for i in range(max_iterations):
