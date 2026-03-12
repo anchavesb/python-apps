@@ -35,13 +35,28 @@ DEFAULT_SYSTEM_PROMPT = (
     "especially for voice queries.\n\n"
     "IMPORTANT: Only respond to the LATEST user message. Prior messages in the conversation "
     "are context for continuity — do not repeat, summarize, or react to them. Treat them as "
-    "silent memory. Focus entirely on what the user just said.\n\n"
-    "IMPORTANT: Begin every response with an emotion tag that best matches your tone. "
+    "silent memory. Focus entirely on what the user just said."
+)
+
+_EMOTION_SUFFIX = (
+    "\n\nIMPORTANT: Begin every response with an emotion tag that best matches your tone. "
     "Use exactly one of: [emotion:neutral], [emotion:curious], [emotion:happy], "
     "[emotion:sad], [emotion:surprised], [emotion:empathetic]. "
     "Example: '[emotion:happy] Great to hear that!' "
     "The tag will be stripped before display, so always include it."
 )
+
+_TOOLS_SUFFIX = (
+    "\n\nWhen you have access to tools, use them to help the user. "
+    "Always respond in natural language — never return raw JSON."
+)
+
+
+def _build_system_prompt(base: str, has_tools: bool) -> str:
+    """Append emotion tags only when no tools (avoids confusing small models)."""
+    if has_tools:
+        return base + _TOOLS_SUFFIX
+    return base + _EMOTION_SUFFIX
 
 
 def _trim_history(messages: list[dict], max_messages: int) -> list[dict]:
@@ -86,7 +101,8 @@ async def chat(
         messages = []
 
     # Add system prompt if not already present
-    system_prompt = req.system_prompt or DEFAULT_SYSTEM_PROMPT
+    base_prompt = req.system_prompt or DEFAULT_SYSTEM_PROMPT
+    system_prompt = _build_system_prompt(base_prompt, has_tools=bool(req.tools))
     if not messages or messages[0].get("role") != "system":
         messages.insert(0, {"role": "system", "content": system_prompt})
 
@@ -177,7 +193,8 @@ async def chat_stream(
         conv_id = await store.create(conv_id)
         messages = []
 
-    system_prompt = req.system_prompt or DEFAULT_SYSTEM_PROMPT
+    base_prompt = req.system_prompt or DEFAULT_SYSTEM_PROMPT
+    system_prompt = _build_system_prompt(base_prompt, has_tools=bool(req.tools))
     if not messages or messages[0].get("role") != "system":
         messages.insert(0, {"role": "system", "content": system_prompt})
 
