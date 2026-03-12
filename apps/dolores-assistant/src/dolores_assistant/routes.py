@@ -301,9 +301,10 @@ async def _process_and_respond(
 ) -> None:
     """Send user text to brain, stream response text, and optionally TTS audio."""
 
-    # When tools are available, use the non-streaming tool loop
-    # so the LLM can call tools before producing a final response.
-    if get_tool_definitions():
+    # Only offer tools to the LLM when the user has authenticated (JWT present).
+    # Without a JWT, downstream services (e.g. todo) will return 401.
+    has_user_token = current_user_token.get() is not None
+    if get_tool_definitions() and has_user_token:
         result = await run_tool_loop(
             client=client,
             initial_message=user_text,
