@@ -48,10 +48,11 @@ def main():
     )
 
     # Clean up files we don't need at runtime
+    # Keep model.onnx, model.onnx.data (if split), and tokenizer.json
+    keep = {"model.onnx", "model.onnx.data", "tokenizer.json"}
     for f in output_dir.iterdir():
-        if f.name not in ("model.onnx", "tokenizer.json"):
-            if f.is_file():
-                f.unlink()
+        if f.name not in keep and f.is_file():
+            f.unlink()
 
     total_mb = sum(f.stat().st_size for f in output_dir.iterdir()) / (1024 * 1024)
     print(f"Done! Model dir: {output_dir} ({total_mb:.1f} MB)")
