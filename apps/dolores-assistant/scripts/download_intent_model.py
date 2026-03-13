@@ -45,7 +45,6 @@ def main():
             "last_hidden_state": {0: "batch", 1: "seq"},
         },
         opset_version=14,
-        dynamo=False,  # Use legacy TorchScript exporter for correct dynamic axes
     )
 
     # Validate the exported model works with various batch sizes
