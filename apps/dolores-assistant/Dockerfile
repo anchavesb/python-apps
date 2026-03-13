@@ -1,3 +1,13 @@
+## Stage 1: Export model to ONNX (PyTorch only needed here, discarded after)
+FROM python:3.12-slim AS model-export
+
+RUN pip install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cpu \
+    && pip install --no-cache-dir transformers
+
+COPY apps/dolores-assistant/scripts/download_intent_model.py /tmp/download.py
+RUN python /tmp/download.py /models/intent
+
+## Stage 2: Runtime image (no PyTorch)
 FROM python:3.12-slim
 
 RUN groupadd -r appuser && useradd -r -m -g appuser appuser
@@ -13,12 +23,10 @@ COPY apps/dolores-assistant/pyproject.toml /app/
 COPY apps/dolores-assistant/src /app/src
 RUN pip install --no-cache-dir .
 
-# Pre-download the intent classification model (~80MB) into the image
-RUN python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('all-MiniLM-L6-v2')"
+# Copy pre-exported ONNX model from build stage (~80MB, no PyTorch needed)
+COPY --from=model-export /models/intent /app/models/intent
 
-# Model cache lives in /root/.cache — move it to appuser's home
-RUN cp -r /root/.cache /home/appuser/.cache && \
-    chown -R appuser:appuser /app /home/appuser/.cache
+RUN chown -R appuser:appuser /app
 
 USER appuser
 
