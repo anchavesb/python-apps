@@ -291,47 +291,11 @@ async def conversation_ws(websocket: WebSocket) -> None:
 _EMOTION_TAG_RE = re.compile(r"^\[emotion:(\w+)\]\s*")
 _VALID_EMOTIONS = {"neutral", "curious", "happy", "sad", "surprised", "empathetic"}
 
-# Intent-to-tool mapping: keywords → tool name substrings to filter by.
-# Tool names from OpenAPI discovery are prefixed: todo_list_todos, todo_create_note, etc.
-_INTENT_PATTERNS: list[tuple[re.Pattern, set[str]]] = [
-    # Todo / task keywords → only todo-related tools
-    (re.compile(
-        r"\b(todo|todos|task|tasks|reminder|reminders"
-        r"|what.s\s+on\s+my\s+list"
-        r"|check\s+(?:my\s+)?(?:todo|task|list))\b",
-        re.IGNORECASE,
-    ), {"todo"}),
-    # Note keywords → only note-related tools
-    (re.compile(
-        r"\b(note|notes|write\s+(?:a\s+)?note|save\s+(?:a\s+)?note)\b",
-        re.IGNORECASE,
-    ), {"note"}),
-    # Work item keywords → only work-related tools
-    (re.compile(
-        r"\b(work\s*item|work\s*log|log\s+work)\b",
-        re.IGNORECASE,
-    ), {"work"}),
-]
-
-# Generic action keywords that need context from other matches
-_ACTION_RE = re.compile(
-    r"\b(add|create|show|list|delete|remove|mark\s+(?:as\s+)?done|complete)\b",
-    re.IGNORECASE,
-)
-
-
 def _detect_tool_filter(message: str) -> set[str] | None:
-    """Return tool name substrings to filter by, or None if no tools needed."""
-    matched: set[str] = set()
-    for pattern, tool_filter in _INTENT_PATTERNS:
-        if pattern.search(message):
-            matched.update(tool_filter)
-
-    if matched:
-        return matched
-
-    # If only generic action words with no specific domain, no tools
-    return None
+    """Classify message intent and return tool name filter, or None for chat."""
+    from .intent import classify_intent
+    _, tool_filter, _ = classify_intent(message)
+    return tool_filter
 
 
 async def _process_and_respond(

@@ -13,7 +13,12 @@ COPY apps/dolores-assistant/pyproject.toml /app/
 COPY apps/dolores-assistant/src /app/src
 RUN pip install --no-cache-dir .
 
-RUN chown -R appuser:appuser /app
+# Pre-download the intent classification model (~80MB) into the image
+RUN python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('all-MiniLM-L6-v2')"
+
+# Model cache lives in /root/.cache — move it to appuser's home
+RUN cp -r /root/.cache /home/appuser/.cache && \
+    chown -R appuser:appuser /app /home/appuser/.cache
 
 USER appuser
 
