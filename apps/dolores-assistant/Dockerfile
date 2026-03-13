@@ -1,13 +1,3 @@
-## Stage 1: Export model to ONNX (PyTorch only needed here, discarded after)
-FROM python:3.12-slim AS model-export
-
-RUN pip install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cpu \
-    && pip install --no-cache-dir "transformers<5" onnxscript onnxruntime tokenizers
-
-COPY apps/dolores-assistant/scripts/download_intent_model.py /tmp/download.py
-RUN python /tmp/download.py /models/intent
-
-## Stage 2: Runtime image (no PyTorch)
 FROM python:3.12-slim
 
 RUN groupadd -r appuser && useradd -r -m -g appuser appuser
@@ -23,8 +13,12 @@ COPY apps/dolores-assistant/pyproject.toml /app/
 COPY apps/dolores-assistant/src /app/src
 RUN pip install --no-cache-dir .
 
-# Copy pre-exported ONNX model from build stage (~80MB, no PyTorch needed)
-COPY --from=model-export /models/intent /app/models/intent
+# Download pre-built ONNX model from HuggingFace Hub (no PyTorch needed)
+COPY apps/dolores-assistant/scripts/download_intent_model.py /tmp/download.py
+RUN pip install --no-cache-dir huggingface_hub \
+    && python /tmp/download.py /app/models/intent \
+    && pip uninstall -y huggingface_hub \
+    && rm /tmp/download.py
 
 RUN chown -R appuser:appuser /app
 
