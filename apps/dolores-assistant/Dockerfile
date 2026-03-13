@@ -2,7 +2,7 @@
 FROM python:3.12-slim AS model-export
 
 RUN pip install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cpu \
-    && pip install --no-cache-dir transformers onnxscript
+    && pip install --no-cache-dir transformers onnxscript onnxruntime tokenizers
 
 COPY apps/dolores-assistant/scripts/download_intent_model.py /tmp/download.py
 RUN python /tmp/download.py /models/intent
