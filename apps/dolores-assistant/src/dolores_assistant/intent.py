@@ -88,35 +88,35 @@ def _normalize(vectors: np.ndarray) -> np.ndarray:
 
 
 def _encode(texts: list[str]) -> np.ndarray:
-    """Tokenize and run ONNX inference, returning normalized embeddings."""
+    """Tokenize and run ONNX inference, returning normalized embeddings.
+
+    Encodes one text at a time to avoid ONNX dynamic batch issues
+    (pre-built models often have fixed batch=1).
+    """
     assert _session is not None and _tokenizer is not None
 
-    # Tokenize
-    encodings = _tokenizer.encode_batch(texts)
-    max_len = max(len(e.ids) for e in encodings)
-
-    input_ids = np.zeros((len(texts), max_len), dtype=np.int64)
-    attention_mask = np.zeros((len(texts), max_len), dtype=np.int64)
-    token_type_ids = np.zeros((len(texts), max_len), dtype=np.int64)
-
-    for i, enc in enumerate(encodings):
+    all_embeddings = []
+    for text in texts:
+        enc = _tokenizer.encode(text)
         length = len(enc.ids)
-        input_ids[i, :length] = enc.ids
-        attention_mask[i, :length] = enc.attention_mask
 
-    # Run ONNX model
-    outputs = _session.run(
-        None,
-        {
-            "input_ids": input_ids,
-            "attention_mask": attention_mask,
-            "token_type_ids": token_type_ids,
-        },
-    )
+        input_ids = np.array([enc.ids], dtype=np.int64)
+        attention_mask = np.array([enc.attention_mask], dtype=np.int64)
+        token_type_ids = np.zeros((1, length), dtype=np.int64)
 
-    # outputs[0] is token_embeddings: (batch, seq_len, hidden_size)
-    pooled = _mean_pool(outputs[0], attention_mask)
-    return _normalize(pooled)
+        outputs = _session.run(
+            None,
+            {
+                "input_ids": input_ids,
+                "attention_mask": attention_mask,
+                "token_type_ids": token_type_ids,
+            },
+        )
+
+        pooled = _mean_pool(outputs[0], attention_mask)
+        all_embeddings.append(pooled[0])
+
+    return _normalize(np.array(all_embeddings))
 
 
 def _get_model_dir() -> Path:
