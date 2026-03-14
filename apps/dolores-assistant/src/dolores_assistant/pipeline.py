@@ -323,6 +323,7 @@ async def run_tool_loop(
         return {
             "message": "Your session has expired. Please log in again.",
             "conversation_id": conversation_id or "",
+            "session_expired": True,
         }
     tools = (get_tool_definitions(tool_filter) or None) if (tool_filter and has_token) else None
     message = initial_message
@@ -363,6 +364,13 @@ async def run_tool_loop(
             if tool:
                 try:
                     tool_result = await tool.execute(**tool_args)
+                except PermissionError:
+                    log.warning("tool_auth_failed", tool=tool_name)
+                    return {
+                        "message": "Your session has expired. Please log in again.",
+                        "conversation_id": conversation_id or "",
+                        "session_expired": True,
+                    }
                 except Exception as e:
                     tool_result = f"Error executing {tool_name}: {e}"
             else:

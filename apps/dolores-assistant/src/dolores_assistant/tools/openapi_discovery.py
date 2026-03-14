@@ -106,6 +106,9 @@ class OpenAPITool(Tool):
         except Exception:
             data = resp.text
 
+        if resp.status_code in (401, 403):
+            raise PermissionError(f"Authentication failed ({resp.status_code}): token may be expired")
+
         if resp.status_code >= 400:
             return f"Error {resp.status_code}: {json.dumps(data) if isinstance(data, (dict, list)) else data}"
 

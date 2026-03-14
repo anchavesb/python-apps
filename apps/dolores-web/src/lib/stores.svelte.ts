@@ -121,11 +121,44 @@ function createAppState() {
         break;
       }
       case 'error':
-        state.messages = [...state.messages, {
-          role: 'assistant',
-          content: `Error: ${msg.message}`,
-          timestamp: new Date(),
-        }];
+        if (msg.code === 'session_expired') {
+          // Attempt silent token refresh, then prompt re-login if that fails
+          const config = getOIDCConfig();
+          if (config) {
+            refreshAccessToken(config).then((refreshed) => {
+              if (refreshed?.accessToken) {
+                state.userToken = refreshed.accessToken;
+                // Push the new token to the backend so subsequent requests use it
+                client.updateToken(refreshed.accessToken);
+                state.messages = [...state.messages, {
+                  role: 'assistant',
+                  content: 'Session refreshed. Please try again.',
+                  timestamp: new Date(),
+                }];
+              } else {
+                state.userToken = '';
+                state.oidcUser = null;
+                state.messages = [...state.messages, {
+                  role: 'assistant',
+                  content: 'Your session has expired. Please login again in Settings.',
+                  timestamp: new Date(),
+                }];
+              }
+            });
+          } else {
+            state.messages = [...state.messages, {
+              role: 'assistant',
+              content: 'Your session has expired. Please login again in Settings.',
+              timestamp: new Date(),
+            }];
+          }
+        } else {
+          state.messages = [...state.messages, {
+            role: 'assistant',
+            content: `Error: ${msg.message}`,
+            timestamp: new Date(),
+          }];
+        }
         state.thinking = false;
         break;
     }

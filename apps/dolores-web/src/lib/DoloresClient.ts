@@ -89,6 +89,11 @@ export class DoloresClient {
     this.ws.send(JSON.stringify({ type: 'audio.end', content_type: contentType }));
   }
 
+  updateToken(userToken: string): void {
+    if (!this.ws) return;
+    this.ws.send(JSON.stringify({ type: 'session.update_token', user_token: userToken }));
+  }
+
   disconnect(): void {
     if (this.ws) {
       try {
