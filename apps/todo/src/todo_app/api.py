@@ -1,7 +1,11 @@
+import logging
+
 from flask import Blueprint, current_app, jsonify, request, session
 from .storage import ValidationError
 from .jwt_auth import validate_bearer_token
 from .openapi_spec import OPENAPI_SPEC
+
+logger = logging.getLogger(__name__)
 
 api_bp = Blueprint("api", __name__)
 
@@ -39,21 +43,39 @@ def get_user_id():
     # Try bearer token first (mobile/API clients)
     bearer_user = get_user_from_bearer()
     if bearer_user:
-        # Ensure user exists in DB (same as session auth flow)
+        bearer_sub = bearer_user["sub"]
+        bearer_email = bearer_user.get("email")
+        logger.debug("auth via bearer token: sub=%s email=%s", bearer_sub, bearer_email)
+
         store_inst = store()
+        # Reconcile cross-OIDC-app identity: if a user with the same email
+        # already exists under a different sub (e.g. web login via 'notes' app
+        # vs bearer token from 'dolores' app), use the existing user's ID.
+        if hasattr(store_inst, "find_user_by_email") and bearer_email:
+            existing = store_inst.find_user_by_email(bearer_email)
+            if existing and existing.id != bearer_sub:
+                logger.info(
+                    "bearer sub=%s mapped to existing user sub=%s (same email=%s)",
+                    bearer_sub, existing.id, bearer_email,
+                )
+                return existing.id
+
+        # Ensure user exists in DB
         if hasattr(store_inst, "get_or_create_user"):
             store_inst.get_or_create_user(
-                user_id=bearer_user["sub"],
-                email=bearer_user.get("email"),
+                user_id=bearer_sub,
+                email=bearer_email,
                 name=bearer_user.get("name"),
             )
-        return bearer_user["sub"]
+        return bearer_sub
 
     # Fall back to session cookie (web UI)
     user = session.get("user")
     if user:
+        logger.debug("auth via session: sub=%s email=%s", user.get("sub"), user.get("email"))
         return user.get("sub")
 
+    logger.debug("no auth: bearer token invalid and no session cookie")
     return None
 
 
