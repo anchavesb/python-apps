@@ -1,5 +1,6 @@
 <script lang="ts">
   import { app } from '../stores.svelte';
+  import { DoloresClient } from '../DoloresClient';
 
   function handleSave() {
     app.saveSettings();
@@ -11,6 +12,21 @@
   }
 
   let loginError = $state('');
+  let voices = $state<{ id: string; name: string }[]>([]);
+  let loadingVoices = $state(false);
+  let voiceError = $state('');
+
+  async function loadVoices() {
+    loadingVoices = true;
+    voiceError = '';
+    try {
+      voices = await DoloresClient.listVoices(app.state.serverUrl, app.state.apiKey);
+    } catch (e: any) {
+      voiceError = e.message || 'Failed to load voices';
+    } finally {
+      loadingVoices = false;
+    }
+  }
 
   async function handleLogin() {
     loginError = '';
@@ -43,8 +59,25 @@
     </label>
 
     <label>
-      Voice ID
-      <input type="text" bind:value={app.state.voiceId} placeholder="default" />
+      Voice
+      <div class="voice-row">
+        {#if voices.length > 0}
+          <select bind:value={app.state.voiceId}>
+            <option value="default">Default</option>
+            {#each voices as voice}
+              <option value={voice.id}>{voice.name}</option>
+            {/each}
+          </select>
+        {:else}
+          <input type="text" bind:value={app.state.voiceId} placeholder="default" />
+        {/if}
+        <button class="voice-load-btn" onclick={loadVoices} disabled={loadingVoices}>
+          {loadingVoices ? '...' : 'Load'}
+        </button>
+      </div>
+      {#if voiceError}
+        <p class="error" style="color: #e74c3c; font-size: 0.8em; margin-top: 4px;">{voiceError}</p>
+      {/if}
     </label>
 
     <label>
@@ -87,3 +120,20 @@
     </div>
   </div>
 </div>
+
+<style>
+  .voice-row {
+    display: flex;
+    gap: 6px;
+  }
+  .voice-row select,
+  .voice-row input {
+    flex: 1;
+    min-width: 0;
+  }
+  .voice-load-btn {
+    padding: 6px 12px;
+    font-size: 0.8rem;
+    flex-shrink: 0;
+  }
+</style>

@@ -221,7 +221,7 @@ OPENAPI_SPEC = {
                     "title": {"type": "string"},
                     "description": {"type": "string"},
                     "tags": {"$ref": "#/components/schemas/Tags", "description": "Optional. Defaults to category='general', priority='medium' if omitted."},
-                    "done": {"type": "boolean", "default": False},
+                    "done": {"type": "boolean", "default": False, "description": "Always set to false when creating new todos."},
                     "due_date": {"type": "string", "description": "YYYY-MM-DD or ISO datetime"},
                 },
             },
