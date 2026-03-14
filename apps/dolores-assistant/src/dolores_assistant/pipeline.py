@@ -339,10 +339,14 @@ async def run_tool_loop(
     tools = (get_tool_definitions(tool_filter) or None) if (tool_filter and has_token) else None
     message = initial_message
 
+    # Use a fresh conversation for tool calls so stale history doesn't
+    # confuse the LLM into generating text instead of calling tools.
+    tool_conv_id = None
+
     for i in range(max_iterations):
         result = await client.chat(
             message=message,
-            conversation_id=conversation_id,
+            conversation_id=tool_conv_id,
             provider=provider,
             tools=tools,
         )
@@ -350,7 +354,7 @@ async def run_tool_loop(
         if result is None:
             return {"message": "I'm having trouble connecting to my brain. Please try again.", "conversation_id": conversation_id or ""}
 
-        conversation_id = result.get("conversation_id", conversation_id)
+        tool_conv_id = result.get("conversation_id", tool_conv_id)
 
         # Some models output tool calls as JSON text instead of structured
         # tool_calls. Detect and parse them from the message.
@@ -361,6 +365,7 @@ async def run_tool_loop(
 
         # If no tool calls, return the text response
         if not result.get("tool_calls"):
+            result["conversation_id"] = conversation_id or ""
             return result
 
         # Execute tools and collect results

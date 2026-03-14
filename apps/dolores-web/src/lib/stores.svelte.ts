@@ -310,6 +310,19 @@ function createAppState() {
     return false;
   }
 
+  function newConversation() {
+    state.conversationId = '';
+    state.messages = [];
+    state.streamingText = '';
+    state.emotion = 'neutral';
+    saveSettings();
+    // Reconnect with fresh conversation if currently connected
+    if (client.connected) {
+      disconnect();
+      connect();
+    }
+  }
+
   return {
     get state() { return state; },
     get avatarPhase(): AvatarPhase { return getAvatarPhase(state); },
@@ -321,6 +334,7 @@ function createAppState() {
     stopRecording,
     saveSettings,
     setViewMode,
+    newConversation,
     oidcLogin,
     oidcLogout,
     oidcHandleCallback,

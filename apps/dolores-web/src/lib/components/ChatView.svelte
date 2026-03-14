@@ -44,6 +44,9 @@
   </div>
 
   <div class="input-area">
+    <button class="new-chat-btn" onclick={() => app.newConversation()} title="New conversation">
+      +
+    </button>
     <textarea
       bind:value={inputText}
       onkeydown={handleKeydown}
