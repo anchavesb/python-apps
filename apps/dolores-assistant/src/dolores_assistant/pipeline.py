@@ -344,7 +344,9 @@ async def run_tool_loop(
 
             tool_results.append(f"[{tool_name}]: {tool_result}")
 
-        # Send tool results back as a new message
+        # Send tool results back as a new message (without tools, so LLM
+        # generates a natural language response instead of more tool calls)
         message = "\n".join(tool_results)
+        tools = None
 
     return {"message": result.get("message", ""), "conversation_id": conversation_id or ""}
