@@ -10,6 +10,7 @@ import asyncio
 import json
 import re
 import os
+import time
 from typing import AsyncGenerator
 
 import httpx
@@ -21,6 +22,23 @@ from .tools.openapi_discovery import current_user_token
 from .tools.registry import get_tool_by_name, get_tool_definitions
 
 log = get_logger(__name__)
+
+
+def _is_jwt_expired(token: str) -> bool:
+    """Check if a JWT token is expired without verifying the signature."""
+    import base64
+    try:
+        # Decode the payload (second segment)
+        payload = token.split(".")[1]
+        # Add padding
+        payload += "=" * (4 - len(payload) % 4)
+        data = json.loads(base64.urlsafe_b64decode(payload))
+        exp = data.get("exp")
+        if exp is None:
+            return False
+        return time.time() > exp
+    except Exception:
+        return False
 
 # GPU concurrency: only one request at a time per GPU service
 _stt_semaphore = asyncio.Semaphore(1)
@@ -298,7 +316,14 @@ async def run_tool_loop(
     *tool_filter*: if set, only include tools whose names contain one of these
     substrings. If None, no tools are sent.
     """
-    has_token = current_user_token.get() is not None
+    token = current_user_token.get()
+    has_token = token is not None
+    if has_token and _is_jwt_expired(token):
+        log.warning("jwt_expired", message=initial_message[:80])
+        return {
+            "message": "Your session has expired. Please log in again.",
+            "conversation_id": conversation_id or "",
+        }
     tools = (get_tool_definitions(tool_filter) or None) if (tool_filter and has_token) else None
     message = initial_message
 
