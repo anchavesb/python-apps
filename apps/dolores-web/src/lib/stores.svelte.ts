@@ -11,6 +11,7 @@ export interface ChatMessage {
   role: 'user' | 'assistant';
   content: string;
   timestamp: Date;
+  speakerName?: string;
 }
 
 interface AppState {
@@ -93,7 +94,12 @@ function createAppState() {
         break;
       case 'transcription.final':
         state.transcription = msg.text;
-        state.messages = [...state.messages, { role: 'user', content: msg.text, timestamp: new Date() }];
+        state.messages = [...state.messages, {
+          role: 'user',
+          content: msg.text,
+          timestamp: new Date(),
+          speakerName: msg.speaker_name,
+        }];
         break;
       case 'response.emotion':
         state.emotion = msg.emotion as AvatarEmotion;

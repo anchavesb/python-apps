@@ -33,3 +33,22 @@ class StreamMessage(BaseModel):
     text: str = ""
     language: str = ""
     error: str = ""
+
+
+class IdentifyResponse(BaseModel):
+    """Response from /v1/identify endpoint."""
+
+    speaker_id: str | None = None
+    speaker_name: str | None = None
+    confidence: float = 0.0
+
+
+class SpeakerProfile(BaseModel):
+    """Speaker profile for list/get/enroll responses."""
+
+    id: str | None = None
+    name: str
+    email: str | None = None
+    samples_count: int | None = None
+    created_at: str | None = None
+    updated_at: str | None = None

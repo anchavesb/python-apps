@@ -1,11 +1,18 @@
 export type MessageEvent =
   | { type: 'session.created'; session_id: string; conversation_id: string }
   | { type: 'transcription.partial'; text: string }
-  | { type: 'transcription.final'; text: string }
+  | { type: 'transcription.final'; text: string; speaker_name?: string; speaker_confidence?: number }
   | { type: 'response.emotion'; emotion: string }
   | { type: 'response.text'; content: string }
   | { type: 'response.end'; full_text: string }
   | { type: 'error'; code: string; message: string };
+
+export interface SpeakerProfile {
+  id: string;
+  name: string;
+  email?: string;
+  samples_count?: number;
+}
 
 export interface SessionConfig {
   serverUrl: string;
@@ -114,5 +121,44 @@ export class DoloresClient {
     });
     if (!resp.ok) throw new Error(`Failed to fetch voices: ${resp.status}`);
     return resp.json();
+  }
+
+  static async listSpeakers(serverUrl: string, apiKey: string): Promise<SpeakerProfile[]> {
+    const resp = await fetch(`${serverUrl}/v1/speakers`, {
+      headers: apiKey ? { 'Authorization': `Bearer ${apiKey}` } : {},
+    });
+    if (!resp.ok) throw new Error(`Failed to fetch speakers: ${resp.status}`);
+    return resp.json();
+  }
+
+  static async enrollSpeaker(
+    serverUrl: string,
+    apiKey: string,
+    name: string,
+    audioBlobs: Blob[],
+  ): Promise<SpeakerProfile> {
+    const formData = new FormData();
+    audioBlobs.forEach((blob, i) => {
+      formData.append('files', blob, `sample_${i}.webm`);
+    });
+    const url = `${serverUrl}/v1/speakers?name=${encodeURIComponent(name)}`;
+    const resp = await fetch(url, {
+      method: 'POST',
+      headers: apiKey ? { 'Authorization': `Bearer ${apiKey}` } : {},
+      body: formData,
+    });
+    if (!resp.ok) {
+      const detail = await resp.text();
+      throw new Error(`Failed to enroll speaker: ${detail}`);
+    }
+    return resp.json();
+  }
+
+  static async deleteSpeaker(serverUrl: string, apiKey: string, id: string): Promise<void> {
+    const resp = await fetch(`${serverUrl}/v1/speakers/${id}`, {
+      method: 'DELETE',
+      headers: apiKey ? { 'Authorization': `Bearer ${apiKey}` } : {},
+    });
+    if (!resp.ok) throw new Error(`Failed to delete speaker: ${resp.status}`);
   }
 }
