@@ -83,3 +83,26 @@ class TestExtractToolCallsFromText:
         assert result is not None
         # arguments can be dict or string — both should be accepted
         assert result[0]["function"]["name"] == "note_create_note"
+
+    def test_single_dict_without_function_wrapper(self):
+        """Model outputs {"name": "...", "arguments": {...}} directly."""
+        text = '{"name": "todo_list_todos", "arguments": {}}'
+        result = _extract_tool_calls_from_text(text)
+        assert result is not None
+        assert len(result) == 1
+        assert result[0]["function"]["name"] == "todo_list_todos"
+
+    def test_trailing_model_tags_stripped(self):
+        """Model appends <|python_tag|> or <|eot_id|> after JSON."""
+        text = '{"name": "todo_list_todos", "arguments": {}}<|python_tag|>'
+        result = _extract_tool_calls_from_text(text)
+        assert result is not None
+        assert result[0]["function"]["name"] == "todo_list_todos"
+
+    def test_list_without_function_wrapper(self):
+        """List of dicts with name/arguments at top level (no function key)."""
+        text = '[{"name": "todo_create_todo", "arguments": {"title": "buy milk"}}]'
+        result = _extract_tool_calls_from_text(text)
+        assert result is not None
+        assert result[0]["function"]["name"] == "todo_create_todo"
+        assert result[0]["function"]["arguments"] == {"title": "buy milk"}

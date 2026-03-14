@@ -267,6 +267,12 @@ async def conversation_ws(websocket: WebSocket) -> None:
                     websocket, client, user_text, conversation_id, provider, voice_id, mode
                 )
 
+            elif msg_type == "session.update_token":
+                new_token = data.get("user_token")
+                _cv_token = current_user_token.set(new_token)
+                log.info("token_updated", session_id=session_id)
+                continue
+
             elif msg_type == "text.send":
                 user_text = data.get("text", "").strip()
                 if not user_text:
@@ -321,6 +327,16 @@ async def _process_and_respond(
             provider=provider,
             tool_filter=tool_filter,
         )
+
+        # Handle session expiry with a dedicated event so the UI can prompt re-login
+        if result.get("session_expired"):
+            await websocket.send_json({
+                "type": "error",
+                "code": "session_expired",
+                "message": result.get("message", "Your session has expired."),
+            })
+            return
+
         full_text = result.get("message", "")
 
         # Parse and strip emotion tag
