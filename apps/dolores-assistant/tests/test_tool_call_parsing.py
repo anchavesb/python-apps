@@ -75,3 +75,11 @@ class TestExtractToolCallsFromText:
         result = _extract_tool_calls_from_text(text)
         assert result is not None
         assert result[0]["function"]["name"] == "todo_list_todos"
+
+    def test_arguments_as_dict(self):
+        """Arguments already a dict (not a string) — should be preserved."""
+        text = '{"tool_calls": [{"id": "1", "type": "function", "function": {"name": "note_create_note", "arguments": {"title": "test"}}}]}'
+        result = _extract_tool_calls_from_text(text)
+        assert result is not None
+        # arguments can be dict or string — both should be accepted
+        assert result[0]["function"]["name"] == "note_create_note"
