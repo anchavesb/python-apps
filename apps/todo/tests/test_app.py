@@ -67,11 +67,15 @@ def test_note_crud(client):
 
 
 def test_validation(client):
-    # Missing required tags
-    resp = client.post("/api/todos", json={"title": "X", "tags": {"category": "c"}})
-    assert resp.status_code == 400
+    # Missing tags entirely — should succeed with defaults
+    resp = client.post("/api/todos", json={"title": "X"})
+    assert resp.status_code == 201
 
-    # Invalid priority
+    # Partial tags — missing priority gets defaulted
+    resp = client.post("/api/todos", json={"title": "Y", "tags": {"category": "c"}})
+    assert resp.status_code == 201
+
+    # Invalid priority — still rejected
     resp = client.post("/api/notes", json={"title": "Y", "tags": {"category": "c", "priority": "p"}})
     assert resp.status_code == 400
 
