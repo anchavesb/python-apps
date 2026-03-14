@@ -249,6 +249,39 @@ def split_sentences(text: str) -> list[str]:
     return [s.strip() for s in sentences if s.strip()]
 
 
+def _extract_tool_calls_from_text(text: str) -> list[dict] | None:
+    """Try to parse tool calls from message text (for models that output JSON)."""
+    text = text.strip()
+    if not text.startswith("{") and not text.startswith("["):
+        return None
+    try:
+        data = json.loads(text)
+    except json.JSONDecodeError:
+        return None
+
+    # Handle {"tool_calls": [...]} wrapper
+    if isinstance(data, dict) and "tool_calls" in data:
+        data = data["tool_calls"]
+
+    # Handle direct list of tool calls
+    if isinstance(data, list):
+        calls = []
+        for item in data:
+            fn = item.get("function", {})
+            if fn.get("name"):
+                calls.append({
+                    "id": item.get("id", "call_parsed"),
+                    "type": "function",
+                    "function": {
+                        "name": fn["name"],
+                        "arguments": fn.get("arguments", "{}"),
+                    },
+                })
+        return calls if calls else None
+
+    return None
+
+
 async def run_tool_loop(
     client: ServiceClient,
     initial_message: str,
@@ -281,6 +314,13 @@ async def run_tool_loop(
             return {"message": "I'm having trouble connecting to my brain. Please try again.", "conversation_id": conversation_id or ""}
 
         conversation_id = result.get("conversation_id", conversation_id)
+
+        # Some models output tool calls as JSON text instead of structured
+        # tool_calls. Detect and parse them from the message.
+        if not result.get("tool_calls") and tools:
+            parsed = _extract_tool_calls_from_text(result.get("message", ""))
+            if parsed:
+                result["tool_calls"] = parsed
 
         # If no tool calls, return the text response
         if not result.get("tool_calls"):
