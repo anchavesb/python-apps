@@ -272,6 +272,10 @@ def _extract_tool_calls_from_text(text: str) -> list[dict] | None:
     text = text.strip()
     if not text.startswith("{") and not text.startswith("["):
         return None
+
+    # Strip trailing model tags like <|python_tag|>, <|eot_id|>, etc.
+    text = re.sub(r"<\|[^>]+\|>\s*$", "", text).rstrip()
+
     try:
         data = json.loads(text)
     except json.JSONDecodeError:
@@ -281,18 +285,25 @@ def _extract_tool_calls_from_text(text: str) -> list[dict] | None:
     if isinstance(data, dict) and "tool_calls" in data:
         data = data["tool_calls"]
 
+    # Handle single tool call dict: {"name": "...", "arguments": {...}}
+    if isinstance(data, dict) and data.get("name"):
+        data = [data]
+
     # Handle direct list of tool calls
     if isinstance(data, list):
         calls = []
         for item in data:
+            # Support both {"function": {"name": ...}} and {"name": ...} formats
             fn = item.get("function", {})
-            if fn.get("name"):
+            name = fn.get("name") or item.get("name")
+            if name:
+                args = fn.get("arguments", item.get("arguments", "{}"))
                 calls.append({
                     "id": item.get("id", "call_parsed"),
                     "type": "function",
                     "function": {
-                        "name": fn["name"],
-                        "arguments": fn.get("arguments", "{}"),
+                        "name": name,
+                        "arguments": args,
                     },
                 })
         return calls if calls else None
