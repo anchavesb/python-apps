@@ -81,7 +81,11 @@ class JsonStore:
         if not for_update:
             if not data.get("title"):
                 raise ValidationError("title is required")
-        tags = data.get("tags", {})
+        # Apply default tags if missing
+        tags = data.get("tags") or {}
+        tags.setdefault("category", "general")
+        tags.setdefault("priority", "medium")
+        data["tags"] = tags
         self._validate_tags(tags)
         if data.get("due_date"):
             # allow YYYY-MM-DD or ISO datetime
@@ -93,7 +97,10 @@ class JsonStore:
         if not for_update:
             if not data.get("title"):
                 raise ValidationError("title is required")
-        tags = data.get("tags", {})
+        tags = data.get("tags") or {}
+        tags.setdefault("category", "general")
+        tags.setdefault("priority", "medium")
+        data["tags"] = tags
         self._validate_tags(tags)
 
     def _validate_work(self, data: Dict[str, Any], for_update: bool = False):

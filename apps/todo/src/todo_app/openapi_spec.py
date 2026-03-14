@@ -216,11 +216,11 @@ OPENAPI_SPEC = {
             },
             "TodoCreate": {
                 "type": "object",
-                "required": ["title", "tags"],
+                "required": ["title"],
                 "properties": {
                     "title": {"type": "string"},
                     "description": {"type": "string"},
-                    "tags": {"$ref": "#/components/schemas/Tags"},
+                    "tags": {"$ref": "#/components/schemas/Tags", "description": "Optional. Defaults to category='general', priority='medium' if omitted."},
                     "done": {"type": "boolean", "default": False},
                     "due_date": {"type": "string", "description": "YYYY-MM-DD or ISO datetime"},
                 },
@@ -248,11 +248,11 @@ OPENAPI_SPEC = {
             },
             "NoteCreate": {
                 "type": "object",
-                "required": ["title", "tags"],
+                "required": ["title"],
                 "properties": {
                     "title": {"type": "string"},
                     "note": {"type": "string"},
-                    "tags": {"$ref": "#/components/schemas/Tags"},
+                    "tags": {"$ref": "#/components/schemas/Tags", "description": "Optional. Defaults to category='general', priority='medium' if omitted."},
                 },
             },
             "NoteUpdate": {
