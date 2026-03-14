@@ -331,7 +331,8 @@ async def run_tool_loop(
         for tc in result["tool_calls"]:
             fn = tc.get("function", {})
             tool_name = fn.get("name", "")
-            tool_args = json.loads(fn.get("arguments", "{}"))
+            raw_args = fn.get("arguments", "{}")
+            tool_args = raw_args if isinstance(raw_args, dict) else json.loads(raw_args)
 
             tool = get_tool_by_name(tool_name)
             if tool:
