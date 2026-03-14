@@ -32,8 +32,10 @@ def _convert_to_wav(audio_data: bytes, content_type: str) -> Path:
     }
     in_ext = ext_map.get(content_type.split(";")[0].strip(), ".webm")
 
-    in_path = Path(tempfile.mktemp(suffix=in_ext))
-    out_path = Path(tempfile.mktemp(suffix=".wav"))
+    with tempfile.NamedTemporaryFile(suffix=in_ext, delete=False) as f:
+        in_path = Path(f.name)
+    with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as f:
+        out_path = Path(f.name)
 
     try:
         in_path.write_bytes(audio_data)

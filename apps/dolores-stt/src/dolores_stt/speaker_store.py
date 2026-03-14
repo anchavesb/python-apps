@@ -43,6 +43,8 @@ class SpeakerStore:
     def open(self) -> None:
         self._conn = sqlite3.connect(self._db_path, check_same_thread=False)
         self._conn.row_factory = sqlite3.Row
+        # WAL mode for safe concurrent reads from asyncio.to_thread workers
+        self._conn.execute("PRAGMA journal_mode=WAL")
         self._conn.execute(_SCHEMA)
         self._conn.commit()
 
@@ -131,7 +133,12 @@ class SpeakerStore:
         return [dict(r) for r in rows]
 
     def list_with_embeddings(self) -> list[dict]:
-        """List all speakers with decoded embeddings."""
+        """List all speakers with decoded embeddings.
+
+        Note: loads all embeddings into memory. Fine for the expected scale
+        (household/small-team, <100 speakers). For larger deployments,
+        consider approximate nearest-neighbor search (e.g. FAISS).
+        """
         rows = self.conn.execute(
             "SELECT id, name, email, embedding, embedding_version, samples_count FROM speakers"
         ).fetchall()

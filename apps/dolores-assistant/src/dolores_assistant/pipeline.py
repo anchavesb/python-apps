@@ -156,14 +156,27 @@ class ServiceClient:
             log.error("enroll_speaker_failed", error=str(e))
             return None
 
-    async def delete_speaker(self, speaker_id: str) -> bool:
-        """Delete a speaker profile via STT service."""
+    async def delete_speaker(self, speaker_id: str) -> bool | None:
+        """Delete a speaker profile via STT service.
+
+        Returns True if deleted, False if not found, None on service error.
+        """
+        try:
+            import uuid as _uuid
+            _uuid.UUID(speaker_id, version=4)
+        except ValueError:
+            return False
+
         try:
             resp = await self.client.delete(f"{settings.stt_url}/v1/speakers/{speaker_id}", timeout=10)
-            return resp.status_code == 204
+            if resp.status_code == 204:
+                return True
+            if resp.status_code == 404:
+                return False
+            return None
         except Exception as e:
             log.error("delete_speaker_failed", error=str(e))
-            return False
+            return None
 
     # --- Brain ---
 

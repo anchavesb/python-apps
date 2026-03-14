@@ -21,7 +21,28 @@ from .tools.registry import get_tool_definitions
 
 SPEAKER_NAME_RE = re.compile(r"^[a-zA-Z0-9 ]{1,32}$")
 
+_SPEAKER_CONFIDENCE_THRESHOLD = 0.85
+
 log = get_logger(__name__)
+
+
+def inject_speaker_context(
+    user_text: str,
+    speaker_result: dict | None,
+    threshold: float = _SPEAKER_CONFIDENCE_THRESHOLD,
+) -> str:
+    """Prepend [Speaker: Name] tag to user text when identification is confident.
+
+    Returns the original text unmodified if speaker_result is None, confidence
+    is below threshold, or the name fails sanitization.
+    """
+    if not speaker_result or not speaker_result.get("speaker_name"):
+        return user_text
+    name = speaker_result["speaker_name"]
+    confidence = speaker_result.get("confidence", 0)
+    if confidence >= threshold and SPEAKER_NAME_RE.match(name):
+        return f"[Speaker: {name}] {user_text}"
+    return user_text
 
 router = APIRouter(prefix="/v1", tags=["assistant"])
 
@@ -171,8 +192,10 @@ async def delete_speaker(
     client: ServiceClient = Depends(get_service_client),
 ):
     """Delete a speaker profile (proxies to STT service)."""
-    success = await client.delete_speaker(speaker_id)
-    if not success:
+    result = await client.delete_speaker(speaker_id)
+    if result is None:
+        raise HTTPException(status_code=502, detail="Speaker service unavailable")
+    if not result:
         raise HTTPException(status_code=404, detail="Speaker not found")
     return Response(status_code=204)
 
@@ -330,12 +353,7 @@ async def conversation_ws(websocket: WebSocket) -> None:
                     continue
 
                 # Inject speaker context into message for Brain (sanitized)
-                brain_text = user_text
-                if speaker_result and speaker_result.get("speaker_name"):
-                    name = speaker_result["speaker_name"]
-                    confidence = speaker_result.get("confidence", 0)
-                    if confidence >= 0.85 and SPEAKER_NAME_RE.match(name):
-                        brain_text = f"[Speaker: {name}] {user_text}"
+                brain_text = inject_speaker_context(user_text, speaker_result)
 
                 # Brain -> response
                 await _process_and_respond(

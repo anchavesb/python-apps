@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import io
-from typing import List
+import uuid as _uuid
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, WebSocket, WebSocketDisconnect
 
@@ -22,6 +22,17 @@ from .schemas import (
 from .speaker import SpeakerIdentifier
 
 log = get_logger(__name__)
+
+# Max size per audio file for enrollment (10 MB)
+_MAX_ENROLL_FILE_BYTES = 10 * 1024 * 1024
+
+
+def _validate_uuid(value: str, label: str = "ID") -> None:
+    """Validate that a string is a valid UUID4."""
+    try:
+        _uuid.UUID(value, version=4)
+    except ValueError:
+        raise HTTPException(status_code=400, detail=f"Invalid {label}: {value}")
 
 router = APIRouter(prefix="/v1", tags=["stt"])
 
@@ -119,6 +130,9 @@ async def enroll_speaker(
     audio_samples = []
     for f in files:
         data = await f.read()
+        if len(data) > _MAX_ENROLL_FILE_BYTES:
+            max_mb = _MAX_ENROLL_FILE_BYTES // (1024 * 1024)
+            raise HTTPException(status_code=413, detail=f"Audio file too large. Maximum: {max_mb} MB")
         if data:
             ct = (f.content_type or "audio/webm").split(";")[0].strip()
             audio_samples.append((data, ct))
@@ -136,7 +150,7 @@ async def enroll_speaker(
     return SpeakerProfile(**result)
 
 
-@router.get("/speakers", response_model=List[SpeakerProfile])
+@router.get("/speakers", response_model=list[SpeakerProfile])
 async def list_speakers(
     _auth: ServicePSK = None,
     identifier: SpeakerIdentifier = Depends(get_speaker_identifier),
@@ -152,6 +166,7 @@ async def get_speaker(
     identifier: SpeakerIdentifier = Depends(get_speaker_identifier),
 ) -> SpeakerProfile:
     """Get a speaker profile by ID."""
+    _validate_uuid(speaker_id, "speaker_id")
     profile = identifier.store.get(speaker_id)
     if not profile:
         raise HTTPException(status_code=404, detail="Speaker not found")
@@ -165,6 +180,7 @@ async def delete_speaker(
     identifier: SpeakerIdentifier = Depends(get_speaker_identifier),
 ) -> None:
     """Delete a speaker profile."""
+    _validate_uuid(speaker_id, "speaker_id")
     if not identifier.store.delete(speaker_id):
         raise HTTPException(status_code=404, detail="Speaker not found")
 

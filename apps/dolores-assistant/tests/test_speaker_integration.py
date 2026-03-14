@@ -9,7 +9,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from dolores_assistant.pipeline import ServiceClient
-from dolores_assistant.routes import SPEAKER_NAME_RE
+from dolores_assistant.routes import SPEAKER_NAME_RE, inject_speaker_context
 
 
 class TestSpeakerNameSanitization:
@@ -121,7 +121,7 @@ class TestSpeakerManagement:
         mock_resp.status_code = 204
         self.client._client.delete = AsyncMock(return_value=mock_resp)
 
-        result = asyncio.run(self.client.delete_speaker("speaker-123"))
+        result = asyncio.run(self.client.delete_speaker("00000000-0000-4000-8000-000000000000"))
         assert result is True
 
     def test_delete_speaker_not_found(self):
@@ -129,62 +129,42 @@ class TestSpeakerManagement:
         mock_resp.status_code = 404
         self.client._client.delete = AsyncMock(return_value=mock_resp)
 
-        result = asyncio.run(self.client.delete_speaker("nonexistent"))
+        result = asyncio.run(self.client.delete_speaker("00000000-0000-4000-8000-000000000000"))
+        assert result is False
+
+    def test_delete_speaker_service_error(self):
+        self.client._client.delete = AsyncMock(side_effect=Exception("connection refused"))
+
+        result = asyncio.run(self.client.delete_speaker("00000000-0000-4000-8000-000000000000"))
+        assert result is None
+
+    def test_delete_speaker_invalid_uuid(self):
+        result = asyncio.run(self.client.delete_speaker("not-a-uuid"))
         assert result is False
 
 
 class TestSpeakerContextInjection:
-    """Tests for the speaker context injection into Brain messages."""
+    """Tests for the inject_speaker_context helper."""
 
     def test_injects_speaker_tag_above_threshold(self):
         """When confidence >= 0.85 and name is valid, inject [Speaker: Name]."""
         speaker_result = {"speaker_name": "Alice", "confidence": 0.92}
-        user_text = "add milk to my list"
-
-        name = speaker_result["speaker_name"]
-        confidence = speaker_result["confidence"]
-        brain_text = user_text
-        if confidence >= 0.85 and SPEAKER_NAME_RE.match(name):
-            brain_text = f"[Speaker: {name}] {user_text}"
-
-        assert brain_text == "[Speaker: Alice] add milk to my list"
+        assert inject_speaker_context("add milk to my list", speaker_result) == "[Speaker: Alice] add milk to my list"
 
     def test_no_injection_below_threshold(self):
         """When confidence < 0.85, do not inject speaker tag."""
         speaker_result = {"speaker_name": "Alice", "confidence": 0.60}
-        user_text = "add milk to my list"
-
-        name = speaker_result["speaker_name"]
-        confidence = speaker_result["confidence"]
-        brain_text = user_text
-        if confidence >= 0.85 and SPEAKER_NAME_RE.match(name):
-            brain_text = f"[Speaker: {name}] {user_text}"
-
-        assert brain_text == "add milk to my list"
+        assert inject_speaker_context("add milk to my list", speaker_result) == "add milk to my list"
 
     def test_no_injection_for_invalid_name(self):
         """When name fails sanitization, do not inject."""
         speaker_result = {"speaker_name": "<script>evil</script>", "confidence": 0.95}
-        user_text = "add milk to my list"
-
-        name = speaker_result["speaker_name"]
-        confidence = speaker_result["confidence"]
-        brain_text = user_text
-        if confidence >= 0.85 and SPEAKER_NAME_RE.match(name):
-            brain_text = f"[Speaker: {name}] {user_text}"
-
-        assert brain_text == "add milk to my list"
+        assert inject_speaker_context("add milk to my list", speaker_result) == "add milk to my list"
 
     def test_no_injection_when_no_speaker(self):
         """When speaker_result is None, no injection."""
-        speaker_result = None
-        user_text = "hello"
+        assert inject_speaker_context("hello", None) == "hello"
 
-        brain_text = user_text
-        if speaker_result and speaker_result.get("speaker_name"):
-            name = speaker_result["speaker_name"]
-            confidence = speaker_result.get("confidence", 0)
-            if confidence >= 0.85 and SPEAKER_NAME_RE.match(name):
-                brain_text = f"[Speaker: {name}] {user_text}"
-
-        assert brain_text == "hello"
+    def test_no_injection_when_name_missing(self):
+        """When speaker_name is None in result, no injection."""
+        assert inject_speaker_context("hello", {"speaker_name": None, "confidence": 0.9}) == "hello"
