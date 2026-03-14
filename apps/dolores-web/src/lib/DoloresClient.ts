@@ -107,4 +107,12 @@ export class DoloresClient {
   get connected(): boolean {
     return this.ws?.readyState === WebSocket.OPEN;
   }
+
+  static async listVoices(serverUrl: string, apiKey: string): Promise<{ id: string; name: string }[]> {
+    const resp = await fetch(`${serverUrl}/v1/voices`, {
+      headers: apiKey ? { 'Authorization': `Bearer ${apiKey}` } : {},
+    });
+    if (!resp.ok) throw new Error(`Failed to fetch voices: ${resp.status}`);
+    return resp.json();
+  }
 }
