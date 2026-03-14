@@ -18,5 +18,10 @@ class STTConfig:
     log_level: str = get_env("LOG_LEVEL", "INFO")
     log_format: str = get_env("LOG_FORMAT", "console")
 
+    # Speaker identification
+    speaker_id_enabled: bool = get_env("SPEAKER_ID_ENABLED", "0") == "1"
+    speaker_db_path: str = get_env("SPEAKER_DB_PATH", "data/speakers.db")
+    speaker_threshold: float = float(get_env("SPEAKER_THRESHOLD", "0.85"))
+
 
 settings = STTConfig()

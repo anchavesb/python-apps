@@ -1,7 +1,8 @@
-"""Assistant API routes: WS /v1/conversation, POST /v1/chat, voice management."""
+"""Assistant API routes: WS /v1/conversation, POST /v1/chat, voice & speaker management."""
 
 from __future__ import annotations
 
+import asyncio
 import json
 import re
 import uuid
@@ -18,7 +19,30 @@ from .schemas import TextChatRequest, TextChatResponse
 from .tools.openapi_discovery import current_user_token
 from .tools.registry import get_tool_definitions
 
+SPEAKER_NAME_RE = re.compile(r"^[a-zA-Z0-9 ]{1,32}$")
+
+_SPEAKER_CONFIDENCE_THRESHOLD = 0.85
+
 log = get_logger(__name__)
+
+
+def inject_speaker_context(
+    user_text: str,
+    speaker_result: dict | None,
+    threshold: float = _SPEAKER_CONFIDENCE_THRESHOLD,
+) -> str:
+    """Prepend [Speaker: Name] tag to user text when identification is confident.
+
+    Returns the original text unmodified if speaker_result is None, confidence
+    is below threshold, or the name fails sanitization.
+    """
+    if not speaker_result or not speaker_result.get("speaker_name"):
+        return user_text
+    name = speaker_result["speaker_name"]
+    confidence = speaker_result.get("confidence", 0)
+    if confidence >= threshold and SPEAKER_NAME_RE.match(name):
+        return f"[Speaker: {name}] {user_text}"
+    return user_text
 
 router = APIRouter(prefix="/v1", tags=["assistant"])
 
@@ -122,6 +146,57 @@ async def delete_voice(
     success = await client.delete_voice(voice_id)
     if not success:
         raise HTTPException(status_code=404, detail="Voice not found")
+    return Response(status_code=204)
+
+
+# --- Speaker management (proxy to STT service) ---
+
+
+@router.get("/speakers")
+async def list_speakers(
+    _auth: ClientAPIKey = None,
+    client: ServiceClient = Depends(get_service_client),
+):
+    """List enrolled speaker profiles (proxies to STT service)."""
+    return await client.list_speakers()
+
+
+@router.post("/speakers")
+async def enroll_speaker(
+    name: str,
+    files: list[UploadFile],
+    email: str | None = None,
+    _auth: ClientAPIKey = None,
+    client: ServiceClient = Depends(get_service_client),
+):
+    """Enroll a new speaker (proxies to STT service)."""
+    audio_files = []
+    for f in files:
+        data = await f.read()
+        if data:
+            audio_files.append((f.filename or "audio.webm", data, f.content_type or "audio/webm"))
+
+    if not audio_files:
+        raise HTTPException(status_code=400, detail="No audio files provided")
+
+    result = await client.enroll_speaker(name=name, audio_files=audio_files, email=email)
+    if result is None:
+        raise HTTPException(status_code=502, detail="Failed to enroll speaker")
+    return result
+
+
+@router.delete("/speakers/{speaker_id}", status_code=204)
+async def delete_speaker(
+    speaker_id: str,
+    _auth: ClientAPIKey = None,
+    client: ServiceClient = Depends(get_service_client),
+):
+    """Delete a speaker profile (proxies to STT service)."""
+    result = await client.delete_speaker(speaker_id)
+    if result is None:
+        raise HTTPException(status_code=502, detail="Speaker service unavailable")
+    if not result:
+        raise HTTPException(status_code=404, detail="Speaker not found")
     return Response(status_code=204)
 
 
@@ -245,8 +320,17 @@ async def conversation_ws(websocket: WebSocket) -> None:
                     log.warning("unrecognized_audio_header", size=len(audio_data), header=audio_data[:8].hex() if len(audio_data) >= 8 else audio_data.hex(), content_type=content_type)
                     # Still attempt transcription — let STT service decide
 
-                # STT
-                transcription = await client.transcribe(audio_data, content_type=content_type)
+                # STT + Speaker ID in parallel
+                transcription, speaker_result = await asyncio.gather(
+                    client.transcribe(audio_data, content_type=content_type),
+                    client.identify_speaker(audio_data, content_type=content_type),
+                    return_exceptions=True,
+                )
+                # Handle exceptions gracefully — speaker failure doesn't block transcription
+                if isinstance(transcription, Exception):
+                    transcription = None
+                if isinstance(speaker_result, Exception):
+                    speaker_result = None
 
                 if transcription is None:
                     await websocket.send_json({
@@ -257,14 +341,23 @@ async def conversation_ws(websocket: WebSocket) -> None:
                     continue
 
                 user_text = transcription.get("text", "")
-                await websocket.send_json({"type": "transcription.final", "text": user_text})
+
+                # Enrich transcription.final with speaker info
+                final_event = {"type": "transcription.final", "text": user_text}
+                if speaker_result and speaker_result.get("speaker_name"):
+                    final_event["speaker_name"] = speaker_result["speaker_name"]
+                    final_event["speaker_confidence"] = speaker_result.get("confidence", 0)
+                await websocket.send_json(final_event)
 
                 if not user_text.strip():
                     continue
 
+                # Inject speaker context into message for Brain (sanitized)
+                brain_text = inject_speaker_context(user_text, speaker_result)
+
                 # Brain -> response
                 await _process_and_respond(
-                    websocket, client, user_text, conversation_id, provider, voice_id, mode
+                    websocket, client, brain_text, conversation_id, provider, voice_id, mode
                 )
 
             elif msg_type == "session.update_token":

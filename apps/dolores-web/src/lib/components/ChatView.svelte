@@ -31,7 +31,7 @@
 <div class="chat-container">
   <div class="messages" bind:this={messagesEl}>
     {#each app.state.messages as msg}
-      <ChatMessage role={msg.role} content={msg.content} />
+      <ChatMessage role={msg.role} content={msg.content} speakerName={msg.speakerName} />
     {/each}
 
     {#if app.state.streamingText}

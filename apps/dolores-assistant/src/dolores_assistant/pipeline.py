@@ -105,6 +105,79 @@ class ServiceClient:
                 log.error("stt_call_failed", error=str(e), audio_size=len(audio_data), content_type=content_type)
                 return None
 
+    # --- Speaker identification ---
+
+    async def identify_speaker(self, audio_data: bytes, content_type: str) -> dict | None:
+        """Send audio to STT /v1/identify endpoint. Returns {speaker_id, speaker_name, confidence}."""
+        base_type = content_type.split(";")[0].strip()
+        ext = self._EXT_MAP.get(base_type, ".webm")
+        try:
+            resp = await self.client.post(
+                f"{settings.stt_url}/v1/identify",
+                files={"file": (f"audio{ext}", audio_data, base_type)},
+                timeout=10,
+            )
+            if resp.status_code == 200:
+                return resp.json()
+        except Exception as e:
+            log.warning("speaker_id_failed", error=str(e))
+        return None
+
+    # --- Speaker management (proxy to STT) ---
+
+    async def list_speakers(self) -> list[dict]:
+        """List enrolled speakers from STT service."""
+        try:
+            resp = await self.client.get(f"{settings.stt_url}/v1/speakers", timeout=10)
+            resp.raise_for_status()
+            return resp.json()
+        except Exception as e:
+            log.error("list_speakers_failed", error=str(e))
+            return []
+
+    async def enroll_speaker(
+        self, name: str, audio_files: list[tuple[str, bytes, str]], email: str | None = None,
+    ) -> dict | None:
+        """Enroll a new speaker via STT service."""
+        try:
+            files = [("files", (fname, data, ct)) for fname, data, ct in audio_files]
+            params = {"name": name}
+            if email:
+                params["email"] = email
+            resp = await self.client.post(
+                f"{settings.stt_url}/v1/speakers",
+                params=params,
+                files=files,
+                timeout=30,
+            )
+            resp.raise_for_status()
+            return resp.json()
+        except Exception as e:
+            log.error("enroll_speaker_failed", error=str(e))
+            return None
+
+    async def delete_speaker(self, speaker_id: str) -> bool | None:
+        """Delete a speaker profile via STT service.
+
+        Returns True if deleted, False if not found, None on service error.
+        """
+        try:
+            import uuid as _uuid
+            _uuid.UUID(speaker_id, version=4)
+        except ValueError:
+            return False
+
+        try:
+            resp = await self.client.delete(f"{settings.stt_url}/v1/speakers/{speaker_id}", timeout=10)
+            if resp.status_code == 204:
+                return True
+            if resp.status_code == 404:
+                return False
+            return None
+        except Exception as e:
+            log.error("delete_speaker_failed", error=str(e))
+            return None
+
     # --- Brain ---
 
     async def chat(
