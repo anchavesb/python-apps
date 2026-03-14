@@ -79,6 +79,15 @@ class PostgresStore:
                 raise ValidationError("end_date cannot be earlier than start_date")
 
     # ---------- User Management ----------
+    def find_user_by_email(self, email: str | None) -> User | None:
+        """Look up a user by email address."""
+        if not email:
+            return None
+        with self.get_session() as session:
+            return session.execute(
+                select(User).where(User.email == email)
+            ).scalar_one_or_none()
+
     def get_or_create_user(self, user_id: str, email: str | None = None, name: str | None = None) -> User:
         """Get existing user or create new one."""
         with self.get_session() as session:

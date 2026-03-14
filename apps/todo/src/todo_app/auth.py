@@ -1,7 +1,10 @@
 """OIDC authentication blueprint for Authentik integration."""
+import logging
 from functools import wraps
 from flask import Blueprint, current_app, redirect, url_for, session, request, flash
 from authlib.integrations.flask_client import OAuth
+
+logger = logging.getLogger(__name__)
 
 auth_bp = Blueprint("auth", __name__)
 oauth = OAuth()
@@ -65,6 +68,7 @@ def callback():
         userinfo = token.get("userinfo")
 
         if userinfo:
+            logger.debug("OIDC callback userinfo: sub=%s email=%s", userinfo.get("sub"), userinfo.get("email"))
             session["user"] = {
                 "sub": userinfo.get("sub"),
                 "email": userinfo.get("email"),
