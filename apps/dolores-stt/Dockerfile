@@ -13,8 +13,8 @@ COPY apps/dolores-stt/pyproject.toml /app/
 COPY apps/dolores-stt/src /app/src
 RUN pip install --no-cache-dir .
 
-# Create model cache directory
-RUN mkdir -p /app/models && chown -R appuser:appuser /app
+# Create model cache and data directories
+RUN mkdir -p /app/models /app/data && chown -R appuser:appuser /app
 
 USER appuser
 
