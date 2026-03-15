@@ -11,7 +11,8 @@ RUN pip install --no-cache-dir /app/libs/dolores-common
 # Install the STT service
 COPY apps/dolores-stt/pyproject.toml /app/
 COPY apps/dolores-stt/src /app/src
-RUN pip install --no-cache-dir .
+RUN pip install --no-cache-dir . && \
+    pip install --no-cache-dir --force-reinstall webrtcvad-wheels
 
 # Create model cache directory
 RUN mkdir -p /app/models && chown -R appuser:appuser /app
