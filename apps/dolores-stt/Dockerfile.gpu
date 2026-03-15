@@ -10,7 +10,7 @@ RUN mkdir -p /app/src/dolores_stt && \
     echo '__version__ = "0.0.0"' > /app/src/dolores_stt/__init__.py && \
     pip install --no-cache-dir . && \
     pip uninstall -y webrtcvad && \
-    pip install --no-cache-dir webrtcvad-wheels>=2.0.12 && \
+    pip install --no-cache-dir "webrtcvad-wheels>=2.0.12" && \
     rm -rf /app/src/dolores_stt
 
 # Copy actual source (fast — deps already cached in layer above)
