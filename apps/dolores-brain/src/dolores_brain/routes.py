@@ -95,6 +95,9 @@ async def chat(
     # Trim to sliding window to avoid unbounded context growth
     messages = _trim_history(messages, settings.max_history_messages)
 
+    # Log the messages being sent to LLM for debugging
+    log.info("llm_inference_request", messages=messages, provider=provider, model=model_str)
+
     # Call LiteLLM
     kwargs: dict = {
         "model": model_str,
@@ -184,6 +187,9 @@ async def chat_stream(
 
     # Trim to sliding window to avoid unbounded context growth
     messages = _trim_history(messages, settings.max_history_messages)
+
+    # Log the messages being sent to LLM for debugging
+    log.info("llm_inference_request_stream", messages=messages, provider=provider, model=model_str)
 
     kwargs: dict = {
         "model": model_str,
