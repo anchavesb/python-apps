@@ -1,27 +1,47 @@
-FROM dolores-gpu-base:latest
+FROM nvidia/cuda:11.8.0-runtime-ubuntu22.04
+
+ENV DEBIAN_FRONTEND=noninteractive
+ENV PYTHONUNBUFFERED=1
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    software-properties-common && \
+    add-apt-repository ppa:deadsnakes/ppa && \
+    apt-get update && apt-get install -y --no-install-recommends \
+    python3.11 python3.11-venv python3.11-dev \
+    curl ffmpeg libsndfile1 && \
+    rm -rf /var/lib/apt/lists/*
+
+# Make python3.11 the default and bootstrap pip
+RUN update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.11 1 && \
+    update-alternatives --install /usr/bin/python python /usr/bin/python3.11 1 && \
+    curl -sS https://bootstrap.pypa.io/get-pip.py | python3.11
+
+RUN groupadd -r appuser && useradd -r -m -g appuser appuser
+
+WORKDIR /app
 
 # Install dolores-common first (shared lib)
 COPY libs/dolores-common /app/libs/dolores-common
 RUN pip install --no-cache-dir /app/libs/dolores-common
 
-# Install dependencies only (stub package so pip can resolve pyproject.toml)
+# Install the TTS service with GPU dependencies (coqui-tts + torch)
 COPY apps/dolores-tts/pyproject.toml /app/
-RUN mkdir -p /app/src/dolores_tts && \
-    echo '__version__ = "0.0.0"' > /app/src/dolores_tts/__init__.py && \
-    pip install --no-cache-dir ".[gpu]" && \
-    rm -rf /app/src/dolores_tts
-
-# Patch coqui-tts to fix ImportError with newer transformers
-RUN sed -i 's/from transformers.pytorch_utils import isin_mps_friendly as isin/import torch; isin = lambda x: torch.backends.mps.is_available() and x.device.type == "mps"/' /usr/local/lib/python3.12/dist-packages/TTS/tts/layers/tortoise/autoregressive.py
-
-# Copy actual source (fast — deps already cached in layer above)
 COPY apps/dolores-tts/src /app/src
-RUN pip install --no-cache-dir --no-deps .
+RUN pip install --no-cache-dir ".[gpu]"
+
+# Patch coqui-tts to fix ImportError with newer transformers (only if file exists)
+RUN TTS_PATCH_FILE="/usr/local/lib/python3.11/dist-packages/TTS/tts/layers/tortoise/autoregressive.py"; \
+    if [ -f "$TTS_PATCH_FILE" ]; then \
+        sed -i 's/from transformers.pytorch_utils import isin_mps_friendly as isin/import torch; isin = lambda x: torch.backends.mps.is_available() and x.device.type == "mps"/' "$TTS_PATCH_FILE"; \
+    fi
 
 # Create data directories
 RUN mkdir -p /app/data/voices /app/models && chown -R appuser:appuser /app
 
 USER appuser
+
+ENV NVIDIA_VISIBLE_DEVICES=all
+ENV NVIDIA_DRIVER_CAPABILITIES=compute,utility
 
 EXPOSE 8002
 

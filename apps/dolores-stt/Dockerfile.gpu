@@ -1,4 +1,4 @@
-FROM dolores-gpu-base:latest
+FROM dolores-gpu-base:python3.11
 
 # Install dolores-common first (shared lib)
 COPY libs/dolores-common /app/libs/dolores-common
@@ -9,9 +9,13 @@ COPY apps/dolores-stt/pyproject.toml /app/
 RUN mkdir -p /app/src/dolores_stt && \
     echo '__version__ = "0.0.0"' > /app/src/dolores_stt/__init__.py && \
     pip install --no-cache-dir . && \
-    pip uninstall -y webrtcvad && \
-    pip install --no-cache-dir "webrtcvad-wheels>=2.0.12" && \
     rm -rf /app/src/dolores_stt
+
+# Patch coqui-tts to fix ImportError with newer transformers (only if file exists)
+RUN TTS_PATCH_FILE="/usr/local/lib/python3.11/dist-packages/TTS/tts/layers/tortoise/autoregressive.py"; \
+    if [ -f "$TTS_PATCH_FILE" ]; then \
+        sed -i 's/from transformers.pytorch_utils import isin_mps_friendly as isin/import torch; isin = lambda x: torch.backends.mps.is_available() and x.device.type == "mps"/' "$TTS_PATCH_FILE"; \
+    fi
 
 # Copy actual source (fast — deps already cached in layer above)
 COPY apps/dolores-stt/src /app/src
