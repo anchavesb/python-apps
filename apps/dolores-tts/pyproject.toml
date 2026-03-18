@@ -24,6 +24,10 @@ gpu = [
     "torchaudio==2.5.1",
     "transformers==4.47.1",
 ]
+mlx = [
+    "f5-tts-mlx>=0.1.2",
+    "soundfile>=0.12.1",
+]
 
 [project.scripts]
 "dolores-tts" = "dolores_tts.__main__:main"

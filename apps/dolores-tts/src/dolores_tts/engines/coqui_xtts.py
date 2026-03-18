@@ -63,8 +63,13 @@ class CoquiXTTSEngine(TTSEngine):
         if device == "auto":
             try:
                 import torch
-                device = "cuda" if torch.cuda.is_available() else "cpu"
-            except ImportError:
+                if torch.cuda.is_available():
+                    device = "cuda"
+                elif torch.backends.mps.is_available():
+                    device = "mps"
+                else:
+                    device = "cpu"
+            except (ImportError, AttributeError):
                 device = "cpu"
 
         self._model = TTS("tts_models/multilingual/multi-dataset/xtts_v2").to(device)
@@ -82,6 +87,7 @@ class CoquiXTTSEngine(TTSEngine):
         text: str,
         voice_id: str = "default",
         sample_rate: int = 24000,
+        ref_text: str | None = None,
     ) -> bytes:
         """Synthesize text to WAV bytes using XTTS v2."""
         if not self._model:

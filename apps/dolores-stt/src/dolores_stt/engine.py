@@ -53,19 +53,38 @@ class STTEngine:
         """Load the faster-whisper model. Call once at startup."""
         from faster_whisper import WhisperModel
 
+        device = self._device
+        cpu_threads = self._cpu_threads
+
+        # Device auto-detection for Apple Silicon/CPU fallback
+        if device == "auto":
+            try:
+                import torch
+                if torch.cuda.is_available():
+                    device = "cuda"
+                else:
+                    device = "cpu"
+                    # Optimization for Mac/M3: Increase threads if on MPS-capable hardware but using CPU
+                    if torch.backends.mps.is_available() and cpu_threads <= 4:
+                        cpu_threads = 8  # Use more cores on M3 Max
+                        log.info("optimizing_for_apple_silicon", cpu_threads=cpu_threads)
+            except (ImportError, AttributeError):
+                device = "cpu"
+
         log.info(
             "loading_model",
             model_size=self._model_size,
-            device=self._device,
+            device=device,
             compute_type=self._compute_type,
+            cpu_threads=cpu_threads,
         )
         start = time.monotonic()
 
         self._model = WhisperModel(
             self._model_size,
-            device=self._device,
+            device=device,
             compute_type=self._compute_type,
-            cpu_threads=self._cpu_threads,
+            cpu_threads=cpu_threads,
         )
 
         elapsed = round(time.monotonic() - start, 2)

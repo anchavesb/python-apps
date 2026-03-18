@@ -32,6 +32,7 @@ class PiperEngine(TTSEngine):
         text: str,
         voice_id: str = "default",
         sample_rate: int = 22050,
+        ref_text: str | None = None,
     ) -> bytes:
         raise NotImplementedError("Piper TTS is not yet implemented")
 

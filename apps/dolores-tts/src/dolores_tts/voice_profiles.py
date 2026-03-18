@@ -19,6 +19,7 @@ CREATE TABLE IF NOT EXISTS voice_profiles (
     name TEXT NOT NULL,
     description TEXT DEFAULT '',
     engine TEXT NOT NULL,
+    ref_text TEXT,
     created_at TEXT NOT NULL
 );
 """
@@ -36,6 +37,13 @@ class VoiceProfileStore:
         self._voices_dir.mkdir(parents=True, exist_ok=True)
         self._db = await aiosqlite.connect(self._db_path)
         await self._db.execute(_CREATE_TABLE)
+
+        # Basic migration for ref_text column
+        try:
+            await self._db.execute("ALTER TABLE voice_profiles ADD COLUMN ref_text TEXT")
+        except aiosqlite.OperationalError:
+            pass  # column already exists
+
         await self._db.commit()
         log.info("voice_profile_store_ready")
 
@@ -44,7 +52,12 @@ class VoiceProfileStore:
             await self._db.close()
 
     async def create(
-        self, name: str, audio_data: bytes, engine: str = "coqui_xtts", description: str = ""
+        self,
+        name: str,
+        audio_data: bytes,
+        engine: str = "coqui_xtts",
+        description: str = "",
+        ref_text: str | None = None,
     ) -> dict:
         """Create a new voice profile from reference audio."""
         profile_id = str(uuid.uuid4())[:8]
@@ -57,33 +70,47 @@ class VoiceProfileStore:
 
         now = datetime.now(timezone.utc).isoformat()
         await self._db.execute(
-            "INSERT INTO voice_profiles (id, name, description, engine, created_at) VALUES (?, ?, ?, ?, ?)",
-            (profile_id, name, description, engine, now),
+            "INSERT INTO voice_profiles (id, name, description, engine, ref_text, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+            (profile_id, name, description, engine, ref_text, now),
         )
         await self._db.commit()
 
         log.info("voice_profile_created", id=profile_id, name=name)
-        return {"id": profile_id, "name": name, "engine": engine}
+        return {"id": profile_id, "name": name, "engine": engine, "ref_text": ref_text}
 
     async def get_profile(self, profile_id: str) -> dict | None:
         """Get a single voice profile by ID."""
         cursor = await self._db.execute(
-            "SELECT id, name, description, engine, created_at FROM voice_profiles WHERE id = ?",
+            "SELECT id, name, description, engine, ref_text, created_at FROM voice_profiles WHERE id = ?",
             (profile_id,),
         )
         row = await cursor.fetchone()
         if row is None:
             return None
-        return {"id": row[0], "name": row[1], "description": row[2], "engine": row[3], "created_at": row[4]}
+        return {
+            "id": row[0],
+            "name": row[1],
+            "description": row[2],
+            "engine": row[3],
+            "ref_text": row[4],
+            "created_at": row[5],
+        }
 
     async def list_profiles(self) -> list[dict]:
         """List all voice profiles."""
         cursor = await self._db.execute(
-            "SELECT id, name, description, engine, created_at FROM voice_profiles ORDER BY created_at DESC"
+            "SELECT id, name, description, engine, ref_text, created_at FROM voice_profiles ORDER BY created_at DESC"
         )
         rows = await cursor.fetchall()
         return [
-            {"id": r[0], "name": r[1], "description": r[2], "engine": r[3], "created_at": r[4]}
+            {
+                "id": r[0],
+                "name": r[1],
+                "description": r[2],
+                "engine": r[3],
+                "ref_text": r[4],
+                "created_at": r[5],
+            }
             for r in rows
         ]
 
