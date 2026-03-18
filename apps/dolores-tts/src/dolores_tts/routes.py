@@ -77,10 +77,22 @@ async def synthesize(
 
     log.info("synthesize_request", voice_id=req.voice_id, text_length=len(req.text))
 
+    # Try to fetch ref_text if it exists in the voice store
+    ref_text = None
+    try:
+        store = get_voice_store()
+        profile = await store.get_profile(req.voice_id)
+        if profile:
+            ref_text = profile.get("ref_text")
+    except Exception:
+        # If store not available or error, continue without ref_text
+        pass
+
     wav_bytes = engine.synthesize(
         text=req.text,
         voice_id=req.voice_id,
         sample_rate=req.sample_rate,
+        ref_text=ref_text,
     )
 
     return Response(content=wav_bytes, media_type="audio/wav")
@@ -114,6 +126,7 @@ async def create_voice(
     name: str,
     file: UploadFile,
     description: str = "",
+    ref_text: str | None = None,
     _auth: ServicePSK = None,
     store: VoiceProfileStore = Depends(get_voice_store),
 ) -> VoiceCreateResponse:
@@ -137,6 +150,7 @@ async def create_voice(
         audio_data=audio_data,
         engine=_engine.name if _engine else "coqui_xtts",
         description=description,
+        ref_text=ref_text,
     )
     return VoiceCreateResponse(**result)
 

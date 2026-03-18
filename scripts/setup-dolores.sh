@@ -6,14 +6,16 @@ set -e
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 VENV="${REPO_ROOT}/.venv"
 PIP="${VENV}/bin/pip"
+PY="${PY:-python3}"
 
 echo "=== Dolores Setup ==="
 echo "Repo root: ${REPO_ROOT}"
+echo "Using Python: ${PY}"
 
 # Create venv if needed
 if [ ! -f "${VENV}/bin/python" ]; then
     echo "Creating virtual environment..."
-    python3 -m venv "${VENV}"
+    "${PY}" -m venv "${VENV}"
 fi
 
 echo "Upgrading pip..."

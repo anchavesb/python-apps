@@ -27,6 +27,9 @@ def _create_engine():
     elif settings.engine == "piper":
         from .engines.piper import PiperEngine
         return PiperEngine()
+    elif settings.engine == "f5_tts":
+        from .engines.f5_tts import F5TTSEngine
+        return F5TTSEngine(voices_dir=settings.voices_dir)
     else:
         raise ValueError(f"Unknown TTS engine: {settings.engine}")
 

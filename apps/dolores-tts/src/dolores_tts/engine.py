@@ -27,6 +27,7 @@ class TTSEngine(ABC):
         text: str,
         voice_id: str = "default",
         sample_rate: int = 24000,
+        ref_text: str | None = None,
     ) -> bytes:
         """Synthesize text to WAV audio bytes (16-bit PCM)."""
         ...

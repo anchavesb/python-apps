@@ -8,7 +8,7 @@ from dolores_common.config import get_env, get_env_int
 class TTSConfig:
     """TTS service configuration from environment variables."""
 
-    engine: str = get_env("TTS_ENGINE", "coqui_xtts")  # coqui_xtts or piper
+    engine: str = get_env("TTS_ENGINE", "coqui_xtts")  # coqui_xtts, piper, or f5_tts
     device: str = get_env("TTS_DEVICE", "auto")
     voices_dir: str = get_env("TTS_VOICES_DIR", "data/voices")
     db_path: str = get_env("TTS_DB_PATH", "data/tts.db")

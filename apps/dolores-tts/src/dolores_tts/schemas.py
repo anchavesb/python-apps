@@ -16,7 +16,8 @@ class VoiceProfile(BaseModel):
     id: str
     name: str
     description: str = ""
-    engine: str  # coqui_xtts or piper
+    engine: str  # coqui_xtts, piper, or f5_tts
+    ref_text: str | None = None
     created_at: str
 
 
@@ -24,3 +25,4 @@ class VoiceCreateResponse(BaseModel):
     id: str
     name: str
     engine: str
+    ref_text: str | None = None
