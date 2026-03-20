@@ -1,47 +1,6 @@
 services:
-  # --- AI Services (CPU-only in Docker on Mac, Native recommended for MPS/MLX) ---
-  
-  dolores-brain:
-    build:
-      context: .
-      dockerfile: apps/dolores-brain/Dockerfile
-    ports:
-      - "8003:8003"
-    environment:
-      - OLLAMA_BASE_URL=http://host.docker.internal:11434
-      - LOG_LEVEL=INFO
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
-    volumes:
-      - dolores-brain-data:/app/data
-
-  dolores-stt:
-    build:
-      context: .
-      dockerfile: apps/dolores-stt/Dockerfile
-    ports:
-      - "8001:8001"
-    environment:
-      - STT_CPU_THREADS=8
-      - LOG_LEVEL=INFO
-    volumes:
-      - dolores-stt-data:/app/data
-      - dolores-stt-models:/app/models
-
-  dolores-tts:
-    build:
-      context: .
-      dockerfile: apps/dolores-tts/Dockerfile
-    ports:
-      - "8002:8002"
-    environment:
-      - LOG_LEVEL=INFO
-      - TTS_ENGINE=coqui_xtts # Use coqui_xtts or piper (f5_tts requires native MLX)
-    volumes:
-      - dolores-tts-data:/app/data
-      - dolores-tts-models:/app/models
-
   # --- Orchestrator & Logic ---
+  # Connects to native STT (8001), TTS (8002), and Brain (8003) on your Mac
 
   dolores-assistant:
     build:
@@ -50,15 +9,13 @@ services:
     ports:
       - "8000:8000"
     environment:
-      - DOLORES_STT_URL=http://dolores-stt:8001
-      - DOLORES_TTS_URL=http://dolores-tts:8002
-      - DOLORES_BRAIN_URL=http://dolores-brain:8003
+      - DOLORES_STT_URL=http://host.docker.internal:8001 # Native STT
+      - DOLORES_TTS_URL=http://host.docker.internal:8002 # Native TTS
+      - DOLORES_BRAIN_URL=http://host.docker.internal:8003 # Native Brain
       - DOLORES_INTEGRATIONS=[{"name":"todo","url":"http://todo:5000","spec_path":"/v1/openapi.json"}]
       - LOG_LEVEL=INFO
-    depends_on:
-      - dolores-stt
-      - dolores-tts
-      - dolores-brain
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
 
   # --- External Apps / Tools ---
 
@@ -88,15 +45,8 @@ services:
       context: apps/dolores-web
     ports:
       - "8080:8080"
-    environment:
-      - VITE_DOLORES_URL=http://localhost:8000
     depends_on:
       - dolores-assistant
 
 volumes:
-  dolores-brain-data:
-  dolores-stt-data:
-  dolores-stt-models:
-  dolores-tts-data:
-  dolores-tts-models:
   todo-db-data:
