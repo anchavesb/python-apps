@@ -187,7 +187,7 @@ class TestCoquiXTTSEngine:
 
         engine.synthesize("Hello", voice_id="myvoice")
 
-        call_kwargs = engine._model.tts.call_args[1]
+        call_kwargs = engine._model.tts.call_args.kwargs
         assert "speaker_wav" in call_kwargs
         assert "speaker" not in call_kwargs
 
@@ -200,7 +200,7 @@ class TestCoquiXTTSEngine:
 
         engine.synthesize("Hello", voice_id="default")
 
-        call_kwargs = engine._model.tts.call_args[1]
+        call_kwargs = engine._model.tts.call_args.kwargs
         assert call_kwargs["speaker"] == "Ana Florence"
         assert "speaker_wav" not in call_kwargs
 
