@@ -3,6 +3,8 @@
 CRITICAL: Must run with single worker due to CUDA/torch multiprocessing issues.
 """
 
+import os
+
 try:
     import torch.multiprocessing
     torch.multiprocessing.set_start_method("spawn", force=True)

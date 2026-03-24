@@ -1,0 +1,52 @@
+services:
+  # --- Orchestrator & Logic ---
+  # Connects to native STT (8001), TTS (8002), and Brain (8003) on your Mac
+
+  dolores-assistant:
+    build:
+      context: .
+      dockerfile: apps/dolores-assistant/Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      - DOLORES_STT_URL=http://host.docker.internal:8001 # Native STT
+      - DOLORES_TTS_URL=http://host.docker.internal:8002 # Native TTS
+      - DOLORES_BRAIN_URL=http://host.docker.internal:8003 # Native Brain
+      - DOLORES_INTEGRATIONS=[{"name":"todo","url":"http://todo:5000","spec_path":"/v1/openapi.json"}]
+      - LOG_LEVEL=INFO
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  # --- External Apps / Tools ---
+
+  todo:
+    build:
+      context: apps/todo
+    ports:
+      - "5000:5000"
+    environment:
+      - DATABASE_URL=postgresql://postgres:postgres@todo-db:5432/postgres
+    depends_on:
+      - todo-db
+
+  todo-db:
+    image: postgres:16-alpine
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=postgres
+    volumes:
+      - todo-db-data:/var/lib/postgresql/data
+
+  # --- Frontend ---
+
+  dolores-web:
+    build:
+      context: apps/dolores-web
+    ports:
+      - "8080:8080"
+    depends_on:
+      - dolores-assistant
+
+volumes:
+  todo-db-data:

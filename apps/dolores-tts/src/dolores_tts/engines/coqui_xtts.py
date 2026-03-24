@@ -65,10 +65,10 @@ class CoquiXTTSEngine(TTSEngine):
                 import torch
                 if torch.cuda.is_available():
                     device = "cuda"
-                elif torch.backends.mps.is_available():
-                    device = "mps"
                 else:
+                    # Prefer CPU over MPS for XTTS v2 on Mac due to the 65536 channel limit
                     device = "cpu"
+                    log.info("using_cpu_for_compatibility", reason="MPS channel limit exceeded in XTTS v2")
             except (ImportError, AttributeError):
                 device = "cpu"
 
