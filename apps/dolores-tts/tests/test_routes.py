@@ -6,6 +6,8 @@ Heavy ML engines and real DB are never instantiated.
 
 from __future__ import annotations
 
+import io
+import struct
 from io import BytesIO
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -23,7 +25,6 @@ def mock_engine():
     engine.is_loaded = True
     engine.name = "coqui_xtts"
     # Minimal valid WAV: 44-byte header + 2 bytes of PCM
-    import struct, io
     buf = io.BytesIO()
     buf.write(b"RIFF")
     buf.write(struct.pack("<I", 38))
@@ -90,7 +91,7 @@ class TestSynthesize:
     def test_calls_engine_synthesize(self, client, mock_engine):
         client.post("/v1/synthesize", json={"text": "Test text", "voice_id": "myvoice"})
         mock_engine.synthesize.assert_called_once()
-        call_kwargs = mock_engine.synthesize.call_args[1]
+        call_kwargs = mock_engine.synthesize.call_args.kwargs
         assert call_kwargs["text"] == "Test text"
         assert call_kwargs["voice_id"] == "myvoice"
 
@@ -98,7 +99,7 @@ class TestSynthesize:
         resp = client.post("/v1/synthesize", json={"text": "   "})
         assert resp.status_code == 400
 
-    def test_text_too_long_returns_400(self, client):
+    def test_text_too_long_returns_422(self, client):
         resp = client.post("/v1/synthesize", json={"text": "x" * 5001})
         assert resp.status_code == 422  # Pydantic max_length
 
@@ -113,7 +114,7 @@ class TestSynthesize:
             "ref_text": "sample reference text", "description": "", "created_at": "2026-01-01T00:00:00Z",
         })
         client.post("/v1/synthesize", json={"text": "Hello", "voice_id": "abc12345"})
-        call_kwargs = mock_engine.synthesize.call_args[1]
+        call_kwargs = mock_engine.synthesize.call_args.kwargs
         assert call_kwargs["ref_text"] == "sample reference text"
 
     def test_synthesize_continues_when_store_unavailable(self, client, mock_engine):
@@ -198,7 +199,7 @@ class TestCreateVoice:
             "/v1/voices?name=F5Voice&ref_text=Hello+world",
             files=[self._audio_file()],
         )
-        call_kwargs = mock_store.create.call_args[1]
+        call_kwargs = mock_store.create.call_args.kwargs
         assert call_kwargs["ref_text"] == "Hello world"
 
     def test_non_audio_content_type_returns_415(self, client):

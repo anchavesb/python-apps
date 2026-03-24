@@ -80,7 +80,9 @@ class TestVoiceProfileStore:
         assert names == {"VoiceA", "VoiceB"}
 
     async def test_list_profiles_ordered_newest_first(self):
+        import asyncio
         await self.store.create(name="First", audio_data=b"d", engine="coqui_xtts")
+        await asyncio.sleep(0.001)  # ensure distinct created_at timestamps
         await self.store.create(name="Second", audio_data=b"d", engine="coqui_xtts")
 
         profiles = await self.store.list_profiles()

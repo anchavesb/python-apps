@@ -13,12 +13,14 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from dolores_tts.engines.coqui_xtts import CoquiXTTSEngine, _write_wav_header
+from dolores_tts.engines.coqui_xtts import CoquiXTTSEngine
+from dolores_tts.engines.coqui_xtts import _write_wav_header as _coqui_write_wav_header
 from dolores_tts.engines.f5_tts import F5TTSEngine
+from dolores_tts.engines.f5_tts import _write_wav_header as _f5_write_wav_header
 
 
 # ---------------------------------------------------------------------------
-# _write_wav_header (shared logic, tested once here)
+# _coqui_write_wav_header (shared logic, tested once here)
 # ---------------------------------------------------------------------------
 
 class TestWriteWavHeader:
@@ -42,46 +44,54 @@ class TestWriteWavHeader:
 
     def test_header_is_44_bytes(self):
         buf = io.BytesIO()
-        _write_wav_header(buf, num_samples=100, sample_rate=24000)
+        _coqui_write_wav_header(buf, num_samples=100, sample_rate=24000)
         assert len(buf.getvalue()) == 44
 
     def test_pcm_format(self):
         buf = io.BytesIO()
-        _write_wav_header(buf, num_samples=100, sample_rate=24000)
+        _coqui_write_wav_header(buf, num_samples=100, sample_rate=24000)
         h = self._parse_header(buf.getvalue())
         assert h["audio_format"] == 1  # PCM
 
     def test_mono_channel(self):
         buf = io.BytesIO()
-        _write_wav_header(buf, num_samples=100, sample_rate=24000)
+        _coqui_write_wav_header(buf, num_samples=100, sample_rate=24000)
         h = self._parse_header(buf.getvalue())
         assert h["num_channels"] == 1
 
     def test_sample_rate_stored(self):
         buf = io.BytesIO()
-        _write_wav_header(buf, num_samples=100, sample_rate=16000)
+        _coqui_write_wav_header(buf, num_samples=100, sample_rate=16000)
         h = self._parse_header(buf.getvalue())
         assert h["sample_rate"] == 16000
 
     def test_16bit_samples(self):
         buf = io.BytesIO()
-        _write_wav_header(buf, num_samples=100, sample_rate=24000)
+        _coqui_write_wav_header(buf, num_samples=100, sample_rate=24000)
         h = self._parse_header(buf.getvalue())
         assert h["bits_per_sample"] == 16
 
     def test_data_size_matches_samples(self):
         num_samples = 1000
         buf = io.BytesIO()
-        _write_wav_header(buf, num_samples=num_samples, sample_rate=24000)
+        _coqui_write_wav_header(buf, num_samples=num_samples, sample_rate=24000)
         h = self._parse_header(buf.getvalue())
         # 16-bit mono: 2 bytes per sample
         assert h["data_size"] == num_samples * 2
 
     def test_chunk_size_is_data_size_plus_36(self):
         buf = io.BytesIO()
-        _write_wav_header(buf, num_samples=500, sample_rate=24000)
+        _coqui_write_wav_header(buf, num_samples=500, sample_rate=24000)
         h = self._parse_header(buf.getvalue())
         assert h["chunk_size"] == h["data_size"] + 36
+
+    def test_coqui_and_f5_implementations_are_identical(self):
+        """Both engine copies of _write_wav_header must produce the same bytes."""
+        buf_coqui = io.BytesIO()
+        buf_f5 = io.BytesIO()
+        _coqui_write_wav_header(buf_coqui, num_samples=1000, sample_rate=22050)
+        _f5_write_wav_header(buf_f5, num_samples=1000, sample_rate=22050)
+        assert buf_coqui.getvalue() == buf_f5.getvalue()
 
 
 # ---------------------------------------------------------------------------
@@ -151,8 +161,6 @@ class TestCoquiXTTSEngine:
 
     def test_synthesize_with_mocked_model(self, tmp_path):
         """Verify synthesize() produces valid WAV bytes when model is mocked."""
-        import numpy as np
-
         engine = CoquiXTTSEngine(voices_dir=str(tmp_path))
         engine._model = MagicMock()
         engine._default_speaker = "Ana Florence"
@@ -168,8 +176,6 @@ class TestCoquiXTTSEngine:
 
     def test_synthesize_uses_speaker_wav_when_voice_resolved(self, tmp_path):
         """When a voice profile exists, speaker_wav is passed to TTS model."""
-        import numpy as np
-
         voice_dir = tmp_path / "myvoice"
         voice_dir.mkdir()
         (voice_dir / "reference.wav").write_bytes(b"fake")

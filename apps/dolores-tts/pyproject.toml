@@ -18,6 +18,11 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+test = [
+    "pytest>=8.0",
+    "anyio[trio]>=4.0",
+    "httpx>=0.25",
+]
 gpu = [
     "coqui-tts>=0.24.0",
     "torch==2.5.1",
