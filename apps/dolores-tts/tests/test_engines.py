@@ -223,7 +223,7 @@ class TestF5TTSEngine:
         mock_mx = MagicMock()
         mock_mx.metal.is_available.return_value = True
 
-        with patch.dict("sys.modules", {"f5_tts_mlx": MagicMock(), "mlx.core": mock_mx}):
+        with patch.dict("sys.modules", {"f5_tts_mlx": MagicMock(), "mlx": MagicMock(), "mlx.core": mock_mx}):
             engine.load()
 
         assert engine.is_loaded is True
