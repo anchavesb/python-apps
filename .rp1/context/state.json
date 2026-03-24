@@ -1,0 +1,24 @@
+{
+  "strategy": "parallel-map-reduce",
+  "repo_type": "monorepo",
+  "monorepo_projects": [
+    "apps/dolores-assistant/",
+    "apps/dolores-brain/",
+    "apps/dolores-cli/",
+    "apps/dolores-stt/",
+    "apps/dolores-tts/",
+    "apps/dolores-web/",
+    "apps/portfolio/",
+    "apps/todo/",
+    "libs/dolores-common/"
+  ],
+  "generated_at": "2026-03-24T00:00:00Z",
+  "git_commit": "ca51a7cc32eac2eca10600389a62d28cf26bb490",
+  "files_analyzed": 159,
+  "languages": ["Python", "TypeScript", "Svelte"],
+  "metrics": {
+    "modules": 10,
+    "components": 35,
+    "concepts": 19
+  }
+}

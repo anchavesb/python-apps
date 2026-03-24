@@ -89,9 +89,9 @@ class F5TTSEngine(TTSEngine):
         # generate() returns a numpy array (usually float32)
         # Note: ref_audio can be a path string
         audio_array = generate(
-            text=text,
-            ref_audio=speaker_wav if speaker_wav else None,
-            ref_text=ref_text if speaker_wav else "",
+            generation_text=text,
+            ref_audio_path=speaker_wav if speaker_wav else None,
+            ref_audio_text=ref_text if speaker_wav else "",
         )
 
         # Convert to 16-bit PCM
