@@ -90,13 +90,20 @@ class F5TTSEngine(TTSEngine):
 
         start = time.monotonic()
 
-        # generate() returns a numpy array (usually float32)
-        # Note: ref_audio can be a path string
-        audio_array = generate(
+        # generate() does not return the audio — it writes to output_path.
+        # We write to a temp WAV file and read it back.
+        tmp_out = tempfile.NamedTemporaryFile(suffix=".wav", delete=False)
+        tmp_out.close()
+
+        generate(
             generation_text=text,
             ref_audio_path=speaker_wav if speaker_wav else None,
             ref_audio_text=ref_text if speaker_wav else "",
+            output_path=tmp_out.name,
         )
+
+        audio_array, _ = sf.read(tmp_out.name, dtype="float32")
+        Path(tmp_out.name).unlink(missing_ok=True)
 
         # Convert to 16-bit PCM
         audio_array = np.clip(audio_array, -1.0, 1.0)

@@ -136,6 +136,9 @@ async def create_voice(
     store: VoiceProfileStore = Depends(get_voice_store),
 ) -> VoiceCreateResponse:
     """Create a new voice profile from reference audio."""
+    if not ref_text or not ref_text.strip():
+        raise HTTPException(status_code=422, detail="ref_text is required: provide a transcript of the reference audio")
+
     if not file.content_type or not file.content_type.startswith("audio/"):
         raise HTTPException(status_code=415, detail="File must be an audio file")
 
@@ -147,7 +150,7 @@ async def create_voice(
     if len(audio_data) > 10 * 1024 * 1024:
         raise HTTPException(status_code=413, detail="Reference audio too large. Maximum: 10 MB")
 
-    # Convert to 16-bit PCM WAV 22050Hz mono for XTTS compatibility
+    # Convert to 16-bit PCM WAV 24kHz mono (required by F5-TTS, accepted by Coqui XTTS)
     audio_data = await _convert_to_wav(audio_data)
 
     result = await store.create(

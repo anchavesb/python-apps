@@ -184,13 +184,20 @@ class TestCreateVoice:
     def test_creates_voice_profile(self, mock_convert, client, mock_store):
         mock_convert.return_value = b"converted_wav"
         resp = client.post(
-            "/v1/voices?name=MyVoice",
+            "/v1/voices?name=MyVoice&ref_text=Hello+world",
             files=[self._audio_file()],
         )
         assert resp.status_code == 200
         data = resp.json()
         assert data["id"] == "abc12345"
         assert data["name"] == "TestVoice"
+
+    def test_missing_ref_text_returns_422(self, client):
+        resp = client.post(
+            "/v1/voices?name=MyVoice",
+            files=[self._audio_file()],
+        )
+        assert resp.status_code == 422
 
     @patch("dolores_tts.routes._convert_to_wav", new_callable=AsyncMock)
     def test_creates_with_ref_text(self, mock_convert, client, mock_store):
@@ -204,14 +211,14 @@ class TestCreateVoice:
 
     def test_non_audio_content_type_returns_415(self, client):
         resp = client.post(
-            "/v1/voices?name=BadVoice",
+            "/v1/voices?name=BadVoice&ref_text=Hello",
             files=[self._audio_file(content_type="text/plain")],
         )
         assert resp.status_code == 415
 
     def test_empty_file_returns_400(self, client):
         resp = client.post(
-            "/v1/voices?name=EmptyVoice",
+            "/v1/voices?name=EmptyVoice&ref_text=Hello",
             files=[self._audio_file(content=b"")],
         )
         assert resp.status_code == 400
