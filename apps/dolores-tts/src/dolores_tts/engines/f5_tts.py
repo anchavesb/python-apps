@@ -27,11 +27,16 @@ def _ensure_24khz(path: str) -> str:
     log.warning("ref_audio_wrong_samplerate", path=path, samplerate=info.samplerate, resampling=True)
     tmp = tempfile.NamedTemporaryFile(suffix=".wav", delete=False)
     tmp.close()
-    subprocess.run(
-        ["ffmpeg", "-y", "-i", path, "-ar", "24000", "-ac", "1", "-acodec", "pcm_s16le", tmp.name],
-        capture_output=True,
-        check=True,
-    )
+    try:
+        subprocess.run(
+            ["ffmpeg", "-y", "-i", path, "-ar", "24000", "-ac", "1", "-acodec", "pcm_s16le", tmp.name],
+            capture_output=True,
+            check=True,
+        )
+    except subprocess.CalledProcessError as e:
+        Path(tmp.name).unlink(missing_ok=True)
+        log.error("ffmpeg_resample_failed", path=path, stderr=e.stderr.decode(errors="replace"))
+        raise RuntimeError(f"Failed to resample audio to 24kHz: {path}") from e
     return tmp.name
 
 
@@ -78,8 +83,12 @@ class F5TTSEngine(TTSEngine):
 
         # Resolve voice reference audio and ensure it's at 24kHz
         speaker_wav = self._resolve_voice(voice_id)
+        resampled_wav: str | None = None
         if speaker_wav:
-            speaker_wav = _ensure_24khz(speaker_wav)
+            resampled = _ensure_24khz(speaker_wav)
+            if resampled != speaker_wav:
+                resampled_wav = resampled
+            speaker_wav = resampled
 
         # F5-TTS works best with a reference transcript.
         # If not provided, it might try to auto-transcribe or fail depending on version.
@@ -94,16 +103,18 @@ class F5TTSEngine(TTSEngine):
         # We write to a temp WAV file and read it back.
         tmp_out = tempfile.NamedTemporaryFile(suffix=".wav", delete=False)
         tmp_out.close()
-
-        generate(
-            generation_text=text,
-            ref_audio_path=speaker_wav if speaker_wav else None,
-            ref_audio_text=ref_text if speaker_wav else "",
-            output_path=tmp_out.name,
-        )
-
-        audio_array, _ = sf.read(tmp_out.name, dtype="float32")
-        Path(tmp_out.name).unlink(missing_ok=True)
+        try:
+            generate(
+                generation_text=text,
+                ref_audio_path=speaker_wav if speaker_wav else None,
+                ref_audio_text=ref_text if speaker_wav else "",
+                output_path=tmp_out.name,
+            )
+            audio_array, _ = sf.read(tmp_out.name, dtype="float32")
+        finally:
+            Path(tmp_out.name).unlink(missing_ok=True)
+            if resampled_wav:
+                Path(resampled_wav).unlink(missing_ok=True)
 
         # Convert to 16-bit PCM
         audio_array = np.clip(audio_array, -1.0, 1.0)

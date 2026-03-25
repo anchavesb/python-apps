@@ -130,15 +130,12 @@ async def get_voice(
 async def create_voice(
     name: str,
     file: UploadFile,
+    ref_text: str,
     description: str = "",
-    ref_text: str | None = None,
     _auth: ServicePSK = None,
     store: VoiceProfileStore = Depends(get_voice_store),
 ) -> VoiceCreateResponse:
     """Create a new voice profile from reference audio."""
-    if not ref_text or not ref_text.strip():
-        raise HTTPException(status_code=422, detail="ref_text is required: provide a transcript of the reference audio")
-
     if not file.content_type or not file.content_type.startswith("audio/"):
         raise HTTPException(status_code=415, detail="File must be an audio file")
 
