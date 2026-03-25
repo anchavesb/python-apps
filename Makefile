@@ -1,13 +1,14 @@
-.PHONY: help venv install install-all test run-todo run-todo-dev clean gpu-base gpu-build gpu-build-all
+.PHONY: help venv install install-all install-dev lint test run-todo run-todo-dev clean gpu-base gpu-build gpu-build-all
 
 PY?=python3
 VENV=.venv
 PIP=$(VENV)/bin/pip
 PYTHON=$(VENV)/bin/python
 PYTEST=$(VENV)/bin/pytest
+RUFF=$(VENV)/bin/ruff
 
 help:
-	@echo "Targets: venv, install, install-all, test, run-todo, run-todo-dev, clean"
+	@echo "Targets: venv, install, install-all, install-dev, lint, test, run-todo, run-todo-dev, clean"
 
 venv:
 	$(PY) -m venv $(VENV)
@@ -29,6 +30,12 @@ install-all: venv
 	    $(PIP) install -e "$$app"; \
 	  fi; \
 	done
+
+install-dev: venv
+	$(PIP) install ruff
+
+lint: install-dev
+	$(RUFF) check .
 
 test: install-all
 	$(PYTEST) -q

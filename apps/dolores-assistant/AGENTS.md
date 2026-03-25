@@ -26,6 +26,11 @@ This application coordinates the Dolores AI pipeline (STT -> Brain -> TTS).
 - **Asynchronous Flow:** Avoid blocking operations in the audio pipeline.
 - **WebSocket Protocol:** Audio is handled as chunked binary/base64 data.
 
+## Quality Gates
+Every code change must pass before merging:
+- **Lint:** `make lint` (`ruff check .` — zero errors required)
+- **Tests:** `make test` (all tests must pass)
+
 ## Security Considerations
 - **Auth Middleware:** All API and WebSocket calls must pass common auth checks.
 - **Health Checks:** Use the standard `/health` endpoint from `dolores-common`.

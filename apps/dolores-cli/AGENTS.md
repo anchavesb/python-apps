@@ -24,6 +24,11 @@ The main terminal client for interacting with the Dolores system.
 - **Inputs:** `Prompt-toolkit` handles command history and completion.
 - **Dolores Common:** Re-use shared models for API communication.
 
+## Quality Gates
+Every code change must pass before merging:
+- **Lint:** `make lint` (`ruff check .` — zero errors required)
+- **Tests:** `make test` (all tests must pass)
+
 ## System Dependencies
 - Requires `portaudio` (system) and `libasound2` (Linux) for voice.
 - Ensure `ALSA` or `PulseAudio` is properly configured for the terminal environment.

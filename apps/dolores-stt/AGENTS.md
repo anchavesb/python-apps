@@ -20,6 +20,11 @@ Speech-to-Text inference service for the Dolores assistant.
 - **Async Execution:** Inference is wrapped in async executors to avoid blocking.
 - **Audio Formats:** Primary support for `.wav` (PCM 16-bit, 16kHz).
 
+## Quality Gates
+Every code change must pass before merging:
+- **Lint:** `make lint` (`ruff check .` — zero errors required)
+- **Tests:** `make test` (all tests must pass)
+
 ## Model Loading
 - Models are cached in `~/.cache/huggingface` by default.
 - Use explicit model tagging in `config.py`.

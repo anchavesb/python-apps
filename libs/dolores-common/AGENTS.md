@@ -26,6 +26,11 @@ Shared utility library for all `dolores-*` applications.
 - **Pydantic V2:** Use strictly Pydantic V2 features and runes.
 - **No Heavy Deps:** Avoid adding ML or UI dependencies here. Keep it core and lightweight.
 
+## Quality Gates
+Every code change must pass before merging:
+- **Lint:** `make lint` (`ruff check .` — zero errors required)
+- **Tests:** `make test` (all tests must pass)
+
 ## Contribution Guidelines
 - Adding a model here implies it will be used by **at least two** different Dolores services.
 - Update `__init__.py` to expose common utilities for easier imports.

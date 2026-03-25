@@ -25,6 +25,11 @@ A traditional multiuser ToDo application.
 - **Auth:** Uses OAuth and JWT through Authlib.
 - Does NOT depend on `dolores-common` (standalone legacy).
 
+## Quality Gates
+Every code change must pass before merging:
+- **Lint:** `make lint` (`ruff check .` — zero errors required)
+- **Tests:** `make test` (all tests must pass)
+
 ## Security Considerations
 - **CSRF Protection:** Check Flask-WTF config.
 - **Migrations:** Managed via `Alembic` or `Flask-Migrate`.

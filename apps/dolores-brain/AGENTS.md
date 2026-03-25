@@ -26,6 +26,11 @@ This application is the intelligence layer of the Dolores AI assistant.
 - **Async DB:** Use `aiosqlite` or async SQLAlchemy patterns.
 - **Provider Abstraction:** Don't write provider-specific logic in routes; use the `LiteLLM` interface.
 
+## Quality Gates
+Every code change must pass before merging:
+- **Lint:** `make lint` (`ruff check .` — zero errors required)
+- **Tests:** `make test` (all tests must pass)
+
 ## PR Instructions
 - Check that new LLM response schemas are added to `schemas.py`.
-- Run `make test` before pushing.
+- Run `make lint && make test` before pushing.
