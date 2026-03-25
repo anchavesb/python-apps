@@ -3,10 +3,13 @@
 from __future__ import annotations
 
 import io
+import subprocess
+import tempfile
 import time
 from pathlib import Path
 
 import numpy as np
+import soundfile as sf
 
 from dolores_common.logging import get_logger
 
@@ -14,6 +17,22 @@ from ..engine import TTSEngine
 from .audio_utils import write_wav_header
 
 log = get_logger(__name__)
+
+
+def _ensure_24khz(path: str) -> str:
+    """Return a path to a 24kHz WAV version of the audio, resampling via ffmpeg if needed."""
+    info = sf.info(path)
+    if info.samplerate == 24000:
+        return path
+    log.warning("ref_audio_wrong_samplerate", path=path, samplerate=info.samplerate, resampling=True)
+    tmp = tempfile.NamedTemporaryFile(suffix=".wav", delete=False)
+    tmp.close()
+    subprocess.run(
+        ["ffmpeg", "-y", "-i", path, "-ar", "24000", "-ac", "1", "-acodec", "pcm_s16le", tmp.name],
+        capture_output=True,
+        check=True,
+    )
+    return tmp.name
 
 
 class F5TTSEngine(TTSEngine):
@@ -57,8 +76,10 @@ class F5TTSEngine(TTSEngine):
 
         from f5_tts_mlx.generate import generate
 
-        # Resolve voice reference audio
+        # Resolve voice reference audio and ensure it's at 24kHz
         speaker_wav = self._resolve_voice(voice_id)
+        if speaker_wav:
+            speaker_wav = _ensure_24khz(speaker_wav)
 
         # F5-TTS works best with a reference transcript.
         # If not provided, it might try to auto-transcribe or fail depending on version.
