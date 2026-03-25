@@ -12,7 +12,8 @@ from dolores_common.logging import setup_logging
 from dolores_common.middleware import add_common_middleware
 
 from .config import settings
-from .routes import router as tts_router, set_engine, set_voice_store
+from .routes import router as tts_router
+from .routes import set_engine, set_voice_store
 from .voice_profiles import VoiceProfileStore
 
 _engine = None

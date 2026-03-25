@@ -1,6 +1,3 @@
-import json
-import os
-import tempfile
 import pytest
 from todo_app import create_app
 

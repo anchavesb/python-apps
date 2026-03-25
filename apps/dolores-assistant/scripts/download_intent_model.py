@@ -19,7 +19,7 @@ def main():
     from huggingface_hub import hf_hub_download
 
     # Download the pre-built ONNX model
-    onnx_path = hf_hub_download(
+    hf_hub_download(
         repo_id=repo_id,
         filename="onnx/model.onnx",
         local_dir=str(output_dir),

@@ -12,7 +12,8 @@ from dolores_common.middleware import add_common_middleware
 
 from .config import settings
 from .pipeline import ServiceClient
-from .routes import router as assistant_router, set_service_client
+from .routes import router as assistant_router
+from .routes import set_service_client
 from .tools.registry import load_tools
 
 _service_client = ServiceClient()

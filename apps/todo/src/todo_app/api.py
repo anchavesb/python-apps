@@ -1,9 +1,10 @@
 import logging
 
 from flask import Blueprint, current_app, jsonify, request, session
-from .storage import ValidationError
+
 from .jwt_auth import validate_bearer_token
 from .openapi_spec import OPENAPI_SPEC
+from .storage import ValidationError
 
 logger = logging.getLogger(__name__)
 

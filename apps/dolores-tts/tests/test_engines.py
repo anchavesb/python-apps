@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import io
 import struct
-from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -17,7 +16,6 @@ from dolores_tts.engines.coqui_xtts import CoquiXTTSEngine
 from dolores_tts.engines.coqui_xtts import _write_wav_header as _coqui_write_wav_header
 from dolores_tts.engines.f5_tts import F5TTSEngine
 from dolores_tts.engines.f5_tts import _write_wav_header as _f5_write_wav_header
-
 
 # ---------------------------------------------------------------------------
 # _coqui_write_wav_header (shared logic, tested once here)

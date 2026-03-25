@@ -14,7 +14,8 @@ from dolores_common.middleware import add_common_middleware
 from .config import settings
 from .conversation import ConversationStore
 from .provider_config import PROVIDERS, setup_providers
-from .routes import router as brain_router, set_store
+from .routes import router as brain_router
+from .routes import set_store
 
 _store = ConversationStore(settings.db_path)
 

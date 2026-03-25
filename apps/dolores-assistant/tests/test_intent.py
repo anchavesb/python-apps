@@ -3,9 +3,10 @@
 Tests the classification logic with mocked embeddings so no ONNX model is needed.
 """
 
-import pytest
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
+
 import numpy as np
+import pytest
 
 from dolores_assistant import intent
 

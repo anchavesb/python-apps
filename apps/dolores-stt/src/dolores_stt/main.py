@@ -12,7 +12,8 @@ from dolores_common.middleware import add_common_middleware
 
 from .config import settings
 from .engine import STTEngine
-from .routes import router as stt_router, set_engine, set_speaker_identifier
+from .routes import router as stt_router
+from .routes import set_engine, set_speaker_identifier
 
 _engine = STTEngine(
     model_size=settings.model_size,

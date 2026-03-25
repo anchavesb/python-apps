@@ -1,6 +1,7 @@
 import pytest
 from todo_app import create_app
 
+
 @pytest.fixture()
 def client(tmp_path):
     data_file = tmp_path / "appdata.json"
@@ -45,7 +46,7 @@ def test_index_sort_todos_by_status(client):
     # Create open and done todos
     r = client.post("/api/todos", json={"title": "Open", "tags": {"category": "c", "priority": "medium"}})
     assert r.status_code == 201
-    open_id = r.get_json()["id"]
+    r.get_json()["id"]
 
     r = client.post("/api/todos", json={"title": "Done", "tags": {"category": "c", "priority": "medium"}})
     assert r.status_code == 201

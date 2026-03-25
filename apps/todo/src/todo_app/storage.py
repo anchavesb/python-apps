@@ -1,11 +1,12 @@
 from __future__ import annotations
+
 import json
 import os
 import shutil
 import tempfile
 import uuid
-from dataclasses import dataclass, asdict
-from datetime import datetime, timezone, date
+from dataclasses import dataclass
+from datetime import date, datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
 
 ISO_DT = "%Y-%m-%dT%H:%M:%SZ"
@@ -219,7 +220,7 @@ class JsonStore:
     def _apply_wal_entry(self, e: Dict[str, Any]):
         t = e.get("type")
         if t == "todo_create":
-            self.state["todos"].append(e["data"]) 
+            self.state["todos"].append(e["data"])
         elif t == "todo_update":
             for i, it in enumerate(self.state["todos"]):
                 if it["id"] == e["id"]:
@@ -227,7 +228,7 @@ class JsonStore:
         elif t == "todo_delete":
             self.state["todos"] = [it for it in self.state["todos"] if it["id"] != e["id"]]
         elif t == "note_create":
-            self.state["notes"].append(e["data"]) 
+            self.state["notes"].append(e["data"])
         elif t == "note_update":
             for i, it in enumerate(self.state["notes"]):
                 if it["id"] == e["id"]:
@@ -308,7 +309,7 @@ class JsonStore:
 
     # Notes
     def list_notes(self, user_id: str | None = None) -> List[Dict[str, Any]]:
-        return list(self.state["notes"])  
+        return list(self.state["notes"])
 
     def get_note(self, nid: str, user_id: str | None = None) -> Optional[Dict[str, Any]]:
         return next((n for n in self.state["notes"] if n["id"] == nid), None)

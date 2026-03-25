@@ -1,6 +1,7 @@
 import pytest
 from todo_app import create_app
 
+
 @pytest.fixture()
 def client(tmp_path):
     data_file = tmp_path / "appdata.json"

@@ -3,13 +3,10 @@
 from __future__ import annotations
 
 import asyncio
-import sys
 
 from prompt_toolkit import PromptSession
 from prompt_toolkit.patch_stdout import patch_stdout
 from rich.console import Console
-from rich.live import Live
-from rich.text import Text
 
 from .client import DoloresClient
 
@@ -46,7 +43,6 @@ async def chat_loop(
                 break
 
             # Stream response
-            response_text = Text()
             console.print("[bold blue]Dolores:[/bold blue] ", end="")
 
             async for event in client.send_text(user_input):
