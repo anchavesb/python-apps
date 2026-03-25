@@ -23,6 +23,11 @@ Text-to-Speech synthesis service for the Dolores assistant.
 - **Latency First:** Keep synthesis chunking in mind for real-time responses.
 - **Audio Formats:** Outputs `.wav` (PCM 16-bit, 24kHz) by default.
 
+## Quality Gates
+Every code change must pass before merging:
+- **Lint:** `make lint` (`ruff check .` — zero errors required)
+- **Tests:** `make test` (all tests must pass)
+
 ## Deployment Notes
 - This service requires significant VRAM (GPU) for low-latency output.
 - Check `Dockerfile.gpu` for specific CUDA architecture requirements.

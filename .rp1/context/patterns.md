@@ -57,6 +57,20 @@ Test files located under `tests/` directories per service (e.g. `apps/dolores-as
 
 ---
 
+## Quality Gates
+
+**Linter**: `ruff` (configured in `ruff.toml` at repo root). Run via `make lint`. Every code change must pass `ruff check .` with zero errors before merging.
+
+**Rules enforced**: E/W (pycodestyle), F (pyflakes), I (isort). Line length: 120.
+
+**Tests**: All changes must pass `make test` (runs full monorepo test suite via pytest).
+
+**CI**: Both `lint` and `test` jobs run on every PR and push to `main` (`.github/workflows/ci.yml`).
+
+**Pre-commit**: `.pre-commit-config.yaml` runs ruff automatically on `git commit`. Activate locally with `pre-commit install`.
+
+---
+
 ## I/O & Integration Patterns
 
 **Database**:
