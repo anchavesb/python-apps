@@ -15,6 +15,8 @@ def write_wav_header(
 ) -> None:
     """Write a WAV file header."""
     data_size = num_samples * num_channels * (bits_per_sample // 8)
+    if data_size > 0xFFFFFFFF - 36:
+        raise ValueError(f"Audio too large for RIFF/WAV uint32 field: {data_size} bytes")
     f.write(b"RIFF")
     f.write(struct.pack("<I", 36 + data_size))
     f.write(b"WAVE")

@@ -82,13 +82,6 @@ class TestWriteWavHeader:
         h = self._parse_header(buf.getvalue())
         assert h["chunk_size"] == h["data_size"] + 36
 
-    def test_coqui_and_f5_implementations_are_identical(self):
-        """Both engine copies of _write_wav_header must produce the same bytes."""
-        buf_coqui = io.BytesIO()
-        buf_f5 = io.BytesIO()
-        write_wav_header(buf_coqui, num_samples=1000, sample_rate=22050)
-        write_wav_header(buf_f5, num_samples=1000, sample_rate=22050)
-        assert buf_coqui.getvalue() == buf_f5.getvalue()
 
 
 # ---------------------------------------------------------------------------
