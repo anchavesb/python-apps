@@ -6,33 +6,17 @@ IMPORTANT: Must run with a single uvicorn worker due to CUDA/torch forking issue
 from __future__ import annotations
 
 import io
-import struct
 import time
 from pathlib import Path
+
+import numpy as np
 
 from dolores_common.logging import get_logger
 
 from ..engine import TTSEngine
+from .audio_utils import write_wav_header
 
 log = get_logger(__name__)
-
-
-def _write_wav_header(f: io.BytesIO, num_samples: int, sample_rate: int, num_channels: int = 1, bits_per_sample: int = 16) -> None:
-    """Write a WAV file header."""
-    data_size = num_samples * num_channels * (bits_per_sample // 8)
-    f.write(b"RIFF")
-    f.write(struct.pack("<I", 36 + data_size))
-    f.write(b"WAVE")
-    f.write(b"fmt ")
-    f.write(struct.pack("<I", 16))  # chunk size
-    f.write(struct.pack("<H", 1))   # PCM format
-    f.write(struct.pack("<H", num_channels))
-    f.write(struct.pack("<I", sample_rate))
-    f.write(struct.pack("<I", sample_rate * num_channels * (bits_per_sample // 8)))
-    f.write(struct.pack("<H", num_channels * (bits_per_sample // 8)))
-    f.write(struct.pack("<H", bits_per_sample))
-    f.write(b"data")
-    f.write(struct.pack("<I", data_size))
 
 
 class CoquiXTTSEngine(TTSEngine):
@@ -106,13 +90,12 @@ class CoquiXTTSEngine(TTSEngine):
         wav_list = self._model.tts(**tts_kwargs)
 
         # Convert float list to 16-bit PCM WAV bytes
-        import numpy as np
         wav_array = np.array(wav_list, dtype=np.float32)
         wav_array = np.clip(wav_array, -1.0, 1.0)
         pcm_data = (wav_array * 32767).astype(np.int16).tobytes()
 
         buf = io.BytesIO()
-        _write_wav_header(buf, len(wav_array), sample_rate)
+        write_wav_header(buf, len(wav_array), sample_rate)
         buf.write(pcm_data)
 
         elapsed = round(time.monotonic() - start, 2)

@@ -84,9 +84,11 @@ async def synthesize(
         profile = await store.get_profile(req.voice_id)
         if profile:
             ref_text = profile.get("ref_text")
-    except Exception:
-        # If store not available or error, continue without ref_text
+    except HTTPException:
+        # Store not initialized — continue without ref_text
         pass
+    except Exception:
+        log.warning("voice_store_lookup_failed", voice_id=req.voice_id, exc_info=True)
 
     wav_bytes = engine.synthesize(
         text=req.text,

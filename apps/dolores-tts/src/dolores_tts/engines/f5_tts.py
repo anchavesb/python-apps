@@ -3,33 +3,17 @@
 from __future__ import annotations
 
 import io
-import struct
 import time
 from pathlib import Path
+
+import numpy as np
 
 from dolores_common.logging import get_logger
 
 from ..engine import TTSEngine
+from .audio_utils import write_wav_header
 
 log = get_logger(__name__)
-
-
-def _write_wav_header(f: io.BytesIO, num_samples: int, sample_rate: int, num_channels: int = 1, bits_per_sample: int = 16) -> None:
-    """Write a WAV file header."""
-    data_size = num_samples * num_channels * (bits_per_sample // 8)
-    f.write(b"RIFF")
-    f.write(struct.pack("<I", 36 + data_size))
-    f.write(b"WAVE")
-    f.write(b"fmt ")
-    f.write(struct.pack("<I", 16))  # chunk size
-    f.write(struct.pack("<H", 1))   # PCM format
-    f.write(struct.pack("<H", num_channels))
-    f.write(struct.pack("<I", sample_rate))
-    f.write(struct.pack("<I", sample_rate * num_channels * (bits_per_sample // 8)))
-    f.write(struct.pack("<H", num_channels * (bits_per_sample // 8)))
-    f.write(struct.pack("<H", bits_per_sample))
-    f.write(b"data")
-    f.write(struct.pack("<I", data_size))
 
 
 class F5TTSEngine(TTSEngine):
@@ -71,7 +55,6 @@ class F5TTSEngine(TTSEngine):
         if not self._loaded:
             raise RuntimeError("F5-TTS MLX not loaded or not installed.")
 
-        import numpy as np
         from f5_tts_mlx.generate import generate
 
         # Resolve voice reference audio
@@ -99,7 +82,7 @@ class F5TTSEngine(TTSEngine):
         pcm_data = (audio_array * 32767).astype(np.int16).tobytes()
 
         buf = io.BytesIO()
-        _write_wav_header(buf, len(audio_array), sample_rate)
+        write_wav_header(buf, len(audio_array), sample_rate)
         buf.write(pcm_data)
 
         elapsed = round(time.monotonic() - start, 2)
