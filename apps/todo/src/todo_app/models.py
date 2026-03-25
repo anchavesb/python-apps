@@ -1,10 +1,11 @@
 """SQLAlchemy models for the todo app with multiuser support."""
 from __future__ import annotations
+
+import uuid
 from datetime import datetime, timezone
 from typing import Optional
-import uuid
 
-from sqlalchemy import String, Text, Boolean, DateTime, ForeignKey, JSON
+from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, String, Text
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 

@@ -1,8 +1,9 @@
 """OIDC authentication blueprint for Authentik integration."""
 import logging
 from functools import wraps
-from flask import Blueprint, current_app, redirect, url_for, session, request, flash
+
 from authlib.integrations.flask_client import OAuth
+from flask import Blueprint, current_app, flash, redirect, request, session, url_for
 
 logger = logging.getLogger(__name__)
 

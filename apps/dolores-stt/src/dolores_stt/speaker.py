@@ -64,8 +64,8 @@ class SpeakerIdentifier:
 
     def load(self) -> None:
         """Initialize the voice encoder and open the database."""
-        from resemblyzer import VoiceEncoder
         import torch
+        from resemblyzer import VoiceEncoder
 
         device = "cpu"
         if torch.cuda.is_available():

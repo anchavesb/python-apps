@@ -2,8 +2,8 @@
 
 import pytest
 
-from dolores_assistant.tools.base import Tool
 from dolores_assistant.tools import registry
+from dolores_assistant.tools.base import Tool
 
 
 class FakeTool(Tool):

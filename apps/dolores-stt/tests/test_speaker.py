@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import numpy as np
@@ -154,7 +153,7 @@ class TestConvertToWav:
     def test_calls_ffmpeg_with_correct_args(self, mock_run):
         mock_run.return_value = MagicMock(returncode=0)
 
-        result = _convert_to_wav(b"fake_audio", "audio/webm")
+        _convert_to_wav(b"fake_audio", "audio/webm")
 
         mock_run.assert_called_once()
         args = mock_run.call_args

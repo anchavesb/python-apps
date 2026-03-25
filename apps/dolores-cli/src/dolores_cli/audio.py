@@ -5,7 +5,6 @@ from __future__ import annotations
 import asyncio
 import io
 import queue
-import threading
 from typing import Optional
 
 import numpy as np

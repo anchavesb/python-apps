@@ -3,7 +3,6 @@
 CRITICAL: Must run with single worker due to CUDA/torch multiprocessing issues.
 """
 
-import os
 
 try:
     import torch.multiprocessing

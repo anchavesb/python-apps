@@ -1,13 +1,14 @@
 """PostgreSQL storage backend with multiuser support."""
 from __future__ import annotations
+
 from datetime import date
 from typing import Any, Dict, List, Optional, Tuple
 
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session, sessionmaker
 
-from .models import Base, User, Todo, Note, WorkItem
-from .storage import ValidationError, PRIORITIES
+from .models import Base, Note, Todo, User, WorkItem
+from .storage import PRIORITIES, ValidationError
 
 
 class PostgresStore:

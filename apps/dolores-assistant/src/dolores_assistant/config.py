@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 
-from dolores_common.config import get_env, get_env_int, get_env_bool
+from dolores_common.config import get_env, get_env_int
 
 
 class AssistantConfig:

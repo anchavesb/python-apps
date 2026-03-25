@@ -1,8 +1,13 @@
 from __future__ import annotations
-from flask import Blueprint, current_app, render_template, request, redirect, url_for, flash, session
+
+import re
 from datetime import date
-from .storage import PRIORITIES, ValidationError
+from html import escape as html_escape
+
+from flask import Blueprint, current_app, flash, redirect, render_template, request, session, url_for
+
 from .auth import login_required
+from .storage import PRIORITIES, ValidationError
 
 
 def get_user_id():
@@ -15,16 +20,13 @@ def get_user_id():
 
 # Optional Markdown/sanitizer; fall back gracefully if unavailable
 try:
-    import markdown as md  # type: ignore
     import bleach  # type: ignore
+    import markdown as md  # type: ignore
     HAVE_MD = True
 except Exception:
     md = None  # type: ignore
     bleach = None  # type: ignore
     HAVE_MD = False
-
-import re
-from html import escape as html_escape
 
 web_bp = Blueprint("web", __name__)
 

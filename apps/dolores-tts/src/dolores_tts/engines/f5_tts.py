@@ -71,13 +71,13 @@ class F5TTSEngine(TTSEngine):
         if not self._loaded:
             raise RuntimeError("F5-TTS MLX not loaded or not installed.")
 
-        from f5_tts_mlx.generate import generate
         import numpy as np
+        from f5_tts_mlx.generate import generate
 
         # Resolve voice reference audio
         speaker_wav = self._resolve_voice(voice_id)
-        
-        # F5-TTS works best with a reference transcript. 
+
+        # F5-TTS works best with a reference transcript.
         # If not provided, it might try to auto-transcribe or fail depending on version.
         # We prefer the one stored in the DB.
         if not ref_text:
@@ -85,7 +85,7 @@ class F5TTSEngine(TTSEngine):
             ref_text = "" # fallback to empty string if missing
 
         start = time.monotonic()
-        
+
         # generate() returns a numpy array (usually float32)
         # Note: ref_audio can be a path string
         audio_array = generate(
@@ -125,5 +125,5 @@ class F5TTSEngine(TTSEngine):
         ref_wav = voice_dir / "reference.wav"
         if ref_wav.exists():
             return str(ref_wav)
-        
+
         return None
