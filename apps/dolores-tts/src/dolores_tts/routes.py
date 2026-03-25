@@ -46,10 +46,13 @@ def set_voice_store(store: VoiceProfileStore) -> None:
 
 
 async def _convert_to_wav(audio_data: bytes) -> bytes:
-    """Convert any audio format to 16-bit PCM WAV 22050Hz mono using ffmpeg."""
+    """Convert any audio format to 16-bit PCM WAV 24kHz mono using ffmpeg.
+
+    24kHz is required by f5_tts_mlx and is also accepted by Coqui XTTS v2.
+    """
     proc = await asyncio.create_subprocess_exec(
         "ffmpeg", "-i", "pipe:0",
-        "-f", "wav", "-acodec", "pcm_s16le", "-ar", "22050", "-ac", "1",
+        "-f", "wav", "-acodec", "pcm_s16le", "-ar", "24000", "-ac", "1",
         "pipe:1",
         stdin=asyncio.subprocess.PIPE,
         stdout=asyncio.subprocess.PIPE,
