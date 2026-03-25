@@ -46,10 +46,13 @@ def set_voice_store(store: VoiceProfileStore) -> None:
 
 
 async def _convert_to_wav(audio_data: bytes) -> bytes:
-    """Convert any audio format to 16-bit PCM WAV 22050Hz mono using ffmpeg."""
+    """Convert any audio format to 16-bit PCM WAV 24kHz mono using ffmpeg.
+
+    24kHz is required by f5_tts_mlx and is also accepted by Coqui XTTS v2.
+    """
     proc = await asyncio.create_subprocess_exec(
         "ffmpeg", "-i", "pipe:0",
-        "-f", "wav", "-acodec", "pcm_s16le", "-ar", "22050", "-ac", "1",
+        "-f", "wav", "-acodec", "pcm_s16le", "-ar", "24000", "-ac", "1",
         "pipe:1",
         stdin=asyncio.subprocess.PIPE,
         stdout=asyncio.subprocess.PIPE,
@@ -127,8 +130,8 @@ async def get_voice(
 async def create_voice(
     name: str,
     file: UploadFile,
+    ref_text: str,
     description: str = "",
-    ref_text: str | None = None,
     _auth: ServicePSK = None,
     store: VoiceProfileStore = Depends(get_voice_store),
 ) -> VoiceCreateResponse:
@@ -144,7 +147,7 @@ async def create_voice(
     if len(audio_data) > 10 * 1024 * 1024:
         raise HTTPException(status_code=413, detail="Reference audio too large. Maximum: 10 MB")
 
-    # Convert to 16-bit PCM WAV 22050Hz mono for XTTS compatibility
+    # Convert to 16-bit PCM WAV 24kHz mono (required by F5-TTS, accepted by Coqui XTTS)
     audio_data = await _convert_to_wav(audio_data)
 
     result = await store.create(

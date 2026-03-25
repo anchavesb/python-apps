@@ -271,14 +271,19 @@ class TestF5TTSEngine:
     def test_synthesize_with_mocked_generate(self, tmp_path):
         """Verify synthesize() produces valid WAV bytes when generate() is mocked."""
         import numpy as np
+        import soundfile as sf
 
         engine = F5TTSEngine(voices_dir=str(tmp_path))
         engine._loaded = True
 
         fake_audio = np.zeros(200, dtype=np.float32)
-        mock_generate_fn = MagicMock(return_value=fake_audio)
+
+        def fake_generate(**kwargs):
+            # Write fake audio to the output_path the engine passes
+            sf.write(kwargs["output_path"], fake_audio, 24000)
+
         mock_generate_module = MagicMock()
-        mock_generate_module.generate = mock_generate_fn
+        mock_generate_module.generate = fake_generate
 
         # Patch the submodule so `from f5_tts_mlx.generate import generate` resolves
         with patch.dict("sys.modules", {
