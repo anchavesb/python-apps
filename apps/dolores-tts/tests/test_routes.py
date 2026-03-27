@@ -31,8 +31,8 @@ def mock_engine():
     buf.write(b"WAVE")
     buf.write(b"fmt ")
     buf.write(struct.pack("<I", 16))
-    buf.write(struct.pack("<H", 1))   # PCM
-    buf.write(struct.pack("<H", 1))   # mono
+    buf.write(struct.pack("<H", 1))
+    buf.write(struct.pack("<H", 1))
     buf.write(struct.pack("<I", 24000))
     buf.write(struct.pack("<I", 48000))
     buf.write(struct.pack("<H", 2))

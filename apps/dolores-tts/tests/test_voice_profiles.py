@@ -130,4 +130,4 @@ class TestVoiceProfileStore:
         result = await self.store.create(name="Timestamped", audio_data=b"d", engine="coqui_xtts")
         profile = await self.store.get_profile(result["id"])
         assert profile["created_at"] is not None
-        assert "T" in profile["created_at"]  # ISO format
+        assert "T" in profile["created_at"]
