@@ -3,7 +3,7 @@
 **Type**: Monorepo
 **Languages**: Python, TypeScript, Svelte
 **Updated**: 2026-03-24
-**Projects**: 9 (dolores-assistant, dolores-brain, dolores-cli, dolores-stt, dolores-tts, dolores-web, todo, portfolio, dolores-common)
+**Projects**: 10 (dolores-assistant, dolores-brain, dolores-cli, dolores-stt, dolores-tts, dolores-web, todo, portfolio, dolores-common, review-bot)
 
 ## Project Summary
 
@@ -30,6 +30,7 @@
 | todo | Flask REST API for todos/notes/work + web UI | Python | `__main__.py` :5000 |
 | portfolio | Static personal portfolio site | HTML/JS | `src/index.html` |
 | dolores-common | Shared FastAPI utilities (auth, health, logging) | Python | library |
+| review-bot | Automated PR review bot via GitHub API polling + LLM | Python | `main.py` :8004 |
 
 ## KB File Manifest
 

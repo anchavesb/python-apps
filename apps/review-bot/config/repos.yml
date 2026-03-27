@@ -1,0 +1,17 @@
+# repos.yml — Repository registry for the PR review bot.
+#
+# defaults.model: The LLM model used for all repositories unless overridden per repo.
+#   Allowed values: any LiteLLM-supported model string.
+#   Examples: "gemini/gemini-2.0-flash", "anthropic/claude-sonnet-4-5"
+#
+# repositories: List of GitHub repositories the bot will poll and review.
+#   Each entry requires:
+#     repo: GitHub repository in "owner/repo" format (string, required).
+#     model: Per-repo model override (string, optional). Overrides defaults.model for this repo.
+
+defaults:
+  model: "gemini/gemini-2.0-flash"
+
+repositories:
+  - repo: "anchavesb/python-apps"
+    # model: "anthropic/claude-sonnet-4-5"  # optional per-repo model override

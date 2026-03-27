@@ -19,6 +19,7 @@ known-first-party = [
     "dolores_cli",
     "dolores_stt",
     "dolores_tts",
+    "review_bot",
 ]
 
 [format]

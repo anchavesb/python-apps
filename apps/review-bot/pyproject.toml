@@ -1,0 +1,31 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "review-bot"
+version = "0.1.0"
+description = "Automated PR review bot service"
+authors = [{ name = "Achaves" }]
+requires-python = ">=3.10"
+dependencies = [
+    "dolores-common",
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.34.0",
+    "litellm>=1.63.2,<2.0",
+    "httpx>=0.25.0",
+    "pyyaml>=6.0",
+    "pydantic>=2.0",
+    "aiosqlite>=0.20.0",
+    "structlog>=23.0",
+]
+
+[project.scripts]
+"review-bot" = "review_bot.__main__:main"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["review_bot*"]
