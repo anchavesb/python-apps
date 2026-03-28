@@ -165,7 +165,7 @@ jobs:
       - name: Determine build context
         id: ctx
         run: |
-          if [[ "${{ matrix.app }}" == dolores-* ]] && grep -q "dolores-common" "apps/${{ matrix.app }}/Dockerfile"; then
+          if [[ "${{ matrix.app }}" == dolores-* || "${{ matrix.app }}" == "review-bot" ]] && grep -q "dolores-common" "apps/${{ matrix.app }}/Dockerfile"; then
             echo "context=." >> $GITHUB_OUTPUT
           else
             echo "context=apps/${{ matrix.app }}" >> $GITHUB_OUTPUT

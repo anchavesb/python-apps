@@ -1,3 +1,6 @@
+# Claude Code
+.claude/worktrees/
+
 # Python
 .dolores-venv/
 __pycache__/
