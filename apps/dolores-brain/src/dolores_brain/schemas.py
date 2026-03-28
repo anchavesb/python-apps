@@ -7,6 +7,7 @@ from pydantic import BaseModel
 
 class ChatRequest(BaseModel):
     message: str
+    image_data: str | None = None
     conversation_id: str | None = None
     provider: str | None = None
     model: str | None = None

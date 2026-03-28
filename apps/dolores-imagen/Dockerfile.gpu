@@ -1,0 +1,40 @@
+FROM nvidia/cuda:11.8.0-runtime-ubuntu22.04
+
+ENV DEBIAN_FRONTEND=noninteractive
+ENV PYTHONUNBUFFERED=1
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    software-properties-common && \
+    add-apt-repository ppa:deadsnakes/ppa && \
+    apt-get update && apt-get install -y --no-install-recommends \
+    python3.11 python3.11-venv python3.11-dev \
+    curl && \
+    rm -rf /var/lib/apt/lists/*
+
+RUN update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.11 1 && \
+    update-alternatives --install /usr/bin/python python /usr/bin/python3.11 1 && \
+    curl -sS https://bootstrap.pypa.io/get-pip.py | python3.11
+
+RUN groupadd -r appuser && useradd -r -m -g appuser appuser
+
+WORKDIR /app
+
+# Install dolores-common first (shared lib)
+COPY libs/dolores-common /app/libs/dolores-common
+RUN pip install --no-cache-dir /app/libs/dolores-common
+
+# Install the imagen service with GPU dependencies (diffusers + torch)
+COPY apps/dolores-imagen/pyproject.toml /app/
+COPY apps/dolores-imagen/src /app/src
+RUN pip install --no-cache-dir ".[gpu]"
+
+RUN mkdir -p /app/models && chown -R appuser:appuser /app
+
+USER appuser
+
+ENV NVIDIA_VISIBLE_DEVICES=all
+ENV NVIDIA_DRIVER_CAPABILITIES=compute,utility
+
+EXPOSE 8005
+
+CMD ["uvicorn", "dolores_imagen.main:app", "--host", "0.0.0.0", "--port", "8005", "--workers", "1"]

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import base64
 import json
 import re
 import uuid
@@ -14,6 +15,7 @@ from dolores_common.auth import ClientAPIKey, validate_ws_token
 from dolores_common.logging import get_logger
 
 from .config import settings
+from .intent import classify_intent
 from .pipeline import ServiceClient, run_tool_loop, split_sentences
 from .schemas import TextChatRequest, TextChatResponse
 from .tools.openapi_discovery import current_user_token
@@ -375,6 +377,16 @@ async def conversation_ws(websocket: WebSocket) -> None:
                     websocket, client, user_text, conversation_id, provider, voice_id, mode
                 )
 
+            elif msg_type == "image.send":
+                user_text = data.get("text", "").strip() or "Describe this image."
+                image_data = data.get("image_data", "")
+                if not image_data:
+                    await websocket.send_json({"type": "error", "code": "no_image", "message": "No image data provided"})
+                    continue
+                await _process_image_message(
+                    websocket, client, user_text, image_data, conversation_id, provider, voice_id, mode
+                )
+
     except WebSocketDisconnect:
         log.info("ws_disconnected", session_id=session_id)
     except Exception as e:
@@ -390,9 +402,51 @@ async def conversation_ws(websocket: WebSocket) -> None:
 _EMOTION_TAG_RE = re.compile(r"^\[emotion:(\w+)\]\s*")
 _VALID_EMOTIONS = {"neutral", "curious", "happy", "sad", "surprised", "empathetic"}
 
+
+async def _process_image_message(
+    websocket: WebSocket,
+    client: ServiceClient,
+    user_text: str,
+    image_data: str,
+    conversation_id: str | None,
+    provider: str,
+    voice_id: str,
+    mode: str,
+) -> None:
+    """Forward image + text to brain for analysis, stream response back to client."""
+    full_text = ""
+    async for event in client.analyze_image(
+        text=user_text,
+        image_data=image_data,
+        conversation_id=conversation_id,
+        provider=provider,
+    ):
+        if event.get("type") == "token":
+            content = event.get("content", "")
+            full_text += content
+            await websocket.send_json({"type": "response.text", "content": content})
+        elif event.get("type") == "done":
+            full_text = event.get("content", full_text)
+        elif event.get("type") == "error":
+            await websocket.send_json({
+                "type": "error",
+                "code": "brain_error",
+                "message": event.get("error", "Unknown error"),
+            })
+            return
+
+    if mode != "text" and full_text.strip():
+        sentences = split_sentences(full_text)
+        for sentence in sentences:
+            audio = await client.synthesize(sentence, voice_id=voice_id)
+            if audio:
+                await websocket.send_bytes(audio)
+
+    await websocket.send_json({"type": "response.end", "full_text": full_text})
+
+
 def _detect_tool_filter(message: str) -> set[str] | None:
     """Classify message intent and return tool name filter, or None for chat."""
-    from .intent import classify_intent
     _, tool_filter, _ = classify_intent(message)
     return tool_filter
 
@@ -407,12 +461,31 @@ async def _process_and_respond(
     mode: str,
 ) -> None:
     """Send user text to brain, stream response text, and optionally TTS audio."""
+    try:
+        intent_name, tool_filter, _ = classify_intent(user_text)
+    except Exception:
+        intent_name, tool_filter = None, None
 
-    # Only use tool loop when: user has JWT AND message matches a tool intent.
-    # Filter tools to the relevant subset so the LLM doesn't get confused.
+    if intent_name == "generate_image":
+        await websocket.send_json({"type": "response.text", "content": "Generating your image..."})
+        image_bytes = await client.generate_image(user_text)
+        if image_bytes:
+            image_b64 = base64.b64encode(image_bytes).decode()
+            await websocket.send_json({
+                "type": "response.image",
+                "image_data": f"data:image/png;base64,{image_b64}",
+                "prompt": user_text,
+            })
+        else:
+            await websocket.send_json({
+                "type": "response.text",
+                "content": "I wasn't able to generate the image. Please try again.",
+            })
+        await websocket.send_json({"type": "response.end", "full_text": ""})
+        return
+
     has_user_token = current_user_token.get() is not None
-    tool_filter = _detect_tool_filter(user_text) if has_user_token else None
-    if tool_filter and get_tool_definitions(tool_filter):
+    if tool_filter and has_user_token and get_tool_definitions(tool_filter):
         result = await run_tool_loop(
             client=client,
             initial_message=user_text,

@@ -106,3 +106,5 @@ Test files located under `tests/` directories per service (e.g. `apps/dolores-as
 **Tool system**: Abstract `Tool` base class with `to_openai_function()` concrete method. Tools dynamically generated from OpenAPI specs at startup via `discover_tools()`; stored in global `TOOLS` list.
 
 **Intent routing**: Declarative `INTENT_EXAMPLES` dict maps intent labels to `(tool_filter, example_phrases)`. Add new domains by adding entries — no code changes elsewhere.
+
+**Image generation providers**: `ImageGenProvider` ABC (`apps/dolores-imagen/src/dolores_imagen/engine.py`) defines abstract properties `name`, `is_loaded` and abstract methods `load()`, `generate(prompt, width, height) -> bytes`. Concrete providers (`FLUXProvider`, `StableDiffusionProvider`) implement the ABC; active provider selected via `IMAGEN_PROVIDER` env var at startup. `asyncio.to_thread()` + `asyncio.Semaphore(1)` in the route layer handle GPU offload and concurrency serialization — same pattern as TTS and STT services. Add a new provider by implementing the ABC; no route or config changes needed beyond adding the class and registering it in `main.py`.

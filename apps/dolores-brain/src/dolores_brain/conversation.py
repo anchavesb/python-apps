@@ -107,7 +107,12 @@ class ConversationStore:
         rows = await cursor.fetchall()
         messages = []
         for role, content, tool_call_id, tool_calls_json in rows:
-            msg: dict = {"role": role, "content": content}
+            try:
+                parsed = json.loads(content)
+                actual_content: list | str = parsed if isinstance(parsed, list) else content
+            except (json.JSONDecodeError, ValueError):
+                actual_content = content
+            msg: dict = {"role": role, "content": actual_content}
             if tool_call_id:
                 msg["tool_call_id"] = tool_call_id
             if tool_calls_json:

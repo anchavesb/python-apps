@@ -242,6 +242,56 @@ class ServiceClient:
             log.error("brain_stream_failed", error=str(e))
             yield {"type": "error", "error": str(e)}
 
+    # --- Image analysis ---
+
+    async def analyze_image(
+        self,
+        text: str,
+        image_data: str,
+        conversation_id: str | None = None,
+        provider: str | None = None,
+    ) -> AsyncGenerator[dict, None]:
+        """Stream brain response for image analysis via /v1/chat/stream. Yields SSE event dicts."""
+        try:
+            body = {
+                "message": text,
+                "image_data": image_data,
+                "conversation_id": conversation_id,
+                "provider": provider or settings.default_provider,
+            }
+            async with self.client.stream(
+                "POST",
+                f"{settings.brain_url}/v1/chat/stream",
+                json=body,
+                timeout=settings.brain_timeout,
+            ) as resp:
+                resp.raise_for_status()
+                async for line in resp.aiter_lines():
+                    if line.startswith("data: "):
+                        try:
+                            yield json.loads(line[6:])
+                        except json.JSONDecodeError:
+                            continue
+        except Exception as e:
+            log.error("analyze_image_failed", error=str(e))
+            yield {"type": "error", "error": str(e)}
+
+    # --- Image generation ---
+
+    async def generate_image(self, prompt: str) -> bytes | None:
+        """Call dolores-imagen /v1/generate. Returns PNG bytes or None on failure."""
+        try:
+            resp = await self.client.post(
+                f"{settings.imagen_url}/v1/generate",
+                json={"prompt": prompt},
+                timeout=settings.imagen_timeout,
+            )
+            resp.raise_for_status()
+            return resp.content
+        except Exception as e:
+            log.error("generate_image_failed", error=str(e))
+            return None
+
     # --- TTS ---
 
     async def synthesize(
