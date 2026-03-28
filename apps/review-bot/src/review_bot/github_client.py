@@ -58,6 +58,8 @@ def get_github_client() -> httpx.AsyncClient:
 
 
 def _auth_headers(token: str) -> dict[str, str]:
+    if not token:
+        log.warning("github_token_missing")
     return {
         "Authorization": f"Bearer {token}",
         "Accept": "application/vnd.github+json",
@@ -154,7 +156,14 @@ async def list_open_prs(owner: str, repo: str, token: str) -> list[PRInfo]:
         _check_rate_limit(response)
         response.raise_for_status()
     except httpx.HTTPStatusError as exc:
+        log.error("github_list_prs_http_error", owner=owner, repo=repo, status=exc.response.status_code, error=str(exc))
         raise HTTPException(status_code=502, detail=f"GitHub API error: {exc}") from exc
+    except httpx.RequestError as exc:
+        log.error("github_list_prs_network_error", owner=owner, repo=repo, error=str(exc))
+        raise HTTPException(status_code=502, detail=f"GitHub API network error: {exc}") from exc
+    except Exception as exc:
+        log.exception("github_list_prs_unexpected_error", owner=owner, repo=repo)
+        raise exc
 
     prs = []
     for item in response.json():
