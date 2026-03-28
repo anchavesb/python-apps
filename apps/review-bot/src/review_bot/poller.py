@@ -59,6 +59,7 @@ async def _poll_repo(repo_entry, store, config) -> None:
     effective = resolve_effective_config(repo_entry.repo)
     open_prs = await github.list_open_prs(owner, repo_name, effective.github_token)
 
+    review_tasks = []
     for pr in open_prs:
         stored_sha = await store.get_sha(repo_entry.repo, pr.number)
 
@@ -81,10 +82,15 @@ async def _poll_repo(repo_entry, store, config) -> None:
                 before_sha=stored_sha,
             )
 
-        await run_review(
-            repo=repo_entry.repo,
-            pr_number=pr.number,
-            head_sha=pr.head_sha,
-            diff_type=diff_type,
-            before_sha=before_sha,
+        review_tasks.append(
+            run_review(
+                repo=repo_entry.repo,
+                pr_number=pr.number,
+                head_sha=pr.head_sha,
+                diff_type=diff_type,
+                before_sha=before_sha,
+            )
         )
+
+    if review_tasks:
+        await asyncio.gather(*review_tasks)
