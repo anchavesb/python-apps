@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import pytest
-
 from review_bot.config import _resolve_api_key
 
 

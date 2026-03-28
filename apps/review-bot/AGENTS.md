@@ -64,5 +64,6 @@ concurrent LLM calls. `_poll_repo` dispatches all eligible PRs concurrently via
 
 ## Quality Gates
 Every code change must pass before merging:
+- **Lint:** `ruff check .` (from repo root) — must return zero errors
 - **Tests:** `pytest apps/review-bot/` (all tests must pass)
 - **No duplicate model definitions:** `EffectiveConfig` is canonical in `schemas.py`.
