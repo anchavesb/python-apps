@@ -66,7 +66,8 @@ def test_init_semaphore_sets_correct_value():
 
 
 @patch("review_bot.review_runner.resolve_effective_config")
-@patch("review_bot.review_runner.get_github_client")
+@patch("review_bot.review_runner.get_diff", new_callable=AsyncMock)
+@patch("review_bot.review_runner.post_review", new_callable=AsyncMock)
 @patch("review_bot.review_runner.get_state_store")
 @patch("review_bot.review_runner.fetch_file_contents", new_callable=AsyncMock)
 @patch("review_bot.review_runner.discover_agents_md", new_callable=AsyncMock)
@@ -80,18 +81,16 @@ async def test_run_review_full_diff_calls_get_diff_with_correct_args(
     mock_discover,
     mock_fetch_file,
     mock_get_store,
-    mock_get_github,
+    mock_post_review,
+    mock_get_diff,
     mock_resolve,
 ):
     effective = MagicMock(model="gemini/flash", api_key="key", github_token="tok")
     mock_resolve.return_value = effective
     mock_fetch_file.return_value = None
 
-    github = AsyncMock()
     diff_meta = _make_diff_metadata("src/foo.py")
-    github.get_diff = AsyncMock(return_value=("diff text", diff_meta))
-    github.post_review = AsyncMock()
-    mock_get_github.return_value = github
+    mock_get_diff.return_value = ("diff text", diff_meta)
 
     store = AsyncMock()
     store.get_sha = AsyncMock(return_value=None)
@@ -111,7 +110,7 @@ async def test_run_review_full_diff_calls_get_diff_with_correct_args(
         before_sha=None,
     )
 
-    github.get_diff.assert_called_once_with(
+    mock_get_diff.assert_called_once_with(
         "owner",
         "repo",
         42,
@@ -123,7 +122,8 @@ async def test_run_review_full_diff_calls_get_diff_with_correct_args(
 
 
 @patch("review_bot.review_runner.resolve_effective_config")
-@patch("review_bot.review_runner.get_github_client")
+@patch("review_bot.review_runner.get_diff", new_callable=AsyncMock)
+@patch("review_bot.review_runner.post_review", new_callable=AsyncMock)
 @patch("review_bot.review_runner.get_state_store")
 @patch("review_bot.review_runner.fetch_file_contents", new_callable=AsyncMock)
 @patch("review_bot.review_runner.discover_agents_md", new_callable=AsyncMock)
@@ -137,18 +137,16 @@ async def test_run_review_incremental_diff_passes_before_sha(
     mock_discover,
     mock_fetch_file,
     mock_get_store,
-    mock_get_github,
+    mock_post_review,
+    mock_get_diff,
     mock_resolve,
 ):
     effective = MagicMock(model="gemini/flash", api_key="key", github_token="tok")
     mock_resolve.return_value = effective
     mock_fetch_file.return_value = None
 
-    github = AsyncMock()
     diff_meta = _make_diff_metadata("src/bar.py")
-    github.get_diff = AsyncMock(return_value=("incremental diff", diff_meta))
-    github.post_review = AsyncMock()
-    mock_get_github.return_value = github
+    mock_get_diff.return_value = ("incremental diff", diff_meta)
 
     store = AsyncMock()
     store.set_sha = AsyncMock()
@@ -167,7 +165,7 @@ async def test_run_review_incremental_diff_passes_before_sha(
         before_sha="oldsha",
     )
 
-    github.get_diff.assert_called_once_with(
+    mock_get_diff.assert_called_once_with(
         "owner",
         "repo",
         7,
@@ -184,7 +182,8 @@ async def test_run_review_incremental_diff_passes_before_sha(
 
 
 @patch("review_bot.review_runner.resolve_effective_config")
-@patch("review_bot.review_runner.get_github_client")
+@patch("review_bot.review_runner.get_diff", new_callable=AsyncMock)
+@patch("review_bot.review_runner.post_review", new_callable=AsyncMock)
 @patch("review_bot.review_runner.get_state_store")
 @patch("review_bot.review_runner.fetch_file_contents", new_callable=AsyncMock)
 @patch("review_bot.review_runner.discover_agents_md", new_callable=AsyncMock)
@@ -198,18 +197,16 @@ async def test_run_review_calls_set_sha_with_head_sha_after_post_review(
     mock_discover,
     mock_fetch_file,
     mock_get_store,
-    mock_get_github,
+    mock_post_review,
+    mock_get_diff,
     mock_resolve,
 ):
     effective = MagicMock(model="gemini/flash", api_key="key", github_token="tok")
     mock_resolve.return_value = effective
     mock_fetch_file.return_value = None
 
-    github = AsyncMock()
     diff_meta = _make_diff_metadata("src/foo.py")
-    github.get_diff = AsyncMock(return_value=("diff", diff_meta))
-    github.post_review = AsyncMock()
-    mock_get_github.return_value = github
+    mock_get_diff.return_value = ("diff", diff_meta)
 
     store = AsyncMock()
     store.set_sha = AsyncMock()
@@ -221,7 +218,7 @@ async def test_run_review_calls_set_sha_with_head_sha_after_post_review(
     mock_parse.return_value = _make_review_result()
 
     call_order = []
-    github.post_review.side_effect = lambda *a, **kw: call_order.append("post_review")
+    mock_post_review.side_effect = lambda *a, **kw: call_order.append("post_review")
     store.set_sha.side_effect = lambda *a, **kw: call_order.append("set_sha")
 
     await run_review(
@@ -242,7 +239,8 @@ async def test_run_review_calls_set_sha_with_head_sha_after_post_review(
 
 
 @patch("review_bot.review_runner.resolve_effective_config")
-@patch("review_bot.review_runner.get_github_client")
+@patch("review_bot.review_runner.get_diff", new_callable=AsyncMock)
+@patch("review_bot.review_runner.post_review", new_callable=AsyncMock)
 @patch("review_bot.review_runner.get_state_store")
 @patch("review_bot.review_runner.fetch_file_contents", new_callable=AsyncMock)
 @patch("review_bot.review_runner.discover_agents_md", new_callable=AsyncMock)
@@ -256,18 +254,16 @@ async def test_semaphore_released_after_successful_run(
     mock_discover,
     mock_fetch_file,
     mock_get_store,
-    mock_get_github,
+    mock_post_review,
+    mock_get_diff,
     mock_resolve,
 ):
     effective = MagicMock(model="gemini/flash", api_key="key", github_token="tok")
     mock_resolve.return_value = effective
     mock_fetch_file.return_value = None
 
-    github = AsyncMock()
     diff_meta = _make_diff_metadata("src/foo.py")
-    github.get_diff = AsyncMock(return_value=("diff", diff_meta))
-    github.post_review = AsyncMock()
-    mock_get_github.return_value = github
+    mock_get_diff.return_value = ("diff", diff_meta)
 
     store = AsyncMock()
     store.set_sha = AsyncMock()
@@ -285,7 +281,8 @@ async def test_semaphore_released_after_successful_run(
 
 
 @patch("review_bot.review_runner.resolve_effective_config")
-@patch("review_bot.review_runner.get_github_client")
+@patch("review_bot.review_runner.get_diff", new_callable=AsyncMock)
+@patch("review_bot.review_runner.post_review", new_callable=AsyncMock)
 @patch("review_bot.review_runner.get_state_store")
 @patch("review_bot.review_runner.fetch_file_contents", new_callable=AsyncMock)
 @patch("review_bot.review_runner.discover_agents_md", new_callable=AsyncMock)
@@ -297,17 +294,16 @@ async def test_semaphore_released_after_exception(
     mock_discover,
     mock_fetch_file,
     mock_get_store,
-    mock_get_github,
+    mock_post_review,
+    mock_get_diff,
     mock_resolve,
 ):
     effective = MagicMock(model="gemini/flash", api_key="key", github_token="tok")
     mock_resolve.return_value = effective
     mock_fetch_file.return_value = None
 
-    github = AsyncMock()
     diff_meta = _make_diff_metadata("src/foo.py")
-    github.get_diff = AsyncMock(return_value=("diff", diff_meta))
-    mock_get_github.return_value = github
+    mock_get_diff.return_value = ("diff", diff_meta)
 
     store = AsyncMock()
     mock_get_store.return_value = store
@@ -329,7 +325,8 @@ async def test_semaphore_released_after_exception(
 
 
 @patch("review_bot.review_runner.resolve_effective_config")
-@patch("review_bot.review_runner.get_github_client")
+@patch("review_bot.review_runner.get_diff", new_callable=AsyncMock)
+@patch("review_bot.review_runner.post_review", new_callable=AsyncMock)
 @patch("review_bot.review_runner.get_state_store")
 @patch("review_bot.review_runner.fetch_file_contents", new_callable=AsyncMock)
 @patch("review_bot.review_runner.discover_agents_md", new_callable=AsyncMock)
@@ -343,7 +340,8 @@ async def test_per_repo_yml_fetched_and_passed_to_resolve_effective_config(
     mock_discover,
     mock_fetch_file,
     mock_get_store,
-    mock_get_github,
+    mock_post_review,
+    mock_get_diff,
     mock_resolve,
 ):
     """run_review must fetch .github/review-bot.yml and pass it to resolve_effective_config."""
@@ -353,11 +351,8 @@ async def test_per_repo_yml_fetched_and_passed_to_resolve_effective_config(
     per_repo_content = "model: anthropic/claude-3-5-sonnet"
     mock_fetch_file.return_value = per_repo_content
 
-    github = AsyncMock()
     diff_meta = _make_diff_metadata("src/foo.py")
-    github.get_diff = AsyncMock(return_value=("diff", diff_meta))
-    github.post_review = AsyncMock()
-    mock_get_github.return_value = github
+    mock_get_diff.return_value = ("diff", diff_meta)
 
     store = AsyncMock()
     store.set_sha = AsyncMock()
@@ -382,7 +377,8 @@ async def test_per_repo_yml_fetched_and_passed_to_resolve_effective_config(
 
 
 @patch("review_bot.review_runner.resolve_effective_config")
-@patch("review_bot.review_runner.get_github_client")
+@patch("review_bot.review_runner.get_diff", new_callable=AsyncMock)
+@patch("review_bot.review_runner.post_review", new_callable=AsyncMock)
 @patch("review_bot.review_runner.get_state_store")
 @patch("review_bot.review_runner.fetch_file_contents", new_callable=AsyncMock)
 @patch("review_bot.review_runner.discover_agents_md", new_callable=AsyncMock)
@@ -396,7 +392,8 @@ async def test_missing_per_repo_yml_proceeds_with_existing_config(
     mock_discover,
     mock_fetch_file,
     mock_get_store,
-    mock_get_github,
+    mock_post_review,
+    mock_get_diff,
     mock_resolve,
 ):
     """When .github/review-bot.yml is absent (None), the review must still complete."""
@@ -404,11 +401,8 @@ async def test_missing_per_repo_yml_proceeds_with_existing_config(
     mock_resolve.return_value = effective
     mock_fetch_file.return_value = None  # file not found
 
-    github = AsyncMock()
     diff_meta = _make_diff_metadata("src/foo.py")
-    github.get_diff = AsyncMock(return_value=("diff", diff_meta))
-    github.post_review = AsyncMock()
-    mock_get_github.return_value = github
+    mock_get_diff.return_value = ("diff", diff_meta)
 
     store = AsyncMock()
     store.set_sha = AsyncMock()

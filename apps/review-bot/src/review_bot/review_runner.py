@@ -14,7 +14,7 @@ from dolores_common.logging import get_logger
 
 from .agents_discovery import discover_agents_md
 from .config import resolve_effective_config
-from .github_client import fetch_file_contents, get_github_client
+from .github_client import fetch_file_contents, get_diff, post_review
 from .llm_client import call_llm
 from .prompt import assemble_prompt
 from .review_parser import parse_review
@@ -65,7 +65,6 @@ async def run_review(
             # Preliminary resolution to obtain the GitHub token for fetching
             # the per-repo .github/review-bot.yml (Layer 1 config).
             preliminary = resolve_effective_config(repo)
-            github = get_github_client()
             store = get_state_store()
 
             # Layer 1 — fetch per-repo config from the default branch.
@@ -76,7 +75,7 @@ async def run_review(
 
             effective = resolve_effective_config(repo, per_repo_yml)
 
-            diff_text, diff_meta = await github.get_diff(
+            diff_text, diff_meta = await get_diff(
                 owner,
                 name,
                 pr_number,
@@ -95,7 +94,7 @@ async def run_review(
             messages = assemble_prompt(effective, agents_files, diff_text)
             raw = await call_llm(effective.model, messages, effective.api_key)
             result = parse_review(raw, diff_meta, effective.model)
-            await github.post_review(owner, name, pr_number, result, effective.github_token)
+            await post_review(owner, name, pr_number, result, effective.github_token)
             await store.set_sha(repo, pr_number, head_sha)
 
             elapsed = round(time.monotonic() - start, 3)
