@@ -8,7 +8,7 @@ import time
 from dolores_common.logging import get_logger
 
 from .config import get_registry, get_settings, resolve_effective_config
-from .github_client import get_github_client
+from .github_client import list_open_prs
 from .review_runner import run_review
 from .state_store import get_state_store
 
@@ -55,7 +55,6 @@ async def _poll_repo(repo_entry, store, config) -> None:
         RegistryError: if ``repo_entry.repo`` is not in the registry (caught by caller).
         Any exception from the GitHub client or review pipeline (caught by caller).
     """
-    github = get_github_client()
     repo_name_full = repo_entry.repo
     owner, repo_name = repo_name_full.split("/", 1)
 
@@ -66,7 +65,7 @@ async def _poll_repo(repo_entry, store, config) -> None:
         return
 
     try:
-        open_prs = await github.list_open_prs(owner, repo_name, effective.github_token)
+        open_prs = await list_open_prs(owner, repo_name, effective.github_token)
     except Exception:
         log.exception("github_list_prs_failed", repo=repo_name_full)
         return
