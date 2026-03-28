@@ -58,8 +58,18 @@ async def _poll_repo(repo_entry, store, config) -> None:
     github = get_github_client()
     repo_name_full = repo_entry.repo
     owner, repo_name = repo_name_full.split("/", 1)
-    effective = resolve_effective_config(repo_name_full)
-    open_prs = await github.list_open_prs(owner, repo_name, effective.github_token)
+
+    try:
+        effective = resolve_effective_config(repo_name_full)
+    except Exception:
+        log.exception("config_resolution_failed", repo=repo_name_full)
+        return
+
+    try:
+        open_prs = await github.list_open_prs(owner, repo_name, effective.github_token)
+    except Exception:
+        log.exception("github_list_prs_failed", repo=repo_name_full)
+        return
 
     review_tasks = []
     for pr in open_prs:
