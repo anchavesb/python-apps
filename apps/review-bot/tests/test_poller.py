@@ -139,8 +139,8 @@ async def test_unregistered_repo_raises_registry_error(mock_get_github, mock_res
 @patch("review_bot.poller.run_review", new_callable=AsyncMock)
 @patch("review_bot.poller.resolve_effective_config")
 @patch("review_bot.poller.get_github_client")
-async def test_llm_failure_propagates_and_does_not_call_set_sha(mock_get_github, mock_resolve, mock_run_review):
-    """run_review raising means SHA update never happens (set_sha lives inside run_review)."""
+async def test_llm_failure_is_logged_and_does_not_call_set_sha(mock_get_github, mock_resolve, mock_run_review):
+    """run_review raising means error is logged but SHA update never happens."""
     effective = _make_effective()
     mock_resolve.return_value = effective
 
@@ -155,8 +155,8 @@ async def test_llm_failure_propagates_and_does_not_call_set_sha(mock_get_github,
 
     config = MagicMock()
 
-    with pytest.raises(RuntimeError, match="LLM down"):
-        await _poll_repo(_repo_entry(), store, config)
+    # Should NOT raise anymore because of return_exceptions=True
+    await _poll_repo(_repo_entry(), store, config)
 
     store.set_sha.assert_not_called()
 
