@@ -63,7 +63,10 @@ concurrent LLM calls. `_poll_repo` dispatches all eligible PRs concurrently via
 - Per-repo YAML keys use `extension` (not `text`) for the prompt fragment field.
 
 ## Quality Gates
-Every code change must pass before merging:
+**Always run both checks locally and confirm they pass before committing or pushing any change:**
 - **Lint:** `ruff check .` (from repo root) — must return zero errors
-- **Tests:** `pytest apps/review-bot/` (all tests must pass)
+- **Tests:** `pytest apps/review-bot/` (from repo root) — all tests must pass
+
+Do not push if either check fails. Fix the issue first.
+
 - **No duplicate model definitions:** `EffectiveConfig` is canonical in `schemas.py`.
