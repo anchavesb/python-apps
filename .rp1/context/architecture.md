@@ -27,11 +27,17 @@ graph TB
         IMAGEN[dolores-imagen\ndiffusers :8005]
     end
 
+    subgraph K8s["Kubernetes Cluster (cluster-internal only)"]
+        REVIEWBOT[review-bot\nPR review polling :8004]
+    end
+
     subgraph LLMBackends["LLM Backends"]
         OLLAMA[Ollama\nllama3.2 :11434]
         ANTHROPIC[Anthropic\nClaude API]
         OPENAI[OpenAI\nGPT API]
     end
+
+    GITHUB[GitHub REST API]
 
     CLI -->|WebSocket| ASST
     WEB -->|HTTP| ASST
@@ -47,6 +53,10 @@ graph TB
     BRAIN -->|LiteLLM| OLLAMA
     BRAIN -->|LiteLLM| ANTHROPIC
     BRAIN -->|LiteLLM| OPENAI
+
+    REVIEWBOT -->|outbound poll: list PRs, fetch diffs, post reviews| GITHUB
+    REVIEWBOT -->|LiteLLM| ANTHROPIC
+    REVIEWBOT -->|LiteLLM| OPENAI
 ```
 
 ## Architectural Patterns
@@ -160,6 +170,7 @@ OIDC access token flows from browser → WebSocket `session.start` → `current_
 | Ollama | Local LLM inference (llama3.2) | HTTP REST via LiteLLM |
 | Anthropic Claude | Cloud LLM fallback | LiteLLM abstraction |
 | OpenAI | Cloud LLM fallback | LiteLLM abstraction |
+| GitHub REST API | review-bot polls for open PRs, fetches diffs and AGENTS.md, posts reviews — outbound from cluster, no inbound webhook | Outbound HTTP polling (review-bot) |
 | GitHub Actions + GHCR | CI: test, build, push Docker images | Workflow automation |
 | Capacitor | iOS/Android wrapper for dolores-web | Mobile native bridge |
 | Authentik | OIDC provider for todo app (optional) | OAuth2/OIDC |

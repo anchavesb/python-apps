@@ -48,7 +48,7 @@ class TestWriteWavHeader:
         buf = io.BytesIO()
         write_wav_header(buf, num_samples=100, sample_rate=24000)
         h = self._parse_header(buf.getvalue())
-        assert h["audio_format"] == 1  # PCM
+        assert h["audio_format"] == 1
 
     def test_mono_channel(self):
         buf = io.BytesIO()

@@ -62,7 +62,11 @@ jobs:
           done
           for app in apps/*; do
             if [ -f "$app/pyproject.toml" ]; then
-              pip install -e "$app"
+              if grep -q 'optional-dependencies' "$app/pyproject.toml"; then
+                pip install -e "$app[test]"
+              else
+                pip install -e "$app"
+              fi
             fi
           done
           pip install -U pytest
@@ -161,7 +165,7 @@ jobs:
       - name: Determine build context
         id: ctx
         run: |
-          if [[ "${{ matrix.app }}" == dolores-* ]] && grep -q "dolores-common" "apps/${{ matrix.app }}/Dockerfile"; then
+          if [[ "${{ matrix.app }}" == dolores-* || "${{ matrix.app }}" == "review-bot" ]] && grep -q "dolores-common" "apps/${{ matrix.app }}/Dockerfile"; then
             echo "context=." >> $GITHUB_OUTPUT
           else
             echo "context=apps/${{ matrix.app }}" >> $GITHUB_OUTPUT
