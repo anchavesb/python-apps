@@ -62,7 +62,11 @@ jobs:
           done
           for app in apps/*; do
             if [ -f "$app/pyproject.toml" ]; then
-              pip install -e "$app"
+              if grep -q 'optional-dependencies' "$app/pyproject.toml"; then
+                pip install -e "$app[test]"
+              else
+                pip install -e "$app"
+              fi
             fi
           done
           pip install -U pytest
