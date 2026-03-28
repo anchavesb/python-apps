@@ -120,8 +120,8 @@ async def test_unchanged_pr_is_skipped(mock_get_github, mock_resolve, mock_run_r
 @patch("review_bot.poller.run_review", new_callable=AsyncMock)
 @patch("review_bot.poller.resolve_effective_config")
 @patch("review_bot.poller.get_github_client")
-async def test_unregistered_repo_raises_registry_error(mock_get_github, mock_resolve, mock_run_review):
-    """resolve_effective_config raises RegistryError for an unregistered repo."""
+async def test_unregistered_repo_is_logged_and_not_polled(mock_get_github, mock_resolve, mock_run_review):
+    """resolve_effective_config raises RegistryError; it's logged and repo skiped."""
     mock_resolve.side_effect = RegistryError("not registered")
 
     github = AsyncMock()
@@ -130,8 +130,8 @@ async def test_unregistered_repo_raises_registry_error(mock_get_github, mock_res
     store = AsyncMock()
     config = MagicMock()
 
-    with pytest.raises(RegistryError):
-        await _poll_repo(_repo_entry("unknown/repo"), store, config)
+    # Should NOT raise anymore, but log and return
+    await _poll_repo(_repo_entry("unknown/repo"), store, config)
 
     mock_run_review.assert_not_called()
 
