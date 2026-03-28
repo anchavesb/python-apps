@@ -171,7 +171,7 @@ class TestMergePerRepoConfig:
         per_repo_yml = textwrap.dedent("""\
             prompt:
               mode: extend
-              text: "Focus on type safety."
+              extension: "Focus on type safety."
         """)
         result = merge_per_repo_config(base_effective, per_repo_yml)
         assert result.prompt_mode == "extend"
@@ -181,7 +181,7 @@ class TestMergePerRepoConfig:
         per_repo_yml = textwrap.dedent("""\
             prompt:
               mode: replace
-              text: "Use this prompt instead of the base."
+              extension: "Use this prompt instead of the base."
         """)
         result = merge_per_repo_config(base_effective, per_repo_yml)
         assert result.prompt_mode == "replace"

@@ -34,10 +34,14 @@ class DiffMetadata(BaseModel):
 
 
 class EffectiveConfig(BaseModel):
+    """Resolved, per-repo configuration used throughout the review pipeline."""
+
     repo: str
     model: str
     prompt_mode: str = "base"
     prompt_extension: str | None = None
+    api_key: str
+    github_token: str
 
 
 class AgentsFile(BaseModel):

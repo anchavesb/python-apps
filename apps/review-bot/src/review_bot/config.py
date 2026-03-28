@@ -3,9 +3,11 @@
 Exposes:
   - ReviewBotConfig: service settings read from environment variables
   - RepoEntry / RepoRegistry: YAML registry models
-  - EffectiveConfig: resolved per-repo configuration passed to review pipeline
   - load_registry / get_registry / get_settings: module-level singletons
   - resolve_effective_config / merge_per_repo_config: precedence resolution
+
+Note: EffectiveConfig is defined in schemas.py and re-exported here for
+convenience.
 """
 
 from __future__ import annotations
@@ -19,22 +21,13 @@ from pydantic import BaseModel
 from dolores_common.config import get_env, get_env_int
 from dolores_common.logging import get_logger
 
+from .schemas import EffectiveConfig
+
 log = get_logger(__name__)
 
 
 class RegistryError(Exception):
     """Raised when a repo is not registered in repos.yml."""
-
-
-class EffectiveConfig(BaseModel):
-    """Resolved, per-repo configuration used throughout the review pipeline."""
-
-    repo: str
-    model: str
-    prompt_mode: str
-    prompt_extension: str | None
-    api_key: str
-    github_token: str
 
 
 class ReviewBotConfig:
@@ -189,7 +182,7 @@ def merge_per_repo_config(effective: EffectiveConfig, per_repo_raw: str) -> Effe
 
     prompt_section: dict = data.get("prompt") or {}
     prompt_mode: str = prompt_section.get("mode") or effective.prompt_mode
-    prompt_extension: str | None = prompt_section.get("text") or effective.prompt_extension
+    prompt_extension: str | None = prompt_section.get("extension") or effective.prompt_extension
 
     return EffectiveConfig(
         repo=effective.repo,
