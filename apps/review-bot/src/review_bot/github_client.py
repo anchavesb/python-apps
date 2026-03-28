@@ -58,8 +58,11 @@ def get_github_client() -> httpx.AsyncClient:
 
 
 def _auth_headers(token: str) -> dict[str, str]:
+    token = token.strip()
     if not token:
         log.warning("github_token_missing")
+    else:
+        log.info("github_token_present", length=len(token))
     return {
         "Authorization": f"Bearer {token}",
         "Accept": "application/vnd.github+json",
