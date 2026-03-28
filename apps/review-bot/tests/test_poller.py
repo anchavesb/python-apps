@@ -41,15 +41,13 @@ def _make_effective(token: str = "gh-token") -> MagicMock:
 
 @patch("review_bot.poller.run_review", new_callable=AsyncMock)
 @patch("review_bot.poller.resolve_effective_config")
-@patch("review_bot.poller.get_github_client")
-async def test_new_pr_triggers_full_diff(mock_get_github, mock_resolve, mock_run_review):
+@patch("review_bot.poller.list_open_prs")
+async def test_new_pr_triggers_full_diff(mock_list_prs, mock_resolve, mock_run_review):
     """stored_sha is None → diff_type='full', before_sha=None."""
     effective = _make_effective()
     mock_resolve.return_value = effective
 
-    github = AsyncMock()
-    github.list_open_prs = AsyncMock(return_value=[_pr(1, "abc")])
-    mock_get_github.return_value = github
+    mock_list_prs.return_value = [_pr(1, "abc")]
 
     store = AsyncMock()
     store.get_sha = AsyncMock(return_value=None)
@@ -69,15 +67,13 @@ async def test_new_pr_triggers_full_diff(mock_get_github, mock_resolve, mock_run
 
 @patch("review_bot.poller.run_review", new_callable=AsyncMock)
 @patch("review_bot.poller.resolve_effective_config")
-@patch("review_bot.poller.get_github_client")
-async def test_updated_pr_triggers_incremental_diff_with_correct_shas(mock_get_github, mock_resolve, mock_run_review):
+@patch("review_bot.poller.list_open_prs")
+async def test_updated_pr_triggers_incremental_diff_with_correct_shas(mock_list_prs, mock_resolve, mock_run_review):
     """stored_sha != head_sha → diff_type='incremental', before_sha=stored_sha."""
     effective = _make_effective()
     mock_resolve.return_value = effective
 
-    github = AsyncMock()
-    github.list_open_prs = AsyncMock(return_value=[_pr(2, "new-sha")])
-    mock_get_github.return_value = github
+    mock_list_prs.return_value = [_pr(2, "new-sha")]
 
     store = AsyncMock()
     store.get_sha = AsyncMock(return_value="old-sha")
@@ -97,15 +93,13 @@ async def test_updated_pr_triggers_incremental_diff_with_correct_shas(mock_get_g
 
 @patch("review_bot.poller.run_review", new_callable=AsyncMock)
 @patch("review_bot.poller.resolve_effective_config")
-@patch("review_bot.poller.get_github_client")
-async def test_unchanged_pr_is_skipped(mock_get_github, mock_resolve, mock_run_review):
+@patch("review_bot.poller.list_open_prs")
+async def test_unchanged_pr_is_skipped(mock_list_prs, mock_resolve, mock_run_review):
     """stored_sha == head_sha → no diff fetched, no review posted."""
     effective = _make_effective()
     mock_resolve.return_value = effective
 
-    github = AsyncMock()
-    github.list_open_prs = AsyncMock(return_value=[_pr(3, "same-sha")])
-    mock_get_github.return_value = github
+    mock_list_prs.return_value = [_pr(3, "same-sha")]
 
     store = AsyncMock()
     store.get_sha = AsyncMock(return_value="same-sha")
@@ -119,13 +113,10 @@ async def test_unchanged_pr_is_skipped(mock_get_github, mock_resolve, mock_run_r
 
 @patch("review_bot.poller.run_review", new_callable=AsyncMock)
 @patch("review_bot.poller.resolve_effective_config")
-@patch("review_bot.poller.get_github_client")
-async def test_unregistered_repo_is_logged_and_not_polled(mock_get_github, mock_resolve, mock_run_review):
+@patch("review_bot.poller.list_open_prs")
+async def test_unregistered_repo_is_logged_and_not_polled(mock_list_prs, mock_resolve, mock_run_review):
     """resolve_effective_config raises RegistryError; it's logged and repo skiped."""
     mock_resolve.side_effect = RegistryError("not registered")
-
-    github = AsyncMock()
-    mock_get_github.return_value = github
 
     store = AsyncMock()
     config = MagicMock()
@@ -138,15 +129,13 @@ async def test_unregistered_repo_is_logged_and_not_polled(mock_get_github, mock_
 
 @patch("review_bot.poller.run_review", new_callable=AsyncMock)
 @patch("review_bot.poller.resolve_effective_config")
-@patch("review_bot.poller.get_github_client")
-async def test_llm_failure_is_logged_and_does_not_call_set_sha(mock_get_github, mock_resolve, mock_run_review):
+@patch("review_bot.poller.list_open_prs")
+async def test_llm_failure_is_logged_and_does_not_call_set_sha(mock_list_prs, mock_resolve, mock_run_review):
     """run_review raising means error is logged but SHA update never happens."""
     effective = _make_effective()
     mock_resolve.return_value = effective
 
-    github = AsyncMock()
-    github.list_open_prs = AsyncMock(return_value=[_pr(4, "head")])
-    mock_get_github.return_value = github
+    mock_list_prs.return_value = [_pr(4, "head")]
 
     store = AsyncMock()
     store.get_sha = AsyncMock(return_value=None)
@@ -264,7 +253,6 @@ class TestPollerIntegration:
         import httpx
         import respx
 
-        from review_bot import github_client as ghc
         from review_bot.config import RepoEntry
         from review_bot.github_client import set_github_client
         from review_bot.poller import _poll_repo
@@ -316,27 +304,7 @@ class TestPollerIntegration:
                 # post_review, etc.) use it — respx intercepts its transport.
                 set_github_client(http_client)
 
-                class _Facade:
-                    """Bridges callers that expect method-style GitHub API to module-level functions."""
-
-                    async def list_open_prs(self, owner, repo, token):
-                        return await ghc.list_open_prs(owner, repo, token)
-
-                    async def get_diff(self, owner, repo, pr_number, mode, *, before_sha, after_sha, token):
-                        return await ghc.get_diff(
-                            owner, repo, pr_number, mode, before_sha=before_sha, after_sha=after_sha, token=token
-                        )
-
-                    async def post_review(self, owner, repo, pr_number, result, token):
-                        return await ghc.post_review(owner, repo, pr_number, result, token)
-
-                facade = _Facade()
-
-                with (
-                    patch("review_bot.poller.get_github_client", return_value=facade),
-                    patch("review_bot.review_runner.get_github_client", return_value=facade),
-                    patch("litellm.acompletion", new_callable=AsyncMock, return_value=llm_response),
-                ):
+                with patch("litellm.acompletion", new_callable=AsyncMock, return_value=llm_response):
                     await _poll_repo(RepoEntry(repo=REPO), real_store, MagicMock())
 
         assert review_route.called, "Expected review to be posted to GitHub Reviews API"
