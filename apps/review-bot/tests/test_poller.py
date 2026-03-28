@@ -6,6 +6,7 @@ import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+
 from review_bot.config import RegistryError, RepoEntry
 from review_bot.poller import _poll_repo
 from review_bot.schemas import PRInfo
@@ -262,6 +263,7 @@ class TestPollerIntegration:
 
         import httpx
         import respx
+
         from review_bot import github_client as ghc
         from review_bot.config import RepoEntry
         from review_bot.github_client import set_github_client

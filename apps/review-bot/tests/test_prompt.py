@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import pytest
+
 import review_bot.prompt as prompt_module
 from review_bot.prompt import assemble_prompt, load_base_prompt
 from review_bot.schemas import AgentsFile, EffectiveConfig

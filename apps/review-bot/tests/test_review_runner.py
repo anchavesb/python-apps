@@ -5,6 +5,7 @@ from __future__ import annotations
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+
 import review_bot.review_runner as rr
 from review_bot.review_runner import get_semaphore, init_semaphore, run_review
 from review_bot.schemas import DiffFile, DiffMetadata, InlineComment, ReviewResult

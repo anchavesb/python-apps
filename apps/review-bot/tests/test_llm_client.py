@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import pytest
+
 from review_bot.llm_client import resolve_api_key
 
 

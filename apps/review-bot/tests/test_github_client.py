@@ -12,6 +12,8 @@ from unittest.mock import AsyncMock, MagicMock
 
 import httpx
 import pytest
+from structlog.testing import capture_logs
+
 from review_bot.github_client import (
     fetch_file_contents,
     get_diff,
@@ -21,7 +23,6 @@ from review_bot.github_client import (
     set_github_client,
 )
 from review_bot.schemas import InlineComment, ReviewResult
-from structlog.testing import capture_logs
 
 pytestmark = pytest.mark.anyio
 

@@ -5,6 +5,7 @@ from __future__ import annotations
 import textwrap
 
 import pytest
+
 import review_bot.config as config_module
 from review_bot.config import (
     EffectiveConfig,

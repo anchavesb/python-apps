@@ -6,9 +6,10 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import httpx
 import pytest
-import review_bot.review_runner as rr
 from fastapi import FastAPI
 from httpx import ASGITransport
+
+import review_bot.review_runner as rr
 from review_bot.config import RegistryError
 from review_bot.github_client import set_github_client
 from review_bot.routes import router

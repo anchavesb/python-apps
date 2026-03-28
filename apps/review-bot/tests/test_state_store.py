@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import pytest
+
 from review_bot.state_store import StateStore, get_state_store, set_state_store
 
 pytestmark = pytest.mark.anyio
