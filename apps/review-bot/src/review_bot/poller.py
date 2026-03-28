@@ -31,10 +31,11 @@ async def run_polling_loop() -> None:
         log.info("poll_cycle_start")
 
         for repo_entry in registry.repositories:
+            repo_name = getattr(repo_entry, "repo", str(repo_entry))
             try:
                 await _poll_repo(repo_entry, store, config)
             except Exception:
-                log.exception("poll_repo_error", repo=repo_entry.repo)
+                log.exception("poll_repo_error", repo=repo_name)
 
         elapsed = round(time.monotonic() - cycle_start, 3)
         log.info("poll_cycle_complete", elapsed_seconds=elapsed)
@@ -55,28 +56,29 @@ async def _poll_repo(repo_entry, store, config) -> None:
         Any exception from the GitHub client or review pipeline (caught by caller).
     """
     github = get_github_client()
-    owner, repo_name = repo_entry.repo.split("/", 1)
-    effective = resolve_effective_config(repo_entry.repo)
+    repo_name_full = repo_entry.repo
+    owner, repo_name = repo_name_full.split("/", 1)
+    effective = resolve_effective_config(repo_name_full)
     open_prs = await github.list_open_prs(owner, repo_name, effective.github_token)
 
     review_tasks = []
     for pr in open_prs:
-        stored_sha = await store.get_sha(repo_entry.repo, pr.number)
+        stored_sha = await store.get_sha(repo_name_full, pr.number)
 
         if stored_sha == pr.head_sha:
-            log.debug("pr_skipped_unchanged", repo=repo_entry.repo, pr_number=pr.number, sha=pr.head_sha)
+            log.debug("pr_skipped_unchanged", repo=repo_name_full, pr_number=pr.number, sha=pr.head_sha)
             continue
 
         if stored_sha is None:
             diff_type = "full"
             before_sha = None
-            log.info("pr_detected_new", repo=repo_entry.repo, pr_number=pr.number, head_sha=pr.head_sha)
+            log.info("pr_detected_new", repo=repo_name_full, pr_number=pr.number, head_sha=pr.head_sha)
         else:
             diff_type = "incremental"
             before_sha = stored_sha
             log.info(
                 "pr_detected_updated",
-                repo=repo_entry.repo,
+                repo=repo_name_full,
                 pr_number=pr.number,
                 head_sha=pr.head_sha,
                 before_sha=stored_sha,
@@ -84,7 +86,7 @@ async def _poll_repo(repo_entry, store, config) -> None:
 
         review_tasks.append(
             run_review(
-                repo=repo_entry.repo,
+                repo=repo_name_full,
                 pr_number=pr.number,
                 head_sha=pr.head_sha,
                 diff_type=diff_type,
@@ -93,4 +95,14 @@ async def _poll_repo(repo_entry, store, config) -> None:
         )
 
     if review_tasks:
-        await asyncio.gather(*review_tasks)
+        results = await asyncio.gather(*review_tasks, return_exceptions=True)
+        for i, res in enumerate(results):
+            if isinstance(res, Exception):
+                # Individual PR review failed; log it but don't crash the repo poll
+                log.error(
+                    "pr_review_failed",
+                    repo=repo_name_full,
+                    error=str(res),
+                    exc_info=res,
+                )
+
