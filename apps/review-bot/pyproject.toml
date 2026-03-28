@@ -20,6 +20,13 @@ dependencies = [
     "structlog>=23.0",
 ]
 
+[project.optional-dependencies]
+test = [
+    "pytest>=8.0",
+    "anyio>=4.0",
+    "respx>=0.21",
+]
+
 [project.scripts]
 "review-bot" = "review_bot.__main__:main"
 
