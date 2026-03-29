@@ -21,6 +21,11 @@ async def call_llm(model: str, messages: list[dict], api_key: str) -> str:
         HTTPException(502): on any LiteLLM error.
     """
     start = time.monotonic()
+    if not api_key:
+        log.warning("llm_api_key_missing", model=model)
+    else:
+        log.info("llm_api_key_present", model=model, length=len(api_key))
+
     try:
         response = await litellm.acompletion(
             model=model,
