@@ -11,6 +11,8 @@ from dolores_common.logging import get_logger
 
 log = get_logger(__name__)
 
+litellm.set_verbose = True
+
 
 async def call_llm(model: str, messages: list[dict], api_key: str) -> str:
     """Call the LLM via LiteLLM and return the response text.
