@@ -31,6 +31,10 @@ class AssistantConfig:
     log_level: str = get_env("LOG_LEVEL", "INFO")
     log_format: str = get_env("LOG_FORMAT", "console")
 
+    # Image generation service
+    imagen_url: str = get_env("DOLORES_IMAGEN_URL", "http://localhost:8005")
+    imagen_timeout: int = get_env_int("IMAGEN_TIMEOUT", 300)
+
     # Integrations — JSON array of {name, url, spec_path?, auth?}
     # Example: [{"name":"todo","url":"http://todo:5000","spec_path":"/api/openapi.json"}]
     @property

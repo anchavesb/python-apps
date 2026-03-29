@@ -38,6 +38,20 @@ services:
     volumes:
       - todo-db-data:/var/lib/postgresql/data
 
+  # --- Image Generation ---
+
+  dolores-imagen:
+    build:
+      context: .
+      dockerfile: apps/dolores-imagen/Dockerfile
+    ports:
+      - "8005:8005"
+    environment:
+      - IMAGEN_PROVIDER=flux
+      - DOLORES_SERVICE_PSK=${DOLORES_SERVICE_PSK}
+    volumes:
+      - huggingface-cache:/home/appuser/.cache/huggingface
+
   # --- Frontend ---
 
   dolores-web:
@@ -50,3 +64,4 @@ services:
 
 volumes:
   todo-db-data:
+  huggingface-cache:

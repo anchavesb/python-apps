@@ -1,0 +1,12 @@
+services:
+  dolores-imagen:
+    build:
+      context: .
+      dockerfile: apps/dolores-imagen/Dockerfile.gpu
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]

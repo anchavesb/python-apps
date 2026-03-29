@@ -19,6 +19,9 @@ class BrainConfig:
     anthropic_api_key: str = get_env("ANTHROPIC_API_KEY", "")
     openai_api_key: str = get_env("OPENAI_API_KEY", "")
 
+    # Vision provider for image analysis requests (empty = use default_provider)
+    vision_provider: str = get_env("VISION_PROVIDER", "")
+
     # Defaults
     max_tokens: int = get_env_int("DEFAULT_MAX_TOKENS", 1024)
     temperature: float = float(get_env("DEFAULT_TEMPERATURE", "0.7"))
