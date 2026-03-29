@@ -41,8 +41,14 @@ async def generate_image(
     """Generate image from text prompt. Returns PNG binary."""
     log.info("generate_request", prompt_length=len(req.prompt), width=req.width, height=req.height)
 
-    async with _semaphore:
+    try:
+        await asyncio.wait_for(_semaphore.acquire(), timeout=60.0)
+    except asyncio.TimeoutError:
+        raise HTTPException(status_code=503, detail="GPU busy — try again shortly")
+    try:
         image_bytes = await asyncio.to_thread(provider.generate, req.prompt, req.width, req.height)
+    finally:
+        _semaphore.release()
 
     return Response(content=image_bytes, media_type="image/png")
 

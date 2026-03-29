@@ -251,7 +251,11 @@ class ServiceClient:
         conversation_id: str | None = None,
         provider: str | None = None,
     ) -> AsyncGenerator[dict, None]:
-        """Stream brain response for image analysis via /v1/chat/stream. Yields SSE event dicts."""
+        """Stream brain response for image analysis via /v1/chat/stream. Yields SSE event dicts.
+
+        Handles the analyze_image intent: forwards image + text to the brain service which
+        routes to a vision-capable provider (e.g. gemini-pro-vision, gpt-4o).
+        """
         try:
             body = {
                 "message": text,

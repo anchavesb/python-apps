@@ -7,8 +7,10 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 
 from dolores_common.health import create_health_router
-from dolores_common.logging import setup_logging
+from dolores_common.logging import get_logger, setup_logging
 from dolores_common.middleware import add_common_middleware
+
+log = get_logger(__name__)
 
 from .config import settings
 from .routes import router as imagen_router
@@ -35,7 +37,11 @@ async def lifespan(app: FastAPI):
     setup_logging("dolores-imagen", settings.log_level, json_output=settings.log_format == "json")
 
     _provider = _create_provider()
-    _provider.load()
+    try:
+        _provider.load()
+    except Exception:
+        log.exception("provider_load_failed", provider=_provider.name)
+        raise
     set_provider(_provider)
 
     yield
