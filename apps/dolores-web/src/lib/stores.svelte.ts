@@ -12,6 +12,8 @@ export interface ChatMessage {
   content: string;
   timestamp: Date;
   speakerName?: string;
+  imageUrl?: string;
+  isGeneratedImage?: boolean;
 }
 
 interface AppState {
@@ -108,13 +110,25 @@ function createAppState() {
         state.streamingText += msg.content;
         state.thinking = false;
         break;
-      case 'response.end': {
-        const fullText = msg.full_text || state.streamingText;
+      case 'response.image':
         state.messages = [...state.messages, {
           role: 'assistant',
-          content: fullText,
+          content: '',
           timestamp: new Date(),
+          imageUrl: msg.image_data,
+          isGeneratedImage: true,
         }];
+        state.thinking = false;
+        break;
+      case 'response.end': {
+        const fullText = msg.full_text || state.streamingText;
+        if (fullText) {
+          state.messages = [...state.messages, {
+            role: 'assistant',
+            content: fullText,
+            timestamp: new Date(),
+          }];
+        }
         // Fallback emotion detection if no LLM tag was received
         if (state.emotion === 'neutral') {
           const detected = detectEmotion(fullText);
@@ -231,6 +245,20 @@ function createAppState() {
     client.sendText(text);
   }
 
+  async function sendImageMessage(imageData: string, text: string) {
+    if (!client.connected) return;
+    state.messages = [...state.messages, {
+      role: 'user',
+      content: text || 'Image',
+      timestamp: new Date(),
+      imageUrl: imageData,
+    }];
+    state.streamingText = '';
+    state.thinking = true;
+    state.emotion = 'neutral';
+    client.sendImage(imageData, text);
+  }
+
   let recordingReady: Promise<void> | null = null;
 
   async function startRecording() {
@@ -336,6 +364,7 @@ function createAppState() {
     connect,
     disconnect,
     sendText,
+    sendImageMessage,
     startRecording,
     stopRecording,
     saveSettings,

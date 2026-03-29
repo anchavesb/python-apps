@@ -4,9 +4,11 @@
     content: string;
     streaming?: boolean;
     speakerName?: string;
+    imageUrl?: string;
+    isGeneratedImage?: boolean;
   }
 
-  let { role, content, streaming = false, speakerName }: Props = $props();
+  let { role, content, streaming = false, speakerName, imageUrl, isGeneratedImage = false }: Props = $props();
 </script>
 
 <div class="message {role}" class:streaming>
@@ -16,7 +18,21 @@
       <span class="speaker-badge">{speakerName}</span>
     {/if}
   </div>
-  <div class="message-content">{content}</div>
+  {#if content}
+    <div class="message-content">{content}</div>
+  {/if}
+  {#if imageUrl}
+    <img
+      src={imageUrl}
+      alt={isGeneratedImage ? 'AI-generated artwork' : 'Attached photo'}
+      class="message-image"
+      class:generated={isGeneratedImage}
+      class:user-thumb={!isGeneratedImage}
+    />
+    {#if isGeneratedImage}
+      <a href={imageUrl} download="dolores-generated.png" class="download-link">Download</a>
+    {/if}
+  {/if}
 </div>
 
 <style>
@@ -29,5 +45,33 @@
     background: rgba(100, 149, 237, 0.2);
     color: cornflowerblue;
     vertical-align: middle;
+  }
+
+  .message-image {
+    display: block;
+    margin-top: 8px;
+    border-radius: 6px;
+  }
+
+  .user-thumb {
+    max-width: 200px;
+    max-height: 200px;
+    object-fit: cover;
+  }
+
+  .generated {
+    max-width: 100%;
+  }
+
+  .download-link {
+    display: inline-block;
+    margin-top: 6px;
+    font-size: 0.8em;
+    color: cornflowerblue;
+    text-decoration: underline;
+  }
+
+  .download-link:hover {
+    color: #89b4fa;
   }
 </style>

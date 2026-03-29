@@ -24,6 +24,7 @@ graph TB
         STT[dolores-stt\nfaster-whisper :8001]
         TTS[dolores-tts\nCoqui/F5/Piper :8002]
         BRAIN[dolores-brain\nLiteLLM :8003]
+        IMAGEN[dolores-imagen\ndiffusers :8005]
     end
 
     subgraph K8s["Kubernetes Cluster (cluster-internal only)"]
@@ -46,6 +47,7 @@ graph TB
     ASST -->|POST text| BRAIN
     ASST -->|POST text| TTS
     ASST -->|OpenAPI dispatch| TODO
+    ASST -->|POST /v1/generate| IMAGEN
     TODO --- TODODB
 
     BRAIN -->|LiteLLM| OLLAMA
@@ -136,6 +138,7 @@ sequenceDiagram
 | dolores-tts | 8002 | FastAPI (REST) |
 | dolores-brain | 8003 | FastAPI (REST + SSE) |
 | review-bot | 8004 | FastAPI (REST) — cluster-internal only |
+| dolores-imagen | 8005 | FastAPI (REST) |
 | todo | 5000 | Flask (REST + Web UI) |
 | dolores-web | 8080 | Nginx serving Svelte SPA |
 | ollama | 11434 | LLM inference |
@@ -171,6 +174,7 @@ OIDC access token flows from browser → WebSocket `session.start` → `current_
 | GitHub Actions + GHCR | CI: test, build, push Docker images | Workflow automation |
 | Capacitor | iOS/Android wrapper for dolores-web | Mobile native bridge |
 | Authentik | OIDC provider for todo app (optional) | OAuth2/OIDC |
+| FLUX / diffusers (HuggingFace) | Local image generation via dolores-imagen; supports FLUX.1-schnell and Stable Diffusion on Apple MPS and NVIDIA CUDA | Local Python library (dolores-imagen) |
 
 ---
 

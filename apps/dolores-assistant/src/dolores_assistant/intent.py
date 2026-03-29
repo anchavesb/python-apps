@@ -64,6 +64,23 @@ INTENT_EXAMPLES: dict[str, tuple[set[str], list[str]]] = {
         "delete that work entry",
         "update my work log",
     ]),
+    "generate_image": ({"generate_image"}, [
+        "generate an image",
+        "create an image",
+        "make a picture",
+        "draw me a",
+        "generate a photo of",
+        "create a picture of",
+        "make an image of",
+        "draw a picture",
+        "generate artwork",
+        "create artwork",
+        "paint a picture",
+        "illustrate this",
+        "generate a landscape",
+        "make a portrait of",
+        "create a visual of",
+    ]),
 }
 
 CONFIDENCE_THRESHOLD = 0.45

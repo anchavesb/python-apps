@@ -5,6 +5,7 @@ export type MessageEvent =
   | { type: 'response.emotion'; emotion: string }
   | { type: 'response.text'; content: string }
   | { type: 'response.end'; full_text: string }
+  | { type: 'response.image'; image_data: string; prompt: string }
   | { type: 'error'; code: string; message: string };
 
 export interface SpeakerProfile {
@@ -79,6 +80,11 @@ export class DoloresClient {
   sendText(text: string): void {
     if (!this.ws) throw new Error('Not connected');
     this.ws.send(JSON.stringify({ type: 'text.send', text }));
+  }
+
+  sendImage(imageData: string, text: string): void {
+    if (!this.ws) throw new Error('Not connected');
+    this.ws.send(JSON.stringify({ type: 'image.send', image_data: imageData, text }));
   }
 
   sendAudioStart(): void {

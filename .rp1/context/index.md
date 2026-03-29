@@ -3,7 +3,7 @@
 **Type**: Monorepo
 **Languages**: Python, TypeScript, Svelte
 **Updated**: 2026-03-24
-**Projects**: 10 (dolores-assistant, dolores-brain, dolores-cli, dolores-stt, dolores-tts, dolores-web, todo, portfolio, dolores-common, review-bot)
+**Projects**: 11 (dolores-assistant, dolores-brain, dolores-cli, dolores-stt, dolores-tts, dolores-web, dolores-imagen, todo, portfolio, dolores-common, review-bot)
 
 ## Project Summary
 
@@ -31,6 +31,7 @@
 | portfolio | Static personal portfolio site | HTML/JS | `src/index.html` |
 | dolores-common | Shared FastAPI utilities (auth, health, logging) | Python | library |
 | review-bot | Automated PR review bot via GitHub API polling + LLM | Python | `main.py` :8004 |
+| dolores-imagen | AI image generation service; pluggable diffusion provider (FLUX/SD); MPS + CUDA support | Python | `main.py` :8005 |
 
 ## KB File Manifest
 

@@ -45,6 +45,16 @@ DEFAULT_SYSTEM_PROMPT = (
 )
 
 
+def _build_user_content(message: str, image_data: str | None) -> list[dict] | str:
+    """Return a LiteLLM-compatible content structure for a user message with optional image."""
+    if not image_data:
+        return message
+    return [
+        {"type": "text", "text": message},
+        {"type": "image_url", "image_url": {"url": image_data}},
+    ]
+
+
 def _trim_history(messages: list[dict], max_messages: int) -> list[dict]:
     """Keep system prompt + last N messages to avoid unbounded context growth."""
     if len(messages) <= max_messages:
@@ -75,8 +85,9 @@ async def chat(
     """Non-streaming chat completion."""
     start = time.monotonic()
 
-    model_str = resolve_model(req.provider, req.model)
-    provider = req.provider or settings.default_provider
+    vision_override = settings.vision_provider if (req.image_data and settings.vision_provider) else None
+    model_str = resolve_model(req.provider, req.model, vision_override)
+    provider = vision_override or req.provider or settings.default_provider
 
     # Get or create conversation
     conv_id = req.conversation_id
@@ -91,9 +102,10 @@ async def chat(
     if not messages or messages[0].get("role") != "system":
         messages.insert(0, {"role": "system", "content": system_prompt})
 
-    # Append user message
-    messages.append({"role": "user", "content": req.message})
-    await store.append(conv_id, "user", req.message)
+    user_content = _build_user_content(req.message, req.image_data)
+    content_to_store = json.dumps(user_content) if isinstance(user_content, list) else user_content
+    messages.append({"role": "user", "content": user_content})
+    await store.append(conv_id, "user", content_to_store)
 
     # Trim to sliding window to avoid unbounded context growth
     messages = _trim_history(messages, settings.max_history_messages)
@@ -170,8 +182,9 @@ async def chat_stream(
     store: ConversationStore = Depends(get_store),
 ) -> StreamingResponse:
     """Streaming chat completion via SSE."""
-    model_str = resolve_model(req.provider, req.model)
-    provider = req.provider or settings.default_provider
+    vision_override = settings.vision_provider if (req.image_data and settings.vision_provider) else None
+    model_str = resolve_model(req.provider, req.model, vision_override)
+    provider = vision_override or req.provider or settings.default_provider
 
     # Get or create conversation
     conv_id = req.conversation_id
@@ -185,8 +198,10 @@ async def chat_stream(
     if not messages or messages[0].get("role") != "system":
         messages.insert(0, {"role": "system", "content": system_prompt})
 
-    messages.append({"role": "user", "content": req.message})
-    await store.append(conv_id, "user", req.message)
+    user_content = _build_user_content(req.message, req.image_data)
+    content_to_store = json.dumps(user_content) if isinstance(user_content, list) else user_content
+    messages.append({"role": "user", "content": user_content})
+    await store.append(conv_id, "user", content_to_store)
 
     # Trim to sliding window to avoid unbounded context growth
     messages = _trim_history(messages, settings.max_history_messages)

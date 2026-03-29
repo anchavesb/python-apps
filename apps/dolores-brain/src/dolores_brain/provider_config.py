@@ -58,12 +58,13 @@ def setup_providers() -> dict[str, dict]:
     return PROVIDERS
 
 
-def resolve_model(provider: str | None, model: str | None) -> str:
+def resolve_model(provider: str | None, model: str | None, vision_provider: str | None = None) -> str:
     """Resolve the LiteLLM model string from provider/model inputs.
 
+    When vision_provider is given and non-empty it overrides provider for model resolution.
     Returns the model string LiteLLM expects (e.g. "ollama/llama3.2", "claude-sonnet-4-20250514").
     """
-    provider = provider or settings.default_provider
+    provider = (vision_provider if vision_provider else None) or provider or settings.default_provider
     prov_info = PROVIDERS.get(provider)
 
     if not prov_info:
