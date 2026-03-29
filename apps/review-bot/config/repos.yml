@@ -10,7 +10,7 @@
 #     model: Per-repo model override (string, optional). Overrides defaults.model for this repo.
 
 defaults:
-  model: "gemini/gemini-1.5-flash-002"
+  model: "gemini/gemini-1.5-flash"
 
 repositories:
   - repo: "anchavesb/python-apps"
