@@ -10,11 +10,11 @@ from dolores_common.health import create_health_router
 from dolores_common.logging import get_logger, setup_logging
 from dolores_common.middleware import add_common_middleware
 
-log = get_logger(__name__)
-
 from .config import settings
 from .routes import router as imagen_router
 from .routes import set_provider
+
+log = get_logger(__name__)
 
 _provider = None
 
