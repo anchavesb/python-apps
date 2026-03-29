@@ -29,17 +29,21 @@ async def call_llm(model: str, messages: list[dict], api_key: str) -> str:
         log.info("llm_api_key_present", model=model, length=len(api_key))
 
     # For Gemini models, we explicitly target the stable v1 endpoint to avoid 404s
-    # found on the default v1beta endpoint.
+    # found on the default v1beta endpoint. We strip the 'gemini/' prefix to
+    # prevent LiteLLM's prefix-based dispatcher from overriding our base_url.
     base_url = None
+    actual_model = model
     if model.startswith("gemini/"):
         base_url = "https://generativelanguage.googleapis.com/v1"
+        actual_model = model.split("/", 1)[1]
 
     try:
         response = await litellm.acompletion(
-            model=model,
+            model=actual_model,
             messages=messages,
             api_key=api_key,
             base_url=base_url,
+            custom_llm_provider="gemini",
             response_format={"type": "json_object"},
         )
         elapsed = round(time.monotonic() - start, 3)
