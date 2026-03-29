@@ -30,15 +30,19 @@ async def call_llm(model: str, messages: list[dict], api_key: str) -> str:
 
     # If the model uses the 'gemini/' prefix, ensure we force the 'gemini' provider
     # (Google AI Studio) and use the stable v1 API to avoid 404s.
+    # We remove the prefix when passing to acompletion to prevent LiteLLM's
+    # internal prefix-based dispatch from overriding our parameters.
     custom_provider = None
     api_version = None
+    actual_model = model
     if model.startswith("gemini/"):
         custom_provider = "gemini"
         api_version = "v1"
+        actual_model = model.split("/", 1)[1]
 
     try:
         response = await litellm.acompletion(
-            model=model,
+            model=actual_model,
             messages=messages,
             api_key=api_key,
             custom_llm_provider=custom_provider,
