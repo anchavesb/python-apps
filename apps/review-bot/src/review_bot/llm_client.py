@@ -29,8 +29,12 @@ async def call_llm(model: str, messages: list[dict], api_key: str) -> str:
         log.info("llm_api_key_present", model=model, length=len(api_key))
 
     # If the model uses the 'gemini/' prefix, ensure we force the 'gemini' provider
-    # (Google AI Studio) to avoid LiteLLM incorrectly routing to Vertex AI.
-    custom_provider = "gemini" if model.startswith("gemini/") else None
+    # (Google AI Studio) and use the stable v1 API to avoid 404s.
+    custom_provider = None
+    api_version = None
+    if model.startswith("gemini/"):
+        custom_provider = "gemini"
+        api_version = "v1"
 
     try:
         response = await litellm.acompletion(
@@ -38,6 +42,7 @@ async def call_llm(model: str, messages: list[dict], api_key: str) -> str:
             messages=messages,
             api_key=api_key,
             custom_llm_provider=custom_provider,
+            api_version=api_version,
             response_format={"type": "json_object"},
         )
         elapsed = round(time.monotonic() - start, 3)
