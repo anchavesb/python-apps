@@ -4,8 +4,11 @@ from __future__ import annotations
 
 import os
 
+from dolores_common.logging import get_logger
+
 from .schemas import AgentsFile, EffectiveConfig
 
+log = get_logger(__name__)
 _base_prompt: str = ""
 
 
@@ -49,10 +52,15 @@ def assemble_prompt(
         user_content_parts.append("\n".join(agents_block_lines))
 
     user_content_parts.append(diff_text)
+    user_content = "\n\n".join(user_content_parts)
+
+    # Log estimated token count (rough heuristic: 4 chars per token)
+    total_chars = len(active_prompt) + len(user_content)
+    log.info("prompt_assembled", repo=config.repo, estimated_tokens=total_chars // 4, char_count=total_chars)
 
     return [
         {"role": "system", "content": active_prompt},
-        {"role": "user", "content": "\n\n".join(user_content_parts)},
+        {"role": "user", "content": user_content},
     ]
 
 
