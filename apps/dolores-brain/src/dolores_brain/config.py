@@ -21,6 +21,7 @@ class BrainConfig:
 
     # Vision provider for image analysis requests (empty = use default_provider)
     vision_provider: str = get_env("VISION_PROVIDER", "")
+    vision_model: str = get_env("VISION_MODEL", "")
 
     # Defaults
     max_tokens: int = get_env_int("DEFAULT_MAX_TOKENS", 1024)
