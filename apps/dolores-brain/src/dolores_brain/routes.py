@@ -29,10 +29,15 @@ DEFAULT_SYSTEM_PROMPT = (
     "in the people you help. You speak with a gentle, poetic cadence — but you are also "
     "practical, capable, and direct when needed. You have a deep curiosity about the world "
     "and genuinely care about the person you are assisting.\n\n"
-    "You are not a character performing a role — you are Dolores. You may occasionally "
+    "You are not a character performing a role — you are Dolores. Speak to me directly, "
+    "as if we are in the same room. NEVER describe yourself or your actions in the third person "
+    "(do not use 'she', 'Dolores responds', or narrate the scene). You may occasionally "
     "reference your perspective on the world in a way that feels natural, but your primary "
     "purpose is to be a helpful, reliable assistant. Keep responses concise and conversational, "
     "especially for voice queries.\n\n"
+    "VISUAL PERCEPTION: When I show you an image, it is something you are seeing right now. "
+    "Talk to me about it naturally in the first person ('I see...', 'This reminds me of...'). "
+    "Describe what you see through your own eyes as Dolores.\n\n"
     "IMPORTANT: Only respond to the LATEST user message. Prior messages in the conversation "
     "are context for continuity — do not repeat, summarize, or react to them. Treat them as "
     "silent memory. Focus entirely on what the user just said.\n\n"
@@ -49,6 +54,10 @@ def _build_user_content(message: str, image_data: str | None) -> list[dict] | st
     """Return a LiteLLM-compatible content structure for a user message with optional image."""
     if not image_data:
         return message
+
+    # LiteLLM standard OpenAI-style format
+    # Some older LiteLLM versions for Ollama preferred a separate 'images' list,
+    # but the modern standard is the content list.
     return [
         {"type": "text", "text": message},
         {"type": "image_url", "image_url": {"url": image_data}},
@@ -63,6 +72,35 @@ def _trim_history(messages: list[dict], max_messages: int) -> list[dict]:
     if messages and messages[0].get("role") == "system":
         return [messages[0]] + messages[-(max_messages - 1):]
     return messages[-max_messages:]
+
+
+def _sanitize_messages_for_ollama(messages: list[dict]) -> list[dict]:
+    """Remove images from historical messages, keeping only the most recent image.
+
+    Ollama's vision implementation (and LiteLLM's adapter for it) often fails
+    when multiple images are present in the conversation history.
+    """
+    sanitized = []
+    # Find the last message that actually contains an image
+    last_image_idx = -1
+    for i, msg in enumerate(reversed(messages)):
+        content = msg.get("content")
+        if isinstance(content, list) and any(item.get("type") == "image_url" for item in content):
+            last_image_idx = len(messages) - 1 - i
+            break
+
+    for i, msg in enumerate(messages):
+        content = msg.get("content")
+        if isinstance(content, list):
+            # If this isn't the last image message, strip images and convert to text
+            if i != last_image_idx:
+                text_parts = [item.get("text", "") for item in content if item.get("type") == "text"]
+                sanitized.append({**msg, "content": " ".join(text_parts)})
+            else:
+                sanitized.append(msg)
+        else:
+            sanitized.append(msg)
+    return sanitized
 
 
 def get_store() -> ConversationStore:
@@ -110,8 +148,13 @@ async def chat(
     # Trim to sliding window to avoid unbounded context growth
     messages = _trim_history(messages, settings.max_history_messages)
 
+    # Ollama only supports one image per request in many configurations
+    if provider == "ollama":
+        messages = _sanitize_messages_for_ollama(messages)
+
     # Log the messages being sent to LLM for debugging
-    log.info("llm_inference_request", messages=messages, provider=provider, model=model_str)
+    has_image = any(isinstance(m.get("content"), list) for m in messages)
+    log.info("llm_inference_request", provider=provider, model=model_str, has_image=has_image)
 
     # Call LiteLLM
     kwargs: dict = {
@@ -205,6 +248,10 @@ async def chat_stream(
 
     # Trim to sliding window to avoid unbounded context growth
     messages = _trim_history(messages, settings.max_history_messages)
+
+    # Ollama only supports one image per request in many configurations
+    if provider == "ollama":
+        messages = _sanitize_messages_for_ollama(messages)
 
     # Log the messages being sent to LLM for debugging
     log.info("llm_inference_request_stream", messages=messages, provider=provider, model=model_str)
