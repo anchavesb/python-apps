@@ -68,6 +68,15 @@ def set_service_client(client: ServiceClient) -> None:
     _service_client = client
 
 
+@router.get("/settings")
+async def get_backend_settings():
+    """Expose backend defaults to frontend."""
+    return {
+        "default_provider": settings.default_provider,
+        "default_voice_id": settings.default_voice_id,
+    }
+
+
 @router.post("/chat", response_model=TextChatResponse)
 async def text_chat(
     req: TextChatRequest,
