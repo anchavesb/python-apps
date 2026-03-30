@@ -38,6 +38,21 @@ class CoquiXTTSEngine(TTSEngine):
 
     def load(self) -> None:
         """Load XTTS v2 model."""
+        # Monkeypatch transformers for coqui-tts compatibility if needed
+        import transformers.pytorch_utils
+        if not hasattr(transformers.pytorch_utils, "isin_mps_friendly"):
+            # Older coqui-tts (tortoise layer) expects this in transformers.pytorch_utils
+            # It was removed in newer transformers versions.
+            def isin_mps_friendly(elements, tensor):
+                import torch
+                return torch.isin(elements, tensor)
+            transformers.pytorch_utils.isin_mps_friendly = isin_mps_friendly
+
+        import transformers.utils.import_utils
+        if not hasattr(transformers.utils.import_utils, "is_torchcodec_available"):
+            # Some versions of coqui-tts expect this
+            transformers.utils.import_utils.is_torchcodec_available = lambda: False
+
         from TTS.api import TTS
 
         log.info("loading_tts_model", engine="coqui_xtts", device=self._device)
