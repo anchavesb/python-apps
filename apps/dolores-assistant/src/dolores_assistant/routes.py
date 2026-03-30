@@ -45,7 +45,7 @@ def inject_speaker_context(
     if confidence >= threshold and SPEAKER_NAME_RE.match(name):
         log.info("speaker_id_applied", name=name, confidence=confidence)
         return f"[Speaker: {name}] {user_text}"
-    
+
     if confidence < threshold:
         log.info("speaker_id_low_confidence", name=name, confidence=confidence, threshold=threshold)
     elif not SPEAKER_NAME_RE.match(name):
