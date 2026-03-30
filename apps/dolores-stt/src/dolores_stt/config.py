@@ -21,7 +21,7 @@ class STTConfig:
     # Speaker identification
     speaker_id_enabled: bool = get_env("SPEAKER_ID_ENABLED", "0") == "1"
     speaker_db_path: str = get_env("SPEAKER_DB_PATH", "data/speakers.db")
-    speaker_threshold: float = float(get_env("SPEAKER_THRESHOLD", "0.85"))
+    speaker_threshold: float = float(get_env("SPEAKER_THRESHOLD", "0.70"))
 
 
 settings = STTConfig()

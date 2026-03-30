@@ -111,7 +111,12 @@ async def identify_speaker(
     content_type = (file.content_type or "audio/webm").split(";")[0].strip()
     log.info("identify_request", content_type=content_type, size_bytes=len(audio_data))
 
-    result = await asyncio.to_thread(identifier.identify, audio_data, content_type)
+    try:
+        result = await asyncio.to_thread(identifier.identify, audio_data, content_type)
+    except Exception as e:
+        log.exception("identify_error", error=str(e))
+        raise HTTPException(status_code=500, detail=f"Speaker identification failed: {str(e)}")
+
     return IdentifyResponse(**result)
 
 

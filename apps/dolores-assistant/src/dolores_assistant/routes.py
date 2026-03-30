@@ -23,7 +23,7 @@ from .tools.registry import get_tool_definitions
 
 SPEAKER_NAME_RE = re.compile(r"^[a-zA-Z0-9 ]{1,32}$")
 
-_SPEAKER_CONFIDENCE_THRESHOLD = 0.85
+_SPEAKER_CONFIDENCE_THRESHOLD = 0.70
 
 log = get_logger(__name__)
 
@@ -43,7 +43,13 @@ def inject_speaker_context(
     name = speaker_result["speaker_name"]
     confidence = speaker_result.get("confidence", 0)
     if confidence >= threshold and SPEAKER_NAME_RE.match(name):
+        log.info("speaker_id_applied", name=name, confidence=confidence)
         return f"[Speaker: {name}] {user_text}"
+
+    if confidence < threshold:
+        log.info("speaker_id_low_confidence", name=name, confidence=confidence, threshold=threshold)
+    elif not SPEAKER_NAME_RE.match(name):
+        log.warning("speaker_id_invalid_name", name=name)
     return user_text
 
 router = APIRouter(prefix="/v1", tags=["assistant"])
@@ -276,6 +282,10 @@ async def conversation_ws(websocket: WebSocket) -> None:
         # Main message loop
         while True:
             message = await websocket.receive()
+
+            if message["type"] == "websocket.disconnect":
+                log.info("ws_client_disconnected", session_id=session_id)
+                break
 
             if "bytes" in message:
                 # Accumulate audio chunks

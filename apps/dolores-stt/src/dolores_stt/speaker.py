@@ -50,6 +50,15 @@ def _convert_to_wav(audio_data: bytes, content_type: str) -> Path:
             timeout=30,
         )
         return out_path
+    except subprocess.CalledProcessError as e:
+        stderr = e.stderr.decode() if e.stderr else "no stderr"
+        stdout = e.stdout.decode() if e.stdout else "no stdout"
+        log.error("ffmpeg_failed", exit_code=e.returncode, stderr=stderr, stdout=stdout)
+        out_path.unlink(missing_ok=True)
+        raise
+    except Exception:
+        out_path.unlink(missing_ok=True)
+        raise
     finally:
         in_path.unlink(missing_ok=True)
 
@@ -101,11 +110,13 @@ class SpeakerIdentifier:
         """
         wav_path = _convert_to_wav(audio_data, content_type)
         try:
+            log.info("extracting_embedding", wav_path=str(wav_path))
             embedding = self.extract_embedding(wav_path)
         finally:
             wav_path.unlink(missing_ok=True)
 
         profiles = self.store.list_with_embeddings()
+        log.info("matching_profiles", count=len(profiles))
         if not profiles:
             return {"speaker_id": None, "speaker_name": None, "confidence": 0.0}
 
@@ -118,9 +129,12 @@ class SpeakerIdentifier:
             if score > best_score:
                 best_id, best_name, best_score = p["id"], p["name"], score
 
-        if best_score >= self.threshold:
-            return {"speaker_id": best_id, "speaker_name": best_name, "confidence": best_score}
-        return {"speaker_id": None, "speaker_name": None, "confidence": best_score}
+        log.info("identification_result", speaker_name=best_name, confidence=best_score)
+        return {
+            "speaker_id": best_id,
+            "speaker_name": best_name,
+            "confidence": best_score,
+        }
 
     def enroll(
         self,
