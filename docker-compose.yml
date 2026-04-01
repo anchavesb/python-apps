@@ -12,7 +12,7 @@ services:
       - DOLORES_STT_URL=http://host.docker.internal:8001 # Native STT
       - DOLORES_TTS_URL=http://host.docker.internal:8002 # Native TTS
       - DOLORES_BRAIN_URL=http://host.docker.internal:8003 # Native Brain
-      - DOLORES_IMAGEN_URL=http://dolores-imagen:8005 # Native Imagen (within Docker)
+      - DOLORES_IMAGEN_URL=http://host.docker.internal:8005 # Native Imagen (Bare Metal)
       - DOLORES_INTEGRATIONS=[{"name":"todo","url":"http://todo:5000","spec_path":"/v1/openapi.json"}]
       - LOG_LEVEL=INFO
     extra_hosts:
