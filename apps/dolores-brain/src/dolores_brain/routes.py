@@ -85,17 +85,29 @@ def _sanitize_messages_for_ollama(messages: list[dict]) -> list[dict]:
     last_image_idx = -1
     for i, msg in enumerate(reversed(messages)):
         content = msg.get("content")
-        if isinstance(content, list) and any(item.get("type") == "image_url" for item in content):
+        has_image = False
+        if isinstance(content, list):
+            has_image = any(item.get("type") == "image_url" for item in content)
+        elif isinstance(content, dict):
+            has_image = content.get("type") == "image_url"
+        
+        if has_image:
             last_image_idx = len(messages) - 1 - i
             break
 
     for i, msg in enumerate(messages):
         content = msg.get("content")
-        if isinstance(content, list):
-            # If this isn't the last image message, strip images and convert to text
-            if i != last_image_idx:
+        # If this isn't the last image message, strip images and convert to text
+        if i != last_image_idx:
+            if isinstance(content, list):
                 text_parts = [item.get("text", "") for item in content if item.get("type") == "text"]
                 sanitized.append({**msg, "content": " ".join(text_parts)})
+            elif isinstance(content, dict):
+                if content.get("type") == "image_url":
+                    # Convert single image object to text if it's not the last one
+                    sanitized.append({**msg, "content": content.get("text", "")})
+                else:
+                    sanitized.append(msg)
             else:
                 sanitized.append(msg)
         else:
