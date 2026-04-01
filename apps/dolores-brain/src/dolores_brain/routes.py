@@ -90,7 +90,7 @@ def _sanitize_messages_for_ollama(messages: list[dict]) -> list[dict]:
             has_image = any(item.get("type") == "image_url" for item in content)
         elif isinstance(content, dict):
             has_image = content.get("type") == "image_url"
-        
+
         if has_image:
             last_image_idx = len(messages) - 1 - i
             break

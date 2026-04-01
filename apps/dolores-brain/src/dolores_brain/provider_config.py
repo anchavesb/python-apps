@@ -81,7 +81,7 @@ def resolve_model(provider: str | None, model: str | None, vision_provider: str 
         model = settings.vision_model
     else:
         model = model or prov_info["default_model"]
-    
+
     prefix = prov_info["prefix"]
 
     # Add prefix if needed (ollama requires "ollama/" prefix for LiteLLM)
