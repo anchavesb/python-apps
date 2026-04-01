@@ -37,8 +37,8 @@ class FLUXProvider(ImageGenProvider):
             dtype = torch.bfloat16
         elif torch.backends.mps.is_available():
             device = torch.device("mps")
-            # float16 is generally faster than bfloat16 on most Metal GPUs
-            dtype = torch.float16
+            # bfloat16 is required for FLUX on MPS to avoid NaNs (black images)
+            dtype = torch.bfloat16
         else:
             device = torch.device("cpu")
             dtype = torch.float32
