@@ -282,12 +282,12 @@ class ServiceClient:
 
     # --- Image generation ---
 
-    async def generate_image(self, prompt: str) -> bytes | None:
+    async def generate_image(self, prompt: str, width: int = 512, height: int = 512) -> bytes | None:
         """Call dolores-imagen /v1/generate. Returns PNG bytes or None on failure."""
         try:
             resp = await self.client.post(
                 f"{settings.imagen_url}/v1/generate",
-                json={"prompt": prompt},
+                json={"prompt": prompt, "width": width, "height": height},
                 timeout=settings.imagen_timeout,
             )
             resp.raise_for_status()
