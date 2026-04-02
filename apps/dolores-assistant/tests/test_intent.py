@@ -16,11 +16,11 @@ def _reset_intent_state():
     """Reset global state between tests."""
     original_session = intent._session
     original_tokenizer = intent._tokenizer
-    original_centroids = intent._intent_centroids
+    original_embeddings = intent._intent_examples_embeddings
     yield
     intent._session = original_session
     intent._tokenizer = original_tokenizer
-    intent._intent_centroids = original_centroids
+    intent._intent_examples_embeddings = original_embeddings
 
 
 class TestIntentExamples:
@@ -48,19 +48,22 @@ class TestIntentExamples:
 class TestClassifyIntent:
     """Test classify_intent with mocked embeddings."""
 
-    def _setup_mock_centroids(self):
-        """Set up mock centroids where each intent maps to a unit vector direction."""
+    def _setup_mock_embeddings(self):
+        """Set up mock example embeddings where each intent maps to a unit vector direction.
+
+        Each intent gets 3 identical example embeddings so kNN top-K mean equals the vector.
+        """
         intent._session = MagicMock()  # Pretend model is loaded
         intent._tokenizer = MagicMock()
-        intent._intent_centroids = {
-            "todo": np.array([1.0, 0.0, 0.0]),
-            "note": np.array([0.0, 1.0, 0.0]),
-            "work": np.array([0.0, 0.0, 1.0]),
+        intent._intent_examples_embeddings = {
+            "todo": np.array([[1.0, 0.0, 0.0]] * 3),
+            "note": np.array([[0.0, 1.0, 0.0]] * 3),
+            "work": np.array([[0.0, 0.0, 1.0]] * 3),
         }
 
     @patch.object(intent, "_encode")
     def test_high_confidence_todo(self, mock_encode):
-        self._setup_mock_centroids()
+        self._setup_mock_embeddings()
         # Return embedding close to "todo" centroid
         mock_encode.return_value = np.array([[0.95, 0.1, 0.05]])
         name, tool_filter, score = intent.classify_intent("show my todos")
@@ -70,7 +73,7 @@ class TestClassifyIntent:
 
     @patch.object(intent, "_encode")
     def test_high_confidence_note(self, mock_encode):
-        self._setup_mock_centroids()
+        self._setup_mock_embeddings()
         mock_encode.return_value = np.array([[0.05, 0.95, 0.1]])
         name, tool_filter, score = intent.classify_intent("save a note")
         assert name == "note"
@@ -78,7 +81,7 @@ class TestClassifyIntent:
 
     @patch.object(intent, "_encode")
     def test_high_confidence_work(self, mock_encode):
-        self._setup_mock_centroids()
+        self._setup_mock_embeddings()
         mock_encode.return_value = np.array([[0.05, 0.1, 0.95]])
         name, tool_filter, score = intent.classify_intent("log my hours")
         assert name == "work"
@@ -86,7 +89,7 @@ class TestClassifyIntent:
 
     @patch.object(intent, "_encode")
     def test_below_threshold_returns_none(self, mock_encode):
-        self._setup_mock_centroids()
+        self._setup_mock_embeddings()
         # Embedding far from all centroids
         mock_encode.return_value = np.array([[0.3, 0.3, 0.3]])
         name, tool_filter, score = intent.classify_intent("what's the weather")
@@ -96,7 +99,7 @@ class TestClassifyIntent:
 
     @patch.object(intent, "_encode")
     def test_returns_best_match(self, mock_encode):
-        self._setup_mock_centroids()
+        self._setup_mock_embeddings()
         # Slightly closer to note than todo
         mock_encode.return_value = np.array([[0.4, 0.6, 0.1]])
         name, _, _ = intent.classify_intent("write something down")
