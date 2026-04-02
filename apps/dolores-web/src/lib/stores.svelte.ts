@@ -39,6 +39,7 @@ interface AppState {
   userToken: string;
   voiceId: string;
   provider: string;
+  ttsEnabled: boolean;
   audioPlaying: boolean;
   emotion: AvatarEmotion;
   viewMode: 'chat' | 'avatar';
@@ -73,6 +74,7 @@ function createAppState() {
     userToken: auth?.accessToken || '',
     voiceId: saved.voiceId || 'default',
     provider: saved.provider || 'ollama',
+    ttsEnabled: saved.ttsEnabled !== false,
     audioPlaying: false,
     emotion: 'neutral',
     viewMode: (saved.viewMode as 'chat' | 'avatar') || 'chat',
@@ -251,7 +253,7 @@ function createAppState() {
         apiKey: state.apiKey,
         voiceId: state.voiceId,
         provider: state.provider,
-        mode: 'both',
+        mode: state.ttsEnabled ? 'both' : 'text',
         conversationId: state.conversationId || undefined,
         userToken: state.userToken || undefined,
       });
@@ -338,7 +340,19 @@ function createAppState() {
       conversationId: state.conversationId,
       oidcIssuer: state.oidcIssuer,
       oidcClientId: state.oidcClientId,
+      ttsEnabled: state.ttsEnabled,
     }));
+  }
+
+  function toggleTts() {
+    state.ttsEnabled = !state.ttsEnabled;
+    if (state.ttsEnabled) {
+      client.updateMode('both');
+    } else {
+      player.stop();
+      client.updateMode('text');
+    }
+    saveSettings();
   }
 
   function setViewMode(mode: 'chat' | 'avatar') {
@@ -408,6 +422,7 @@ function createAppState() {
     oidcLogin,
     oidcLogout,
     oidcHandleCallback,
+    toggleTts,
     stopAudio: () => player.stop(),
   };
 }

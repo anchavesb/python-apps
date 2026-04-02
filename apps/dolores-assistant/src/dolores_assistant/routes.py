@@ -381,6 +381,12 @@ async def conversation_ws(websocket: WebSocket) -> None:
                     websocket, client, brain_text, conversation_id, provider, voice_id, mode
                 )
 
+            elif msg_type == "session.update":
+                if "mode" in data:
+                    mode = data["mode"]
+                    log.info("session_mode_updated", session_id=session_id, mode=mode)
+                continue
+
             elif msg_type == "session.update_token":
                 new_token = data.get("user_token")
                 _cv_token = current_user_token.set(new_token)
