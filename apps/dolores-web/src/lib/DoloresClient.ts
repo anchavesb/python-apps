@@ -107,6 +107,11 @@ export class DoloresClient {
     this.ws.send(JSON.stringify({ type: 'session.update_token', user_token: userToken }));
   }
 
+  updateMode(mode: 'voice' | 'text' | 'both'): void {
+    if (!this.ws) return;
+    this.ws.send(JSON.stringify({ type: 'session.update', mode }));
+  }
+
   disconnect(): void {
     if (this.ws) {
       try {
