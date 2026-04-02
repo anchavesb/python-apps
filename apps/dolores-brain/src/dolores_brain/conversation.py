@@ -109,7 +109,7 @@ class ConversationStore:
         for role, content, tool_call_id, tool_calls_json in rows:
             try:
                 parsed = json.loads(content)
-                actual_content: list | str = parsed if isinstance(parsed, list) else content
+                actual_content = parsed if isinstance(parsed, (list, dict)) else content
             except (json.JSONDecodeError, ValueError):
                 actual_content = content
             msg: dict = {"role": role, "content": actual_content}

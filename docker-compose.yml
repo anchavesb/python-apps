@@ -12,6 +12,7 @@ services:
       - DOLORES_STT_URL=http://host.docker.internal:8001 # Native STT
       - DOLORES_TTS_URL=http://host.docker.internal:8002 # Native TTS
       - DOLORES_BRAIN_URL=http://host.docker.internal:8003 # Native Brain
+      - DOLORES_IMAGEN_URL=http://host.docker.internal:8005 # Native Imagen (Bare Metal)
       - DOLORES_INTEGRATIONS=[{"name":"todo","url":"http://todo:5000","spec_path":"/v1/openapi.json"}]
       - LOG_LEVEL=INFO
     extra_hosts:
@@ -38,20 +39,6 @@ services:
     volumes:
       - todo-db-data:/var/lib/postgresql/data
 
-  # --- Image Generation ---
-
-  dolores-imagen:
-    build:
-      context: .
-      dockerfile: apps/dolores-imagen/Dockerfile
-    ports:
-      - "8005:8005"
-    environment:
-      - IMAGEN_PROVIDER=flux
-      - DOLORES_SERVICE_PSK=${DOLORES_SERVICE_PSK}
-    volumes:
-      - huggingface-cache:/home/appuser/.cache/huggingface
-
   # --- Frontend ---
 
   dolores-web:
@@ -64,4 +51,3 @@ services:
 
 volumes:
   todo-db-data:
-  huggingface-cache:

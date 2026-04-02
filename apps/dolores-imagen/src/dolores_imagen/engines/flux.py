@@ -37,6 +37,7 @@ class FLUXProvider(ImageGenProvider):
             dtype = torch.bfloat16
         elif torch.backends.mps.is_available():
             device = torch.device("mps")
+            # bfloat16 is required for FLUX on MPS to avoid NaNs (black images)
             dtype = torch.bfloat16
         else:
             device = torch.device("cpu")
@@ -55,12 +56,16 @@ class FLUXProvider(ImageGenProvider):
         if self._pipeline is None:
             raise RuntimeError("FLUXProvider not loaded; call load() first")
 
+        log.info("generating_flux_image", width=width, height=height)
+        start = time.monotonic()
         image = self._pipeline(
             prompt=prompt,
             num_inference_steps=4,
             height=height,
             width=width,
         ).images[0]
+        elapsed = time.monotonic() - start
+        log.info("flux_image_generated", elapsed_seconds=round(elapsed, 2))
 
         buf = io.BytesIO()
         image.save(buf, format="PNG")

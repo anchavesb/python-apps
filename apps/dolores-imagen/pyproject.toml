@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "dolores-imagen"
-version = "0.1.0"
+version = "0.1.1"
 description = "Dolores Image Generation service (FLUX / Stable Diffusion)"
 authors = [{ name = "Achaves" }]
 requires-python = ">=3.10"
@@ -25,6 +25,8 @@ gpu = [
     "torch>=2.1.0",
     "accelerate>=0.26.0",
     "Pillow>=10.0.0",
+    "sentencepiece>=0.2.1",
+    "protobuf>=5.29.0",
 ]
 
 [project.scripts]

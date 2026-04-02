@@ -79,6 +79,17 @@ function createAppState() {
   player.onPlaybackStart(() => { state.audioPlaying = true; });
   player.onPlaybackEnd(() => { state.audioPlaying = false; });
 
+  // Fetch backend defaults on startup if no local settings are saved
+  const hasSaved = !!localStorage.getItem('dolores-settings');
+  if (!hasSaved) {
+    DoloresClient.getSettings(state.serverUrl, state.apiKey)
+      .then((defaults) => {
+        state.provider = defaults.default_provider;
+        state.voiceId = defaults.default_voice_id;
+      })
+      .catch((e) => console.error('Failed to fetch backend defaults:', e));
+  }
+
   client.onMessage((event) => {
     if (event instanceof ArrayBuffer) {
       player.enqueue(event);

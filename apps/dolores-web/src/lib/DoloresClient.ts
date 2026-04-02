@@ -167,4 +167,12 @@ export class DoloresClient {
     });
     if (!resp.ok) throw new Error(`Failed to delete speaker: ${resp.status}`);
   }
+
+  static async getSettings(serverUrl: string, apiKey: string): Promise<{ default_provider: string, default_voice_id: string }> {
+    const resp = await fetch(`${serverUrl}/v1/settings`, {
+      headers: apiKey ? { 'Authorization': `Bearer ${apiKey}` } : {},
+    });
+    if (!resp.ok) throw new Error(`Failed to fetch settings: ${resp.status}`);
+    return resp.json();
+  }
 }

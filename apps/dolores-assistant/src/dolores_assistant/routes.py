@@ -68,6 +68,15 @@ def set_service_client(client: ServiceClient) -> None:
     _service_client = client
 
 
+@router.get("/settings")
+async def get_backend_settings():
+    """Expose backend defaults to frontend."""
+    return {
+        "default_provider": settings.default_provider,
+        "default_voice_id": settings.default_voice_id,
+    }
+
+
 @router.post("/chat", response_model=TextChatResponse)
 async def text_chat(
     req: TextChatRequest,
@@ -478,7 +487,8 @@ async def _process_and_respond(
 
     if intent_name == "generate_image":
         await websocket.send_json({"type": "response.text", "content": "Generating your image..."})
-        image_bytes = await client.generate_image(user_text)
+        # Use 512x512 for better performance on Metal
+        image_bytes = await client.generate_image(user_text, width=512, height=512)
         if image_bytes:
             image_b64 = base64.b64encode(image_bytes).decode()
             await websocket.send_json({
