@@ -155,6 +155,15 @@
       >
         Send
       </button>
+      <button
+        class="tts-btn"
+        class:tts-btn--muted={!app.state.ttsEnabled}
+        onclick={() => app.toggleTts()}
+        title={app.state.ttsEnabled ? 'Mute Dolores' : 'Unmute Dolores'}
+        aria-label={app.state.ttsEnabled ? 'Mute audio' : 'Unmute audio'}
+      >
+        {app.state.ttsEnabled ? '🔊' : '🔇'}
+      </button>
       <VoiceButton />
     </div>
   </div>
@@ -213,5 +222,22 @@
 
   .camera-btn:hover:not(:disabled) {
     background: var(--accent-hover);
+  }
+
+  .tts-btn {
+    background: transparent;
+    border: 1px solid var(--border);
+    font-size: 1.1em;
+    padding: 8px 10px;
+    flex-shrink: 0;
+    cursor: pointer;
+  }
+
+  .tts-btn:hover {
+    background: var(--accent-hover);
+  }
+
+  .tts-btn--muted {
+    opacity: 0.5;
   }
 </style>
