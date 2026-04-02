@@ -1,4 +1,7 @@
 <script lang="ts">
+  import WebResultsCard from './WebResultsCard.svelte';
+  import type { WebResultsPayload } from '../stores.svelte';
+
   interface Props {
     role: 'user' | 'assistant';
     content: string;
@@ -6,9 +9,10 @@
     speakerName?: string;
     imageUrl?: string;
     isGeneratedImage?: boolean;
+    webResults?: WebResultsPayload;
   }
 
-  let { role, content, streaming = false, speakerName, imageUrl, isGeneratedImage = false }: Props = $props();
+  let { role, content, streaming = false, speakerName, imageUrl, isGeneratedImage = false, webResults }: Props = $props();
 </script>
 
 <div class="message {role}" class:streaming>
@@ -32,6 +36,9 @@
     {#if isGeneratedImage}
       <a href={imageUrl} download="dolores-generated.png" class="download-link">Download</a>
     {/if}
+  {/if}
+  {#if webResults}
+    <WebResultsCard payload={webResults} />
   {/if}
 </div>
 

@@ -80,14 +80,65 @@ INTENT_EXAMPLES: dict[str, tuple[set[str], list[str]]] = {
         "generate a landscape",
         "make a portrait of",
         "create a visual of",
+        "can you generate an image of",
+        "can you create a picture of",
+        "can you draw",
+        "could you make an image of",
+        "could you generate a picture of",
+        "would you draw me",
+        "please generate an image of",
+        "please draw",
+        "I want an image of",
+        "I'd like a picture of",
+    ]),
+    "web_browse": ({"web_browse"}, [
+        "browse the web",
+        "search the web for",
+        "look up online",
+        "find on the internet",
+        "search online for",
+        "google that",
+        "look that up",
+        "find information about",
+        "what does the internet say about",
+        "search for the latest news on",
+        "open this URL",
+        "fetch this page",
+        "show me the webpage",
+        "browse to",
+        "search the web",
+        "look it up",
+        "find online",
+        "web search",
+        "what is the weather in Melbourne",
+        "what's the weather like in Sydney",
+        "how is the weather in London today",
+        "is it raining in New York",
+        "weather forecast for Tokyo",
+        "what is the temperature in Paris",
+        "current weather in Brisbane",
+        "will it rain tomorrow in Perth",
+        "what's the latest news",
+        "what is happening in the world today",
+        "latest news about the election",
+        "current stock price of Apple",
+        "what is the exchange rate today",
+        "what time is it in Tokyo",
+        "what is the score of the game",
+        "who won the match today",
+        "what movies are showing near me",
+        "what is the current interest rate",
+        "latest updates on the bushfires",
+        "what's on TV tonight",
     ]),
 }
 
-CONFIDENCE_THRESHOLD = 0.45
+CONFIDENCE_THRESHOLD = 0.48
+KNN_K = 3
 
 _session: ort.InferenceSession | None = None
 _tokenizer: Tokenizer | None = None
-_intent_centroids: dict[str, np.ndarray] | None = None
+_intent_examples_embeddings: dict[str, np.ndarray] | None = None
 
 
 def _mean_pool(token_embeddings: np.ndarray, attention_mask: np.ndarray) -> np.ndarray:
@@ -151,8 +202,8 @@ def _get_model_dir() -> Path:
 
 
 def _ensure_loaded() -> None:
-    """Lazy-load ONNX model and pre-compute intent centroids."""
-    global _session, _tokenizer, _intent_centroids
+    """Lazy-load ONNX model and pre-compute per-example embeddings for kNN."""
+    global _session, _tokenizer, _intent_examples_embeddings
 
     if _session is not None:
         return
@@ -166,35 +217,35 @@ def _ensure_loaded() -> None:
         providers=["CPUExecutionProvider"],
     )
 
-    # Pre-compute intent centroids
-    _intent_centroids = {}
+    # Pre-compute embeddings for every example (kNN instead of centroid)
+    _intent_examples_embeddings = {}
     for intent, (_, examples) in INTENT_EXAMPLES.items():
-        embeddings = _encode(examples)
-        centroid = np.mean(embeddings, axis=0)
-        centroid /= np.linalg.norm(centroid)
-        _intent_centroids[intent] = centroid
+        _intent_examples_embeddings[intent] = _encode(examples)
 
-    log.info("intent_model_ready", intents=list(_intent_centroids.keys()))
+    log.info("intent_model_ready", intents=list(_intent_examples_embeddings.keys()))
 
 
 def classify_intent(message: str) -> tuple[str | None, set[str] | None, float]:
-    """Classify a message into a tool intent.
+    """Classify a message into a tool intent using kNN over example embeddings.
 
     Returns:
         (intent_name, tool_filter, confidence)
         If confidence < threshold, returns (None, None, confidence).
     """
     _ensure_loaded()
-    assert _intent_centroids is not None
+    assert _intent_examples_embeddings is not None
 
     msg_embedding = _encode([message])[0]
 
+    # Collect top-K scores per intent, use their mean as the intent score
     best_intent = None
     best_score = -1.0
     best_filter = None
 
-    for intent, centroid in _intent_centroids.items():
-        score = float(np.dot(msg_embedding, centroid))
+    for intent, embeddings in _intent_examples_embeddings.items():
+        similarities = np.dot(embeddings, msg_embedding)
+        top_k = np.sort(similarities)[-KNN_K:]
+        score = float(np.mean(top_k))
         if score > best_score:
             best_score = score
             best_intent = intent

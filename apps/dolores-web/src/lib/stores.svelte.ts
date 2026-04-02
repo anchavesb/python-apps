@@ -1,4 +1,4 @@
-import { DoloresClient, type MessageEvent } from './DoloresClient';
+import { DoloresClient, type MessageEvent, type WebResult } from './DoloresClient';
 import { AudioRecorder } from './AudioRecorder';
 import { AudioPlayer } from './AudioPlayer';
 import { detectEmotion } from './avatar/EmotionDetector';
@@ -7,6 +7,15 @@ import type { AvatarPhase, AvatarEmotion } from './avatar/types';
 
 export type { AvatarPhase, AvatarEmotion };
 
+export type { WebResult };
+
+export interface WebResultsPayload {
+  results?: WebResult[];
+  query?: string;
+  pageContent?: string;
+  url?: string;
+}
+
 export interface ChatMessage {
   role: 'user' | 'assistant';
   content: string;
@@ -14,6 +23,7 @@ export interface ChatMessage {
   speakerName?: string;
   imageUrl?: string;
   isGeneratedImage?: boolean;
+  webResults?: WebResultsPayload;
 }
 
 interface AppState {
@@ -130,6 +140,20 @@ function createAppState() {
           timestamp: new Date(),
           imageUrl: msg.image_data,
           isGeneratedImage: true,
+        }];
+        state.thinking = false;
+        break;
+      case 'response.web_results':
+        state.messages = [...state.messages, {
+          role: 'assistant',
+          content: '',
+          timestamp: new Date(),
+          webResults: {
+            results: msg.results,
+            query: msg.query,
+            pageContent: msg.page_content,
+            url: msg.url,
+          },
         }];
         state.thinking = false;
         break;

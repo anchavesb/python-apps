@@ -107,6 +107,7 @@
         speakerName={msg.speakerName}
         imageUrl={msg.imageUrl}
         isGeneratedImage={msg.isGeneratedImage}
+        webResults={msg.webResults}
       />
     {/each}
 
