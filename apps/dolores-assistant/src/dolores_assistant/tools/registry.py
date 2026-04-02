@@ -16,14 +16,23 @@ TOOLS: list[Tool] = []
 async def load_tools(integrations: list[dict], http_client: httpx.AsyncClient) -> None:
     """Fetch OpenAPI specs and populate the global TOOLS list."""
     global TOOLS
-    if not integrations:
-        return
+    discovered: list[Tool] = []
 
-    from .openapi_discovery import discover_tools
+    if integrations:
+        from .openapi_discovery import discover_tools
+        discovered = await discover_tools(integrations, http_client)
 
-    discovered = await discover_tools(integrations, http_client)
     TOOLS = discovered
+    _load_web_tools()
     log.info("tools_loaded", count=len(TOOLS), names=[t.name for t in TOOLS])
+
+
+def _load_web_tools() -> None:
+    """Append built-in web tools to the global TOOLS list."""
+    from .web_tools import PageFetchTool, WebSearchTool
+    web_tools: list[Tool] = [WebSearchTool(), PageFetchTool()]
+    TOOLS.extend(web_tools)
+    log.info("web_tools_loaded", names=[t.name for t in web_tools])
 
 
 def get_tool_definitions(name_filter: set[str] | None = None) -> list[dict]:

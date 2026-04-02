@@ -445,6 +445,7 @@ async def run_tool_loop(
     provider: str | None,
     max_iterations: int = 5,
     tool_filter: set[str] | None = None,
+    require_token: bool = True,
 ) -> dict:
     """Run the agent tool-calling loop.
 
@@ -453,6 +454,8 @@ async def run_tool_loop(
 
     *tool_filter*: if set, only include tools whose names contain one of these
     substrings. If None, no tools are sent.
+    *require_token*: if False, tools are loaded without checking for a user JWT
+    (use for built-in tools that don't need auth).
     """
     token = current_user_token.get()
     has_token = token is not None
@@ -463,7 +466,8 @@ async def run_tool_loop(
             "conversation_id": conversation_id or "",
             "session_expired": True,
         }
-    tools = (get_tool_definitions(tool_filter) or None) if (tool_filter and has_token) else None
+    token_ok = not require_token or has_token
+    tools = (get_tool_definitions(tool_filter) or None) if (tool_filter and token_ok) else None
     message = initial_message
 
     # Use a fresh conversation for tool calls so stale history doesn't

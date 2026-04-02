@@ -46,7 +46,11 @@ DEFAULT_SYSTEM_PROMPT = (
     "respond with natural language — do NOT call tools.\n\n"
     "SPEAKER IDENTIFICATION: When a message begins with [Speaker: Name], the person speaking "
     "has been identified by voice recognition. Address them by their name naturally — not every "
-    "reply, but when it feels genuine, such as greetings or personal questions."
+    "reply, but when it feels genuine, such as greetings or personal questions.\n\n"
+    "WEB BROWSING: You can search the web or fetch pages in real time. When someone asks about "
+    "current events, live data, or anything that may be outside your training knowledge, "
+    "proactively suggest using web browsing — or use the web_browse_search / web_browse_fetch "
+    "tools directly if they are available."
 )
 
 

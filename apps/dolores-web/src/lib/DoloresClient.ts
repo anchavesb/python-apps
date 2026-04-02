@@ -1,3 +1,9 @@
+export interface WebResult {
+  title: string;
+  snippet: string;
+  url: string;
+}
+
 export type MessageEvent =
   | { type: 'session.created'; session_id: string; conversation_id: string }
   | { type: 'transcription.partial'; text: string }
@@ -6,6 +12,7 @@ export type MessageEvent =
   | { type: 'response.text'; content: string }
   | { type: 'response.end'; full_text: string }
   | { type: 'response.image'; image_data: string; prompt: string }
+  | { type: 'response.web_results'; results?: WebResult[]; query?: string; page_content?: string; url?: string }
   | { type: 'error'; code: string; message: string };
 
 export interface SpeakerProfile {

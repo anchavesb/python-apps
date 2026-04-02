@@ -420,6 +420,13 @@ async def conversation_ws(websocket: WebSocket) -> None:
 
 _EMOTION_TAG_RE = re.compile(r"^\[emotion:(\w+)\]\s*")
 _VALID_EMOTIONS = {"neutral", "curious", "happy", "sad", "surprised", "empathetic"}
+_RENDER_MODE_RE = re.compile(r"\b(show|open|fetch|give me the page|display|load|go to|navigate to)\b", re.IGNORECASE)
+_URL_RE = re.compile(r"https?://\S+")
+
+
+def _is_render_mode(text: str) -> bool:
+    """Return True when the user wants raw results/page displayed rather than summarized."""
+    return bool(_RENDER_MODE_RE.search(text)) or bool(_URL_RE.search(text))
 
 
 async def _process_image_message(
@@ -470,6 +477,138 @@ def _detect_tool_filter(message: str) -> set[str] | None:
     return tool_filter
 
 
+async def _process_web_browse_render(websocket: WebSocket, user_text: str) -> None:
+    """Render-mode web browse: run tools directly and emit response.web_results.
+
+    If the message contains a URL, fetches that page; otherwise runs a search.
+    Skips Brain — results go straight to the frontend as structured JSON.
+    """
+    from .tools.registry import get_tool_by_name
+
+    url_match = _URL_RE.search(user_text)
+
+    if url_match:
+        url = url_match.group(0).rstrip(".,;)")
+        tool = get_tool_by_name("web_browse_fetch")
+        if tool is None:
+            await websocket.send_json({"type": "error", "code": "tool_unavailable", "message": "Page fetch tool not available"})
+            await websocket.send_json({"type": "response.end", "full_text": ""})
+            return
+        await websocket.send_json({"type": "response.text", "content": f"Fetching {url}..."})
+        page_content = await tool.execute(url=url)
+        await websocket.send_json({
+            "type": "response.web_results",
+            "page_content": page_content,
+            "url": url,
+        })
+    else:
+        # Strip common browse keywords to extract the bare query
+        query = re.sub(
+            r"^\s*(browse|search the web for|search for|look up|find|google|web search|search online for)\s+",
+            "",
+            user_text,
+            flags=re.IGNORECASE,
+        ).strip() or user_text
+
+        tool = get_tool_by_name("web_browse_search")
+        if tool is None:
+            await websocket.send_json({"type": "error", "code": "tool_unavailable", "message": "Web search tool not available"})
+            await websocket.send_json({"type": "response.end", "full_text": ""})
+            return
+        await websocket.send_json({"type": "response.text", "content": f'Searching for "{query}"...'})
+        raw = await tool.execute(query=query)
+        try:
+            import json as _json
+            results = _json.loads(raw)
+        except Exception:
+            results = []
+        await websocket.send_json({
+            "type": "response.web_results",
+            "results": results,
+            "query": query,
+        })
+
+    await websocket.send_json({"type": "response.end", "full_text": ""})
+
+
+async def _process_web_browse_verbal(
+    websocket: WebSocket,
+    client: ServiceClient,
+    user_text: str,
+    conversation_id: str | None,
+    provider: str,
+    voice_id: str,
+    mode: str,
+) -> None:
+    """Verbal web browse: call tool directly, then ask Brain to summarize results."""
+    from .tools.registry import get_tool_by_name
+
+    url_match = _URL_RE.search(user_text)
+
+    if url_match:
+        url = url_match.group(0).rstrip(".,;)")
+        tool = get_tool_by_name("web_browse_fetch")
+        if tool is None:
+            await websocket.send_json({"type": "error", "code": "tool_unavailable", "message": "Page fetch tool not available"})
+            await websocket.send_json({"type": "response.end", "full_text": ""})
+            return
+        page_content = await tool.execute(url=url)
+        summary_prompt = (
+            f"The user asked: {user_text}\n\n"
+            f"Here is the content fetched from {url}:\n\n{page_content}\n\n"
+            "Please summarize the key information from this page in response to the user's request."
+        )
+    else:
+        search_tool = get_tool_by_name("web_browse_search")
+        fetch_tool = get_tool_by_name("web_browse_fetch")
+        if search_tool is None:
+            await websocket.send_json({"type": "error", "code": "tool_unavailable", "message": "Web search tool not available"})
+            await websocket.send_json({"type": "response.end", "full_text": ""})
+            return
+
+        raw = await search_tool.execute(query=user_text)
+
+        # Try to fetch the top result for actual content, not just snippets
+        page_content = ""
+        if fetch_tool is not None:
+            try:
+                import json as _json
+                results = _json.loads(raw)
+                if results and results[0].get("url"):
+                    page_content = await fetch_tool.execute(url=results[0]["url"])
+            except Exception:
+                pass
+
+        context = f"Search results:\n{raw}"
+        if page_content and not page_content.startswith("Failed"):
+            context += f"\n\nTop result page content:\n{page_content}"
+
+        summary_prompt = (
+            f"The user asked: {user_text}\n\n"
+            f"Here is live data retrieved from the web:\n\n{context}\n\n"
+            "Using only the information above, answer the user's question concisely. "
+            "Do not say you cannot browse the internet — the data is already provided."
+        )
+
+    log.info("web_browse_summary_prompt", prompt=summary_prompt[:300])
+    result = await client.chat(
+        message=summary_prompt,
+        conversation_id=None,
+        provider=provider,
+    )
+    full_text = result.get("message", "") if result else ""
+
+    if full_text:
+        await websocket.send_json({"type": "response.text", "content": full_text})
+    if mode != "text" and full_text.strip():
+        sentences = split_sentences(full_text)
+        for sentence in sentences:
+            audio = await client.synthesize(sentence, voice_id=voice_id)
+            if audio:
+                await websocket.send_bytes(audio)
+    await websocket.send_json({"type": "response.end", "full_text": full_text})
+
+
 async def _process_and_respond(
     websocket: WebSocket,
     client: ServiceClient,
@@ -481,9 +620,11 @@ async def _process_and_respond(
 ) -> None:
     """Send user text to brain, stream response text, and optionally TTS audio."""
     try:
-        intent_name, tool_filter, _ = classify_intent(user_text)
+        intent_name, tool_filter, confidence = classify_intent(user_text)
     except Exception:
-        intent_name, tool_filter = None, None
+        intent_name, tool_filter, confidence = None, None, 0.0
+
+    log.info("intent_dispatch", message=user_text[:80], intent=intent_name, confidence=round(confidence, 3))
 
     if intent_name == "generate_image":
         await websocket.send_json({"type": "response.text", "content": "Generating your image..."})
@@ -502,6 +643,14 @@ async def _process_and_respond(
                 "content": "I wasn't able to generate the image. Please try again.",
             })
         await websocket.send_json({"type": "response.end", "full_text": ""})
+        return
+
+    if intent_name == "web_browse" and _is_render_mode(user_text):
+        await _process_web_browse_render(websocket, user_text)
+        return
+
+    if intent_name == "web_browse":
+        await _process_web_browse_verbal(websocket, client, user_text, conversation_id, provider, voice_id, mode)
         return
 
     has_user_token = current_user_token.get() is not None
