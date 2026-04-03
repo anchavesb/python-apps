@@ -11,6 +11,7 @@ class TTSConfig:
     engine: str = get_env("TTS_ENGINE", "coqui_xtts")  # coqui_xtts, piper, or f5_tts
     device: str = get_env("TTS_DEVICE", "auto")
     voices_dir: str = get_env("TTS_VOICES_DIR", "data/voices")
+    emotion_refs_dir: str = get_env("TTS_EMOTION_REFS_DIR", "assets/emotion_refs")
     db_path: str = get_env("TTS_DB_PATH", "data/tts.db")
     sample_rate: int = get_env_int("TTS_SAMPLE_RATE", 24000)
     max_text_length: int = get_env_int("TTS_MAX_TEXT_LENGTH", 5000)

@@ -22,7 +22,7 @@ def write_wav_header(
     f.write(b"WAVE")
     f.write(b"fmt ")
     f.write(struct.pack("<I", 16))  # chunk size
-    f.write(struct.pack("<H", 1))   # PCM format
+    f.write(struct.pack("<H", 1))  # PCM format
     f.write(struct.pack("<H", num_channels))
     f.write(struct.pack("<I", sample_rate))
     f.write(struct.pack("<I", sample_rate * num_channels * (bits_per_sample // 8)))

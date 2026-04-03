@@ -1,4 +1,5 @@
 """Tests for image analysis and generation pipeline in dolores-assistant."""
+
 from __future__ import annotations
 
 import asyncio
@@ -32,15 +33,25 @@ class TestProcessImageMessage:
         return client
 
     def test_streams_token_events_as_response_text(self, mock_ws, mock_client):
-        mock_client.analyze_image = MagicMock(return_value=_async_gen(
-            {"type": "token", "content": "This "},
-            {"type": "token", "content": "is a cat."},
-            {"type": "done", "content": "This is a cat."},
-        ))
-        asyncio.run(_process_image_message(
-            mock_ws, mock_client, "What is this?", "data:image/jpeg;base64,abc",
-            "conv-1", "ollama", "default", "text",
-        ))
+        mock_client.analyze_image = MagicMock(
+            return_value=_async_gen(
+                {"type": "token", "content": "This "},
+                {"type": "token", "content": "is a cat."},
+                {"type": "done", "content": "This is a cat."},
+            )
+        )
+        asyncio.run(
+            _process_image_message(
+                mock_ws,
+                mock_client,
+                "What is this?",
+                "data:image/jpeg;base64,abc",
+                "conv-1",
+                "ollama",
+                "default",
+                "text",
+            )
+        )
         calls = [c.args[0] for c in mock_ws.send_json.call_args_list]
         text_events = [c for c in calls if c.get("type") == "response.text"]
         contents = [e["content"] for e in text_events]
@@ -48,25 +59,45 @@ class TestProcessImageMessage:
         assert "is a cat." in contents
 
     def test_sends_response_end(self, mock_ws, mock_client):
-        mock_client.analyze_image = MagicMock(return_value=_async_gen(
-            {"type": "done", "content": "Looks good."},
-        ))
-        asyncio.run(_process_image_message(
-            mock_ws, mock_client, "Describe this.", "data:image/png;base64,xyz",
-            None, "ollama", "default", "text",
-        ))
+        mock_client.analyze_image = MagicMock(
+            return_value=_async_gen(
+                {"type": "done", "content": "Looks good."},
+            )
+        )
+        asyncio.run(
+            _process_image_message(
+                mock_ws,
+                mock_client,
+                "Describe this.",
+                "data:image/png;base64,xyz",
+                None,
+                "ollama",
+                "default",
+                "text",
+            )
+        )
         calls = [c.args[0] for c in mock_ws.send_json.call_args_list]
         end_events = [c for c in calls if c.get("type") == "response.end"]
         assert len(end_events) == 1
 
     def test_brain_error_sends_error_event_and_stops(self, mock_ws, mock_client):
-        mock_client.analyze_image = MagicMock(return_value=_async_gen(
-            {"type": "error", "error": "model unavailable"},
-        ))
-        asyncio.run(_process_image_message(
-            mock_ws, mock_client, "Analyze this.", "data:image/jpeg;base64,abc",
-            None, "ollama", "default", "text",
-        ))
+        mock_client.analyze_image = MagicMock(
+            return_value=_async_gen(
+                {"type": "error", "error": "model unavailable"},
+            )
+        )
+        asyncio.run(
+            _process_image_message(
+                mock_ws,
+                mock_client,
+                "Analyze this.",
+                "data:image/jpeg;base64,abc",
+                None,
+                "ollama",
+                "default",
+                "text",
+            )
+        )
         calls = [c.args[0] for c in mock_ws.send_json.call_args_list]
         error_events = [c for c in calls if c.get("type") == "error"]
         assert len(error_events) == 1
@@ -91,11 +122,20 @@ class TestImageGenerationPipeline:
 
     def test_sends_generating_text_before_request(self, mock_ws, mock_client):
         mock_client.generate_image = AsyncMock(return_value=b"\x89PNG\r\n" + b"\x00" * 50)
-        with patch("dolores_assistant.routes.classify_intent", return_value=("generate_image", {"generate_image"}, 0.9)):
-            asyncio.run(_process_and_respond(
-                mock_ws, mock_client, "generate a red fox in snow",
-                "conv-1", "ollama", "default", "text",
-            ))
+        with patch(
+            "dolores_assistant.routes.classify_intent", return_value=("generate_image", {"generate_image"}, 0.9)
+        ):
+            asyncio.run(
+                _process_and_respond(
+                    mock_ws,
+                    mock_client,
+                    "generate a red fox in snow",
+                    "conv-1",
+                    "ollama",
+                    "default",
+                    "text",
+                )
+            )
         calls = [c.args[0] for c in mock_ws.send_json.call_args_list]
         first_text = next(c for c in calls if c.get("type") == "response.text")
         assert first_text["content"] == "Generating your image..."
@@ -103,11 +143,20 @@ class TestImageGenerationPipeline:
     def test_sends_response_image_event_with_correct_data(self, mock_ws, mock_client):
         png_bytes = b"\x89PNG\r\n\x1a\n" + b"\x00" * 100
         mock_client.generate_image = AsyncMock(return_value=png_bytes)
-        with patch("dolores_assistant.routes.classify_intent", return_value=("generate_image", {"generate_image"}, 0.9)):
-            asyncio.run(_process_and_respond(
-                mock_ws, mock_client, "generate a red fox in snow",
-                "conv-1", "ollama", "default", "text",
-            ))
+        with patch(
+            "dolores_assistant.routes.classify_intent", return_value=("generate_image", {"generate_image"}, 0.9)
+        ):
+            asyncio.run(
+                _process_and_respond(
+                    mock_ws,
+                    mock_client,
+                    "generate a red fox in snow",
+                    "conv-1",
+                    "ollama",
+                    "default",
+                    "text",
+                )
+            )
         calls = [c.args[0] for c in mock_ws.send_json.call_args_list]
         image_events = [c for c in calls if c.get("type") == "response.image"]
         assert len(image_events) == 1
@@ -117,11 +166,20 @@ class TestImageGenerationPipeline:
 
     def test_sends_descriptive_error_when_generate_image_returns_none(self, mock_ws, mock_client):
         mock_client.generate_image = AsyncMock(return_value=None)
-        with patch("dolores_assistant.routes.classify_intent", return_value=("generate_image", {"generate_image"}, 0.9)):
-            asyncio.run(_process_and_respond(
-                mock_ws, mock_client, "make a picture of a cat",
-                "conv-1", "ollama", "default", "text",
-            ))
+        with patch(
+            "dolores_assistant.routes.classify_intent", return_value=("generate_image", {"generate_image"}, 0.9)
+        ):
+            asyncio.run(
+                _process_and_respond(
+                    mock_ws,
+                    mock_client,
+                    "make a picture of a cat",
+                    "conv-1",
+                    "ollama",
+                    "default",
+                    "text",
+                )
+            )
         calls = [c.args[0] for c in mock_ws.send_json.call_args_list]
         text_events = [c for c in calls if c.get("type") == "response.text"]
         assert len(text_events) >= 2
@@ -131,11 +189,20 @@ class TestImageGenerationPipeline:
 
     def test_generate_image_path_sends_response_end(self, mock_ws, mock_client):
         mock_client.generate_image = AsyncMock(return_value=b"\x89PNG" + b"\x00" * 20)
-        with patch("dolores_assistant.routes.classify_intent", return_value=("generate_image", {"generate_image"}, 0.9)):
-            asyncio.run(_process_and_respond(
-                mock_ws, mock_client, "draw a sunset",
-                None, "ollama", "default", "text",
-            ))
+        with patch(
+            "dolores_assistant.routes.classify_intent", return_value=("generate_image", {"generate_image"}, 0.9)
+        ):
+            asyncio.run(
+                _process_and_respond(
+                    mock_ws,
+                    mock_client,
+                    "draw a sunset",
+                    None,
+                    "ollama",
+                    "default",
+                    "text",
+                )
+            )
         calls = [c.args[0] for c in mock_ws.send_json.call_args_list]
         end_events = [c for c in calls if c.get("type") == "response.end"]
         assert len(end_events) == 1
@@ -146,15 +213,18 @@ class TestGenerateImageIntentExamples:
 
     def test_generate_image_intent_exists(self):
         from dolores_assistant.intent import INTENT_EXAMPLES
+
         assert "generate_image" in INTENT_EXAMPLES
 
     def test_generate_image_has_sufficient_examples(self):
         from dolores_assistant.intent import INTENT_EXAMPLES
+
         _, examples = INTENT_EXAMPLES["generate_image"]
         assert len(examples) >= 10
 
     def test_generate_image_tool_filter_is_nonempty_set(self):
         from dolores_assistant.intent import INTENT_EXAMPLES
+
         tool_filter, _ = INTENT_EXAMPLES["generate_image"]
         assert isinstance(tool_filter, set)
         assert len(tool_filter) > 0

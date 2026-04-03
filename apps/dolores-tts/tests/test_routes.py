@@ -49,12 +49,14 @@ def mock_store():
     store = MagicMock()
     store.list_profiles = AsyncMock(return_value=[])
     store.get_profile = AsyncMock(return_value=None)
-    store.create = AsyncMock(return_value={
-        "id": "abc12345",
-        "name": "TestVoice",
-        "engine": "coqui_xtts",
-        "ref_text": None,
-    })
+    store.create = AsyncMock(
+        return_value={
+            "id": "abc12345",
+            "name": "TestVoice",
+            "engine": "coqui_xtts",
+            "ref_text": None,
+        }
+    )
     store.delete = AsyncMock(return_value=True)
     return store
 
@@ -80,6 +82,7 @@ def client(app):
 # ---------------------------------------------------------------------------
 # POST /v1/synthesize
 # ---------------------------------------------------------------------------
+
 
 class TestSynthesize:
     def test_returns_wav_audio(self, client, mock_engine):
@@ -109,10 +112,16 @@ class TestSynthesize:
         assert resp.status_code == 503
 
     def test_synthesize_passes_ref_text_from_store(self, client, mock_engine, mock_store):
-        mock_store.get_profile = AsyncMock(return_value={
-            "id": "abc12345", "name": "Voice", "engine": "f5_tts",
-            "ref_text": "sample reference text", "description": "", "created_at": "2026-01-01T00:00:00Z",
-        })
+        mock_store.get_profile = AsyncMock(
+            return_value={
+                "id": "abc12345",
+                "name": "Voice",
+                "engine": "f5_tts",
+                "ref_text": "sample reference text",
+                "description": "",
+                "created_at": "2026-01-01T00:00:00Z",
+            }
+        )
         client.post("/v1/synthesize", json={"text": "Hello", "voice_id": "abc12345"})
         call_kwargs = mock_engine.synthesize.call_args.kwargs
         assert call_kwargs["ref_text"] == "sample reference text"
@@ -123,10 +132,37 @@ class TestSynthesize:
         resp = client.post("/v1/synthesize", json={"text": "Hello"})
         assert resp.status_code == 200
 
+    def test_emotion_happy_accepted(self, client, mock_engine):
+        resp = client.post("/v1/synthesize", json={"text": "Hello", "emotion": "happy"})
+        assert resp.status_code == 200
+
+    def test_emotion_invalid_value_returns_422(self, client, mock_engine):
+        resp = client.post("/v1/synthesize", json={"text": "Hello", "emotion": "excited"})
+        assert resp.status_code == 422
+
+    def test_emotion_null_accepted(self, client, mock_engine):
+        resp = client.post("/v1/synthesize", json={"text": "Hello", "emotion": None})
+        assert resp.status_code == 200
+
+    def test_emotion_omitted_accepted(self, client, mock_engine):
+        resp = client.post("/v1/synthesize", json={"text": "Hello"})
+        assert resp.status_code == 200
+
+    def test_route_passes_emotion_to_engine(self, client, mock_engine):
+        client.post("/v1/synthesize", json={"text": "Hello", "emotion": "happy"})
+        call_kwargs = mock_engine.synthesize.call_args.kwargs
+        assert call_kwargs["emotion"] == "happy"
+
+    def test_route_passes_none_when_emotion_omitted(self, client, mock_engine):
+        client.post("/v1/synthesize", json={"text": "Hello"})
+        call_kwargs = mock_engine.synthesize.call_args.kwargs
+        assert call_kwargs["emotion"] is None
+
 
 # ---------------------------------------------------------------------------
 # GET /v1/voices
 # ---------------------------------------------------------------------------
+
 
 class TestListVoices:
     def test_returns_empty_list(self, client, mock_store):
@@ -136,10 +172,18 @@ class TestListVoices:
         assert resp.json() == []
 
     def test_returns_profiles(self, client, mock_store):
-        mock_store.list_profiles = AsyncMock(return_value=[{
-            "id": "abc12345", "name": "Voice1", "description": "",
-            "engine": "coqui_xtts", "ref_text": None, "created_at": "2026-01-01T00:00:00Z",
-        }])
+        mock_store.list_profiles = AsyncMock(
+            return_value=[
+                {
+                    "id": "abc12345",
+                    "name": "Voice1",
+                    "description": "",
+                    "engine": "coqui_xtts",
+                    "ref_text": None,
+                    "created_at": "2026-01-01T00:00:00Z",
+                }
+            ]
+        )
         resp = client.get("/v1/voices")
         assert resp.status_code == 200
         data = resp.json()
@@ -156,12 +200,19 @@ class TestListVoices:
 # GET /v1/voices/{voice_id}
 # ---------------------------------------------------------------------------
 
+
 class TestGetVoice:
     def test_returns_profile(self, client, mock_store):
-        mock_store.get_profile = AsyncMock(return_value={
-            "id": "abc12345", "name": "Voice1", "description": "",
-            "engine": "coqui_xtts", "ref_text": None, "created_at": "2026-01-01T00:00:00Z",
-        })
+        mock_store.get_profile = AsyncMock(
+            return_value={
+                "id": "abc12345",
+                "name": "Voice1",
+                "description": "",
+                "engine": "coqui_xtts",
+                "ref_text": None,
+                "created_at": "2026-01-01T00:00:00Z",
+            }
+        )
         resp = client.get("/v1/voices/abc12345")
         assert resp.status_code == 200
         assert resp.json()["name"] == "Voice1"
@@ -175,6 +226,7 @@ class TestGetVoice:
 # ---------------------------------------------------------------------------
 # POST /v1/voices
 # ---------------------------------------------------------------------------
+
 
 class TestCreateVoice:
     def _audio_file(self, content: bytes = b"fake_wav", content_type: str = "audio/wav"):
@@ -227,6 +279,7 @@ class TestCreateVoice:
 # ---------------------------------------------------------------------------
 # DELETE /v1/voices/{voice_id}
 # ---------------------------------------------------------------------------
+
 
 class TestDeleteVoice:
     def test_delete_existing_returns_204(self, client, mock_store):

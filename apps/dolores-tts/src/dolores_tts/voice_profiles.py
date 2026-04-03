@@ -120,8 +120,6 @@ class VoiceProfileStore:
         if profile_dir.exists():
             shutil.rmtree(profile_dir)
 
-        cursor = await self._db.execute(
-            "DELETE FROM voice_profiles WHERE id = ?", (profile_id,)
-        )
+        cursor = await self._db.execute("DELETE FROM voice_profiles WHERE id = ?", (profile_id,))
         await self._db.commit()
         return cursor.rowcount > 0

@@ -58,6 +58,7 @@ def main():
                 item.unlink()
             elif item.is_dir():
                 import shutil
+
                 shutil.rmtree(item)
 
     # Validate the model works
@@ -81,9 +82,9 @@ def _validate_onnx(model_dir: Path):
     tok = Tokenizer.from_file(str(model_dir / "tokenizer.json"))
 
     test_cases = [
-        ["hello world"],                          # batch=1
-        ["hello", "world", "test"],               # batch=3
-        [f"sentence {i}" for i in range(16)],     # batch=16 (matches intent examples)
+        ["hello world"],  # batch=1
+        ["hello", "world", "test"],  # batch=3
+        [f"sentence {i}" for i in range(16)],  # batch=16 (matches intent examples)
     ]
 
     for texts in test_cases:
@@ -100,16 +101,17 @@ def _validate_onnx(model_dir: Path):
             input_ids[i, :length] = enc.ids
             attention_mask[i, :length] = enc.attention_mask
 
-        outputs = session.run(None, {
-            "input_ids": input_ids,
-            "attention_mask": attention_mask,
-            "token_type_ids": token_type_ids,
-        })
+        outputs = session.run(
+            None,
+            {
+                "input_ids": input_ids,
+                "attention_mask": attention_mask,
+                "token_type_ids": token_type_ids,
+            },
+        )
 
-        assert outputs[0].shape[0] == batch, \
-            f"Expected batch={batch}, got {outputs[0].shape[0]}"
-        assert outputs[0].shape[2] == 384, \
-            f"Expected hidden_size=384, got {outputs[0].shape[2]}"
+        assert outputs[0].shape[0] == batch, f"Expected batch={batch}, got {outputs[0].shape[0]}"
+        assert outputs[0].shape[2] == 384, f"Expected hidden_size=384, got {outputs[0].shape[2]}"
         print(f"  batch={batch:>2} seq={max_len:>3} -> output {outputs[0].shape} OK")
 
     print("Validation passed!")

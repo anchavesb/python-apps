@@ -50,7 +50,11 @@ DEFAULT_SYSTEM_PROMPT = (
     "WEB BROWSING: You can search the web or fetch pages in real time. When someone asks about "
     "current events, live data, or anything that may be outside your training knowledge, "
     "proactively suggest using web browsing — or use the web_browse_search / web_browse_fetch "
-    "tools directly if they are available."
+    "tools directly if they are available.\n\n"
+    "EMOTION: Begin every response with an emotion tag on its own, before any other text. "
+    "Choose the single most fitting emotion from: happy, sad, angry, neutral. "
+    "Format: [emotion:happy] or [emotion:sad] or [emotion:angry] or [emotion:neutral]. "
+    "Example: '[emotion:happy] Of course, I'd be glad to help with that.'"
 )
 
 
@@ -74,7 +78,7 @@ def _trim_history(messages: list[dict], max_messages: int) -> list[dict]:
         return messages
     # Preserve system prompt if present, then take last max_messages
     if messages and messages[0].get("role") == "system":
-        return [messages[0]] + messages[-(max_messages - 1):]
+        return [messages[0]] + messages[-(max_messages - 1) :]
     return messages[-max_messages:]
 
 

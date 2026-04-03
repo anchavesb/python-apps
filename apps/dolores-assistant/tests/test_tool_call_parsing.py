@@ -1,6 +1,5 @@
 """Tests for _extract_tool_calls_from_text — parsing tool calls from LLM text output."""
 
-
 from dolores_assistant.pipeline import _extract_tool_calls_from_text
 
 

@@ -147,9 +147,11 @@ def _schema_to_json_schema(spec: dict, schema: dict) -> dict:
         if "required" in schema:
             result["required"] = schema["required"]
         if schema.get("additionalProperties"):
-            result["additionalProperties"] = _schema_to_json_schema(
-                spec, schema["additionalProperties"]
-            ) if isinstance(schema["additionalProperties"], dict) else schema["additionalProperties"]
+            result["additionalProperties"] = (
+                _schema_to_json_schema(spec, schema["additionalProperties"])
+                if isinstance(schema["additionalProperties"], dict)
+                else schema["additionalProperties"]
+            )
     elif schema_type == "array":
         result["type"] = "array"
         if "items" in schema:
@@ -278,8 +280,7 @@ async def discover_tools(
             spec = resp.json()
 
             tools = _build_tools_from_spec(spec, base_url, name, auth, http_client)
-            log.info("openapi_discovered", service=name, tools=len(tools),
-                     tool_names=[t.name for t in tools])
+            log.info("openapi_discovered", service=name, tools=len(tools), tool_names=[t.name for t in tools])
             all_tools.extend(tools)
 
         except Exception as e:

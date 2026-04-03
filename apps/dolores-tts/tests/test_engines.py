@@ -15,10 +15,12 @@ import pytest
 from dolores_tts.engines.audio_utils import write_wav_header
 from dolores_tts.engines.coqui_xtts import CoquiXTTSEngine
 from dolores_tts.engines.f5_tts import F5TTSEngine
+from dolores_tts.engines.piper import PiperEngine
 
 # ---------------------------------------------------------------------------
 # write_wav_header (shared utility, tested once)
 # ---------------------------------------------------------------------------
+
 
 class TestWriteWavHeader:
     def _parse_header(self, data: bytes) -> dict:
@@ -83,10 +85,10 @@ class TestWriteWavHeader:
         assert h["chunk_size"] == h["data_size"] + 36
 
 
-
 # ---------------------------------------------------------------------------
 # CoquiXTTSEngine
 # ---------------------------------------------------------------------------
+
 
 class TestCoquiXTTSEngine:
     def test_name(self):
@@ -199,6 +201,7 @@ class TestCoquiXTTSEngine:
 # F5TTSEngine
 # ---------------------------------------------------------------------------
 
+
 class TestF5TTSEngine:
     def test_name(self):
         engine = F5TTSEngine()
@@ -286,12 +289,195 @@ class TestF5TTSEngine:
         mock_generate_module.generate = fake_generate
 
         # Patch the submodule so `from f5_tts_mlx.generate import generate` resolves
-        with patch.dict("sys.modules", {
-            "f5_tts_mlx": MagicMock(),
-            "f5_tts_mlx.generate": mock_generate_module,
-        }):
+        with patch.dict(
+            "sys.modules",
+            {
+                "f5_tts_mlx": MagicMock(),
+                "f5_tts_mlx.generate": mock_generate_module,
+            },
+        ):
             wav_bytes = engine.synthesize("Hello world", voice_id="default")
 
         assert wav_bytes[:4] == b"RIFF"
         assert wav_bytes[8:12] == b"WAVE"
         assert len(wav_bytes) > 44
+
+
+# ---------------------------------------------------------------------------
+# CoquiXTTSEngine — emotion conditioning
+# ---------------------------------------------------------------------------
+
+
+class TestCoquiXTTSEngineEmotionConditioning:
+    def test_supported_emotions_empty_when_dir_missing(self, tmp_path):
+        engine = CoquiXTTSEngine(emotions_dir=str(tmp_path / "nonexistent"))
+        assert engine.supported_emotions() == []
+
+    def test_supported_emotions_returns_loaded_emotions(self, tmp_path):
+        emotions_dir = tmp_path / "emotion_refs"
+        emotions_dir.mkdir()
+        for name in ("happy", "sad", "angry", "neutral"):
+            (emotions_dir / f"{name}.wav").write_bytes(b"fake")
+
+        engine = CoquiXTTSEngine(emotions_dir=str(emotions_dir))
+        engine._model = MagicMock()
+        engine._default_speaker = "Ana Florence"
+        engine._shared_emotion_refs = engine._load_shared_emotion_refs()
+
+        assert engine.supported_emotions() == ["angry", "happy", "neutral", "sad"]
+
+    def test_synthesize_swaps_speaker_wav_for_shared_clip(self, tmp_path):
+        emotions_dir = tmp_path / "emotion_refs"
+        emotions_dir.mkdir()
+        happy_clip = emotions_dir / "happy.wav"
+        happy_clip.write_bytes(b"fake")
+
+        engine = CoquiXTTSEngine(voices_dir=str(tmp_path / "voices"), emotions_dir=str(emotions_dir))
+        engine._shared_emotion_refs = {str(k): str(emotions_dir / f"{k}.wav") for k in ("happy",)}
+        engine._model = MagicMock()
+        engine._default_speaker = "Ana Florence"
+        engine._model.tts.return_value = [0.0] * 100
+
+        engine.synthesize("Hello", voice_id="default", emotion="happy")
+
+        call_kwargs = engine._model.tts.call_args.kwargs
+        assert call_kwargs["speaker_wav"] == str(happy_clip)
+        assert "speaker" not in call_kwargs
+
+    def test_synthesize_prefers_per_voice_clip_over_shared(self, tmp_path):
+        emotions_dir = tmp_path / "emotion_refs"
+        emotions_dir.mkdir()
+        shared_clip = emotions_dir / "happy.wav"
+        shared_clip.write_bytes(b"shared")
+
+        voices_dir = tmp_path / "voices"
+        per_voice_dir = voices_dir / "myvoice" / "emotion_refs"
+        per_voice_dir.mkdir(parents=True)
+        per_voice_clip = per_voice_dir / "happy.wav"
+        per_voice_clip.write_bytes(b"per_voice")
+
+        engine = CoquiXTTSEngine(voices_dir=str(voices_dir), emotions_dir=str(emotions_dir))
+        engine._shared_emotion_refs = {"happy": str(shared_clip)}
+        engine._model = MagicMock()
+        engine._default_speaker = "Ana Florence"
+        engine._model.tts.return_value = [0.0] * 100
+
+        engine.synthesize("Hello", voice_id="myvoice", emotion="happy")
+
+        call_kwargs = engine._model.tts.call_args.kwargs
+        assert call_kwargs["speaker_wav"] == str(per_voice_clip)
+
+    def test_synthesize_uses_shared_when_no_per_voice(self, tmp_path):
+        emotions_dir = tmp_path / "emotion_refs"
+        emotions_dir.mkdir()
+        shared_clip = emotions_dir / "happy.wav"
+        shared_clip.write_bytes(b"shared")
+
+        engine = CoquiXTTSEngine(voices_dir=str(tmp_path / "voices"), emotions_dir=str(emotions_dir))
+        engine._shared_emotion_refs = {"happy": str(shared_clip)}
+        engine._model = MagicMock()
+        engine._default_speaker = "Ana Florence"
+        engine._model.tts.return_value = [0.0] * 100
+
+        engine.synthesize("Hello", voice_id="default", emotion="happy")
+
+        call_kwargs = engine._model.tts.call_args.kwargs
+        assert call_kwargs["speaker_wav"] == str(shared_clip)
+
+    def test_synthesize_no_swap_when_no_clip_found(self, tmp_path):
+        """When no emotion clip resolves, original speaker kwarg is retained."""
+        engine = CoquiXTTSEngine(voices_dir=str(tmp_path / "voices"), emotions_dir=str(tmp_path / "nonexistent"))
+        engine._shared_emotion_refs = {}
+        engine._model = MagicMock()
+        engine._default_speaker = "Ana Florence"
+        engine._model.tts.return_value = [0.0] * 100
+
+        with patch("dolores_tts.engines.coqui_xtts.log") as mock_log:
+            engine.synthesize("Hello", voice_id="default", emotion="happy")
+
+        call_kwargs = engine._model.tts.call_args.kwargs
+        assert call_kwargs["speaker"] == "Ana Florence"
+        assert "speaker_wav" not in call_kwargs
+        mock_log.warning.assert_called_with("emotion_clip_unavailable", emotion="happy", fallback="voice_default")
+
+    def test_synthesize_no_swap_when_emotion_none(self, tmp_path):
+        """emotion=None leaves the original speaker resolution unchanged."""
+        emotions_dir = tmp_path / "emotion_refs"
+        emotions_dir.mkdir()
+        (emotions_dir / "happy.wav").write_bytes(b"fake")
+
+        engine = CoquiXTTSEngine(voices_dir=str(tmp_path / "voices"), emotions_dir=str(emotions_dir))
+        engine._shared_emotion_refs = {"happy": str(emotions_dir / "happy.wav")}
+        engine._model = MagicMock()
+        engine._default_speaker = "Ana Florence"
+        engine._model.tts.return_value = [0.0] * 100
+
+        engine.synthesize("Hello", voice_id="default", emotion=None)
+
+        call_kwargs = engine._model.tts.call_args.kwargs
+        assert call_kwargs["speaker"] == "Ana Florence"
+        assert "speaker_wav" not in call_kwargs
+
+    def test_resolve_emotion_clip_per_voice_priority(self, tmp_path):
+        emotions_dir = tmp_path / "emotion_refs"
+        emotions_dir.mkdir()
+        shared_clip = emotions_dir / "happy.wav"
+        shared_clip.write_bytes(b"shared")
+
+        voices_dir = tmp_path / "voices"
+        per_voice_dir = voices_dir / "myvoice" / "emotion_refs"
+        per_voice_dir.mkdir(parents=True)
+        per_voice_clip = per_voice_dir / "happy.wav"
+        per_voice_clip.write_bytes(b"per_voice")
+
+        engine = CoquiXTTSEngine(voices_dir=str(voices_dir), emotions_dir=str(emotions_dir))
+        engine._shared_emotion_refs = {"happy": str(shared_clip)}
+
+        result = engine._resolve_emotion_clip("myvoice", "happy")
+        assert result == str(per_voice_clip)
+
+    def test_resolve_emotion_clip_shared_fallback(self, tmp_path):
+        emotions_dir = tmp_path / "emotion_refs"
+        emotions_dir.mkdir()
+        shared_clip = emotions_dir / "happy.wav"
+        shared_clip.write_bytes(b"shared")
+
+        engine = CoquiXTTSEngine(voices_dir=str(tmp_path / "voices"), emotions_dir=str(emotions_dir))
+        engine._shared_emotion_refs = {"happy": str(shared_clip)}
+
+        result = engine._resolve_emotion_clip("somevoice", "happy")
+        assert result == str(shared_clip)
+
+
+# ---------------------------------------------------------------------------
+# F5TTSEngine — emotion no-op
+# ---------------------------------------------------------------------------
+
+
+class TestF5TTSEngineEmotion:
+    def test_supported_emotions_returns_empty(self):
+        engine = F5TTSEngine()
+        assert engine.supported_emotions() == []
+
+    def test_synthesize_accepts_emotion_kwarg(self, tmp_path):
+        """Calling synthesize() with emotion= raises RuntimeError (not loaded), not TypeError."""
+        engine = F5TTSEngine()
+        with pytest.raises(RuntimeError):
+            engine.synthesize("Hello", emotion="happy")
+
+
+# ---------------------------------------------------------------------------
+# PiperEngine — emotion no-op
+# ---------------------------------------------------------------------------
+
+
+class TestPiperEngineEmotion:
+    def test_supported_emotions_returns_empty(self):
+        engine = PiperEngine()
+        assert engine.supported_emotions() == []
+
+    def test_synthesize_accepts_emotion_kwarg(self):
+        """Calling synthesize() with emotion= raises NotImplementedError, not TypeError."""
+        engine = PiperEngine()
+        with pytest.raises(NotImplementedError):
+            engine.synthesize("Hello", emotion="happy")

@@ -60,13 +60,20 @@ class F5TTSEngine(TTSEngine):
         try:
             import f5_tts_mlx  # noqa: F401
             import mlx.core as mx
+
             if not mx.metal.is_available():
-                 log.warning("f5_tts_mlx_no_metal", msg="MLX is available but Metal (GPU) is not detected.")
+                log.warning("f5_tts_mlx_no_metal", msg="MLX is available but Metal (GPU) is not detected.")
             self._loaded = True
             log.info("f5_tts_mlx_loaded")
         except ImportError:
-            log.error("f5_tts_mlx_not_installed", msg="f5-tts-mlx is not installed. Install with 'pip install f5-tts-mlx'")
+            log.error(
+                "f5_tts_mlx_not_installed", msg="f5-tts-mlx is not installed. Install with 'pip install f5-tts-mlx'"
+            )
             self._loaded = False
+
+    def supported_emotions(self) -> list[str]:
+        """Return empty list — F5-TTS does not support emotion conditioning."""
+        return []
 
     def synthesize(
         self,
@@ -74,6 +81,7 @@ class F5TTSEngine(TTSEngine):
         voice_id: str = "default",
         sample_rate: int = 24000,
         ref_text: str | None = None,
+        emotion: str | None = None,
     ) -> bytes:
         """Synthesize text using F5-TTS MLX."""
         if not self._loaded:
@@ -95,7 +103,7 @@ class F5TTSEngine(TTSEngine):
         # We prefer the one stored in the DB.
         if not ref_text:
             log.warning("f5_tts_missing_ref_text", voice_id=voice_id)
-            ref_text = "" # fallback to empty string if missing
+            ref_text = ""
 
         start = time.monotonic()
 
@@ -116,7 +124,6 @@ class F5TTSEngine(TTSEngine):
             if resampled_wav:
                 Path(resampled_wav).unlink(missing_ok=True)
 
-        # Convert to 16-bit PCM
         audio_array = np.clip(audio_array, -1.0, 1.0)
         pcm_data = (audio_array * 32767).astype(np.int16).tobytes()
 

@@ -101,7 +101,9 @@ Test files located under `tests/` directories per service (e.g. `apps/dolores-as
 
 ## Extension Patterns
 
-**TTS engines**: ABC with abstract `name`, `is_loaded`, `load()`, `synthesize()`, `list_voices()`. Concrete engines (`CoquiXTTSEngine`, `F5TTSEngine`, `PiperEngine`) implement `TTSEngine`. Engine swapped by config at startup.
+**TTS engines**: ABC with abstract `name`, `is_loaded`, `load()`, `synthesize(text, voice_id, ..., emotion: str | None = None)`, `list_voices()` and concrete `supported_emotions() -> list[str]` (returns `[]` by default; overridden by engines with real support). Concrete engines (`CoquiXTTSEngine`, `F5TTSEngine`, `PiperEngine`) implement `TTSEngine`. Engine swapped by config at startup.
+
+**XTTS v2 emotion conditioning**: The validated path for per-emotion conditioning in XTTS v2 is `speaker_wav` substitution. When `emotion` is set, `CoquiXTTSEngine._resolve_emotion_clip()` looks up a reference WAV (per-voice override first, then shared `assets/emotion_refs/{emotion}.wav` fallback) and replaces the `speaker_wav` argument passed to `tts()`. Note: `style_wav` is not a valid XTTS v2 conditioning argument — it is not present in `XttsArgs` and is silently dropped by the `TTS.api` wrapper. F5-TTS and Piper accept `emotion` as a no-op keyword argument for API compatibility.
 
 **Tool system**: Abstract `Tool` base class with `to_openai_function()` concrete method. Tools dynamically generated from OpenAPI specs at startup via `discover_tools()`; stored in global `TOOLS` list.
 

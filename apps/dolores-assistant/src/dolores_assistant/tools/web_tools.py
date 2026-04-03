@@ -130,6 +130,7 @@ def _extract_uddg(href: str) -> str:
     m = _UDDG_RE.search(href)
     if m:
         from urllib.parse import unquote
+
         return unquote(m.group(1))
     return ""
 

@@ -27,10 +27,9 @@ log = get_logger(__name__)
 def _is_jwt_expired(token: str) -> bool:
     """Check if a JWT token is expired without verifying the signature."""
     import base64
+
     try:
-        # Decode the payload (second segment)
         payload = token.split(".")[1]
-        # Add padding
         payload += "=" * (4 - len(payload) % 4)
         data = json.loads(base64.urlsafe_b64decode(payload))
         exp = data.get("exp")
@@ -40,12 +39,13 @@ def _is_jwt_expired(token: str) -> bool:
     except Exception:
         return False
 
+
 # GPU concurrency: only one request at a time per GPU service
 _stt_semaphore = asyncio.Semaphore(1)
 _tts_semaphore = asyncio.Semaphore(1)
 
 # Sentence boundary regex for TTS chunking
-_SENTENCE_RE = re.compile(r'(?<=[.!?])\s+')
+_SENTENCE_RE = re.compile(r"(?<=[.!?])\s+")
 
 
 def _auth_headers() -> dict[str, str]:
@@ -136,7 +136,10 @@ class ServiceClient:
             return []
 
     async def enroll_speaker(
-        self, name: str, audio_files: list[tuple[str, bytes, str]], email: str | None = None,
+        self,
+        name: str,
+        audio_files: list[tuple[str, bytes, str]],
+        email: str | None = None,
     ) -> dict | None:
         """Enroll a new speaker via STT service."""
         try:
@@ -163,6 +166,7 @@ class ServiceClient:
         """
         try:
             import uuid as _uuid
+
             _uuid.UUID(speaker_id, version=4)
         except ValueError:
             return False
@@ -298,15 +302,13 @@ class ServiceClient:
 
     # --- TTS ---
 
-    async def synthesize(
-        self, text: str, voice_id: str = "default"
-    ) -> bytes | None:
+    async def synthesize(self, text: str, voice_id: str = "default", emotion: str | None = None) -> bytes | None:
         """Send text to TTS service. Returns WAV bytes or None on failure."""
         async with _tts_semaphore:
             try:
                 resp = await self.client.post(
                     f"{settings.tts_url}/v1/synthesize",
-                    json={"text": text, "voice_id": voice_id},
+                    json={"text": text, "voice_id": voice_id, "emotion": emotion},
                     timeout=settings.tts_timeout,
                 )
                 resp.raise_for_status()
@@ -425,14 +427,16 @@ def _extract_tool_calls_from_text(text: str) -> list[dict] | None:
             name = fn.get("name") or item.get("name")
             if name:
                 args = fn.get("arguments", item.get("arguments", "{}"))
-                calls.append({
-                    "id": item.get("id", "call_parsed"),
-                    "type": "function",
-                    "function": {
-                        "name": name,
-                        "arguments": args,
-                    },
-                })
+                calls.append(
+                    {
+                        "id": item.get("id", "call_parsed"),
+                        "type": "function",
+                        "function": {
+                            "name": name,
+                            "arguments": args,
+                        },
+                    }
+                )
         return calls if calls else None
 
     return None
@@ -483,7 +487,10 @@ async def run_tool_loop(
         )
 
         if result is None:
-            return {"message": "I'm having trouble connecting to my brain. Please try again.", "conversation_id": conversation_id or ""}
+            return {
+                "message": "I'm having trouble connecting to my brain. Please try again.",
+                "conversation_id": conversation_id or "",
+            }
 
         tool_conv_id = result.get("conversation_id", tool_conv_id)
 
@@ -494,12 +501,10 @@ async def run_tool_loop(
             if parsed:
                 result["tool_calls"] = parsed
 
-        # If no tool calls, return the text response
         if not result.get("tool_calls"):
             result["conversation_id"] = conversation_id or ""
             return result
 
-        # Execute tools and collect results
         tool_results = []
         for tc in result["tool_calls"]:
             fn = tc.get("function", {})
