@@ -51,10 +51,10 @@ class CoquiXTTSEngine(TTSEngine):
         if not hasattr(transformers.pytorch_utils, "isin_mps_friendly"):
             # Older coqui-tts (tortoise layer) expects this in transformers.pytorch_utils
             # It was removed in newer transformers versions.
-            def isin_mps_friendly(elements, tensor):
+            def isin_mps_friendly(elements, test_elements=None, **kwargs):
                 import torch
 
-                return torch.isin(elements, tensor)
+                return torch.isin(elements, test_elements)
 
             transformers.pytorch_utils.isin_mps_friendly = isin_mps_friendly
 
