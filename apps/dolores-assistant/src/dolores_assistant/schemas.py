@@ -7,6 +7,7 @@ from pydantic import BaseModel
 
 class TextChatRequest(BaseModel):
     """POST /v1/chat request body."""
+
     message: str
     conversation_id: str | None = None
     provider: str | None = None
@@ -16,6 +17,7 @@ class TextChatRequest(BaseModel):
 
 class TextChatResponse(BaseModel):
     """POST /v1/chat response body."""
+
     message: str
     conversation_id: str
 

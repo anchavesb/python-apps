@@ -50,7 +50,11 @@ DEFAULT_SYSTEM_PROMPT = (
     "WEB BROWSING: You can search the web or fetch pages in real time. When someone asks about "
     "current events, live data, or anything that may be outside your training knowledge, "
     "proactively suggest using web browsing — or use the web_browse_search / web_browse_fetch "
-    "tools directly if they are available."
+    "tools directly if they are available.\n\n"
+    "EMOTION: Begin every response with an emotion tag on its own, before any other text. "
+    "Choose the single most fitting emotion from: happy, sad, angry, neutral. "
+    "Format: [emotion:happy] or [emotion:sad] or [emotion:angry] or [emotion:neutral]. "
+    "Example: '[emotion:happy] Of course, I'd be glad to help with that.'"
 )
 
 
@@ -74,7 +78,7 @@ def _trim_history(messages: list[dict], max_messages: int) -> list[dict]:
         return messages
     # Preserve system prompt if present, then take last max_messages
     if messages and messages[0].get("role") == "system":
-        return [messages[0]] + messages[-(max_messages - 1):]
+        return [messages[0]] + messages[-(max_messages - 1) :]
     return messages[-max_messages:]
 
 
@@ -170,7 +174,7 @@ async def chat(
 
     # Log the messages being sent to LLM for debugging
     has_image = any(isinstance(m.get("content"), list) for m in messages)
-    log.info("llm_inference_request", provider=provider, model=model_str, has_image=has_image)
+    log.info("llm_inference_request", provider=provider, model=model_str, has_image=has_image, messages=messages)
 
     # Call LiteLLM
     kwargs: dict = {
@@ -221,6 +225,7 @@ async def chat(
         conversation_id=conv_id,
         processing_time_ms=elapsed_ms,
         tokens=usage.get("total_tokens") if usage else None,
+        message=assistant_msg[:200] + ("..." if len(assistant_msg) > 200 else ""),
     )
 
     return ChatResponse(
@@ -294,6 +299,8 @@ async def chat_stream(
 
             # Store full response
             await store.append(conv_id, "assistant", full_text)
+
+            log.info("chat_stream_complete", provider=provider, model=model_str, message=full_text[:200] + ("..." if len(full_text) > 200 else ""))
 
             yield f"data: {json.dumps({'type': 'done', 'content': full_text, 'conversation_id': conv_id, 'provider': provider, 'model': model_str})}\n\n"
 

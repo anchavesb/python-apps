@@ -3,9 +3,9 @@
 CRITICAL: Must run with single worker due to CUDA/torch multiprocessing issues.
 """
 
-
 try:
     import torch.multiprocessing
+
     torch.multiprocessing.set_start_method("spawn", force=True)
 except ImportError:
     pass  # torch not installed, running without GPU support

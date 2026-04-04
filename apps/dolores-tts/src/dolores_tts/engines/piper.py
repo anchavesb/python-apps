@@ -27,12 +27,17 @@ class PiperEngine(TTSEngine):
     def load(self) -> None:
         log.warning("piper_not_implemented", msg="Piper TTS engine is not yet implemented")
 
+    def supported_emotions(self) -> list[str]:
+        """Return empty list — Piper does not support emotion conditioning."""
+        return []
+
     def synthesize(
         self,
         text: str,
         voice_id: str = "default",
         sample_rate: int = 22050,
         ref_text: str | None = None,
+        emotion: str | None = None,
     ) -> bytes:
         raise NotImplementedError("Piper TTS is not yet implemented")
 

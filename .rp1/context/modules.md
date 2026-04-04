@@ -71,16 +71,20 @@
 ---
 
 ### `apps/dolores-tts`
-**Purpose**: Text-to-speech — pluggable engine backends, voice profile CRUD with reference audio on filesystem and metadata in SQLite.
+**Purpose**: Text-to-speech — pluggable engine backends, voice profile CRUD with reference audio on filesystem and metadata in SQLite. Supports optional per-request emotion conditioning for XTTS v2 via speaker reference clip swapping.
 
 | Component | File | Responsibility |
 |-----------|------|---------------|
-| `TTSEngine` (ABC) | `engine.py` | Interface: `name`, `is_loaded`, `load()`, `synthesize()`, `list_voices()` |
-| `CoquiXTTSEngine` | `engines/coqui_xtts.py` | XTTS v2 voice cloning; CUDA/CPU auto-select (avoids MPS on Mac) |
-| `F5TTSEngine` | `engines/f5_tts.py` | F5-TTS MLX for Apple Silicon; requires reference audio + text |
-| `PiperEngine` | `engines/piper.py` | CPU fallback stub |
+| `TTSEngine` (ABC) | `engine.py` | Interface: `name`, `is_loaded`, `load()`, `synthesize(emotion: str | None = None)`, `list_voices()`, `supported_emotions() -> list[str]` |
+| `CoquiXTTSEngine` | `engines/coqui_xtts.py` | XTTS v2 voice cloning; CUDA/CPU auto-select (avoids MPS on Mac); emotion conditioning via `speaker_wav` swap using bundled or per-voice reference clips |
+| `F5TTSEngine` | `engines/f5_tts.py` | F5-TTS MLX for Apple Silicon; requires reference audio + text; accepts `emotion` as no-op |
+| `PiperEngine` | `engines/piper.py` | CPU fallback stub; accepts `emotion` as no-op |
 | `VoiceProfileStore` | `voice_profiles.py` | Async SQLite: create/list/get/delete profiles; WAV saved to disk |
 | `TTSRoutes` | `routes.py` | POST /v1/synthesize; ffmpeg audio conversion; voice CRUD |
+
+**Emotion conditioning assets**:
+- `assets/emotion_refs/` — bundled shared reference clips (`happy.wav`, `sad.wav`, `angry.wav`, `neutral.wav`); 16-bit PCM, 24kHz mono; used as `speaker_wav` fallback for all voices
+- `data/voices/{voice_id}/emotion_refs/` — optional per-voice override clips; take priority over shared clips when present
 
 **Public API**: `POST /v1/synthesize`, `GET/POST/DELETE /v1/voices/{id}`
 **Auth**: Requires `DOLORES_SERVICE_PSK`

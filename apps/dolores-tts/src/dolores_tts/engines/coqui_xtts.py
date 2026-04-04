@@ -22,9 +22,16 @@ log = get_logger(__name__)
 class CoquiXTTSEngine(TTSEngine):
     """Coqui XTTS v2 TTS engine with voice cloning support."""
 
-    def __init__(self, device: str = "auto", voices_dir: str = "data/voices") -> None:
+    def __init__(
+        self,
+        device: str = "auto",
+        voices_dir: str = "data/voices",
+        emotions_dir: str = "assets/emotion_refs",
+    ) -> None:
         self._device = device
         self._voices_dir = Path(voices_dir)
+        self._emotions_dir = Path(emotions_dir)
+        self._shared_emotion_refs: dict[str, str] = {}
         self._model = None
         self._config = None
 
@@ -40,15 +47,19 @@ class CoquiXTTSEngine(TTSEngine):
         """Load XTTS v2 model."""
         # Monkeypatch transformers for coqui-tts compatibility if needed
         import transformers.pytorch_utils
+
         if not hasattr(transformers.pytorch_utils, "isin_mps_friendly"):
             # Older coqui-tts (tortoise layer) expects this in transformers.pytorch_utils
             # It was removed in newer transformers versions.
-            def isin_mps_friendly(elements, tensor):
+            def isin_mps_friendly(elements, test_elements=None, **kwargs):
                 import torch
-                return torch.isin(elements, tensor)
+
+                return torch.isin(elements, test_elements)
+
             transformers.pytorch_utils.isin_mps_friendly = isin_mps_friendly
 
         import transformers.utils.import_utils
+
         if not hasattr(transformers.utils.import_utils, "is_torchcodec_available"):
             # Some versions of coqui-tts expect this
             transformers.utils.import_utils.is_torchcodec_available = lambda: False
@@ -62,6 +73,7 @@ class CoquiXTTSEngine(TTSEngine):
         if device == "auto":
             try:
                 import torch
+
                 if torch.cuda.is_available():
                     device = "cuda"
                 else:
@@ -78,8 +90,17 @@ class CoquiXTTSEngine(TTSEngine):
         speakers = getattr(self._model, "speakers", None) or []
         self._default_speaker = speakers[0] if speakers else "Ana Florence"
 
+        self._shared_emotion_refs = self._load_shared_emotion_refs()
+        log.info("shared_emotion_refs_loaded", emotions=list(self._shared_emotion_refs.keys()))
+
         elapsed = round(time.monotonic() - start, 2)
-        log.info("tts_model_loaded", engine="coqui_xtts", device=device, elapsed_seconds=elapsed, default_speaker=self._default_speaker)
+        log.info(
+            "tts_model_loaded",
+            engine="coqui_xtts",
+            device=device,
+            elapsed_seconds=elapsed,
+            default_speaker=self._default_speaker,
+        )
 
     def synthesize(
         self,
@@ -87,6 +108,7 @@ class CoquiXTTSEngine(TTSEngine):
         voice_id: str = "default",
         sample_rate: int = 24000,
         ref_text: str | None = None,
+        emotion: str | None = None,
     ) -> bytes:
         """Synthesize text to WAV bytes using XTTS v2."""
         if not self._model:
@@ -101,6 +123,16 @@ class CoquiXTTSEngine(TTSEngine):
             tts_kwargs["speaker_wav"] = speaker_wav
         else:
             tts_kwargs["speaker"] = self._default_speaker
+
+        # Emotion conditioning: swap speaker_wav with emotion-differentiated clip
+        if emotion:
+            clip_path = self._resolve_emotion_clip(voice_id, emotion)
+            if clip_path:
+                tts_kwargs["speaker_wav"] = clip_path
+                tts_kwargs.pop("speaker", None)
+                log.info("emotion_conditioning_applied", emotion=emotion, clip=clip_path)
+            else:
+                log.warning("emotion_clip_unavailable", emotion=emotion, fallback="voice_default")
 
         wav_list = self._model.tts(**tts_kwargs)
 
@@ -127,6 +159,10 @@ class CoquiXTTSEngine(TTSEngine):
                     voices.append(d.name)
         return voices
 
+    def supported_emotions(self) -> list[str]:
+        """Return sorted list of emotions for which shared reference clips are loaded."""
+        return sorted(self._shared_emotion_refs.keys())
+
     def _resolve_voice(self, voice_id: str) -> str | None:
         """Resolve a voice_id to a reference WAV file path."""
         if voice_id == "default":
@@ -144,3 +180,27 @@ class CoquiXTTSEngine(TTSEngine):
             return None
 
         return str(wavs[0])
+
+    def _load_shared_emotion_refs(self) -> dict[str, str]:
+        """Scan emotions_dir for {emotion}.wav shared fallback clips."""
+        refs: dict[str, str] = {}
+        supported = {"happy", "sad", "angry", "neutral"}
+        if not self._emotions_dir.exists():
+            log.warning("emotions_dir_not_found", path=str(self._emotions_dir))
+            return refs
+        for emotion in supported:
+            clip = self._emotions_dir / f"{emotion}.wav"
+            if clip.exists():
+                refs[emotion] = str(clip)
+            else:
+                log.warning("shared_emotion_clip_missing", emotion=emotion, path=str(clip))
+        return refs
+
+    def _resolve_emotion_clip(self, voice_id: str, emotion: str) -> str | None:
+        """Return path to best emotion reference clip, or None if unavailable."""
+        # Tier 1: per-voice clip
+        per_voice = self._voices_dir / voice_id / "emotion_refs" / f"{emotion}.wav"
+        if per_voice.exists():
+            return str(per_voice)
+        # Tier 2: shared fallback
+        return self._shared_emotion_refs.get(emotion)

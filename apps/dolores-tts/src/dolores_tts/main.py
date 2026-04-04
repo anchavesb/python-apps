@@ -24,12 +24,19 @@ def _create_engine():
     """Create the appropriate TTS engine based on config."""
     if settings.engine == "coqui_xtts":
         from .engines.coqui_xtts import CoquiXTTSEngine
-        return CoquiXTTSEngine(device=settings.device, voices_dir=settings.voices_dir)
+
+        return CoquiXTTSEngine(
+            device=settings.device,
+            voices_dir=settings.voices_dir,
+            emotions_dir=settings.emotion_refs_dir,
+        )
     elif settings.engine == "piper":
         from .engines.piper import PiperEngine
+
         return PiperEngine()
     elif settings.engine == "f5_tts":
         from .engines.f5_tts import F5TTSEngine
+
         return F5TTSEngine(voices_dir=settings.voices_dir)
     else:
         raise ValueError(f"Unknown TTS engine: {settings.engine}")
@@ -40,7 +47,6 @@ async def lifespan(app: FastAPI):
     global _engine
     setup_logging("dolores-tts", settings.log_level, json_output=settings.log_format == "json")
 
-    # Ensure data directories exist
     os.makedirs(settings.voices_dir, exist_ok=True)
     os.makedirs(os.path.dirname(settings.db_path) or ".", exist_ok=True)
 
@@ -57,9 +63,11 @@ async def lifespan(app: FastAPI):
 
 def _health_details() -> dict:
     engines = {}
+    supported_emotions: list[str] = []
     if _engine:
         engines[_engine.name] = _engine.is_loaded
-    return {"engines": engines}
+        supported_emotions = _engine.supported_emotions()
+    return {"engines": engines, "supported_emotions": supported_emotions}
 
 
 app = FastAPI(title="dolores-tts", lifespan=lifespan)

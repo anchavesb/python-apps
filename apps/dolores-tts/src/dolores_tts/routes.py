@@ -51,8 +51,17 @@ async def _convert_to_wav(audio_data: bytes) -> bytes:
     24kHz is required by f5_tts_mlx and is also accepted by Coqui XTTS v2.
     """
     proc = await asyncio.create_subprocess_exec(
-        "ffmpeg", "-i", "pipe:0",
-        "-f", "wav", "-acodec", "pcm_s16le", "-ar", "24000", "-ac", "1",
+        "ffmpeg",
+        "-i",
+        "pipe:0",
+        "-f",
+        "wav",
+        "-acodec",
+        "pcm_s16le",
+        "-ar",
+        "24000",
+        "-ac",
+        "1",
         "pipe:1",
         stdin=asyncio.subprocess.PIPE,
         stdout=asyncio.subprocess.PIPE,
@@ -78,9 +87,8 @@ async def synthesize(
     if not req.text.strip():
         raise HTTPException(status_code=400, detail="Text cannot be empty")
 
-    log.info("synthesize_request", voice_id=req.voice_id, text_length=len(req.text))
+    log.info("synthesize_request", voice_id=req.voice_id, text_length=len(req.text), emotion=req.emotion)
 
-    # Try to fetch ref_text if it exists in the voice store
     ref_text = None
     try:
         store = get_voice_store()
@@ -98,6 +106,7 @@ async def synthesize(
         voice_id=req.voice_id,
         sample_rate=req.sample_rate,
         ref_text=ref_text,
+        emotion=req.emotion,
     )
 
     return Response(content=wav_bytes, media_type="audio/wav")

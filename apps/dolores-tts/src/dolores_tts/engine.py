@@ -28,9 +28,14 @@ class TTSEngine(ABC):
         voice_id: str = "default",
         sample_rate: int = 24000,
         ref_text: str | None = None,
+        emotion: str | None = None,
     ) -> bytes:
         """Synthesize text to WAV audio bytes (16-bit PCM)."""
         ...
+
+    def supported_emotions(self) -> list[str]:
+        """Return list of emotion values this engine supports. Empty if none."""
+        return []
 
     @abstractmethod
     def list_voices(self) -> list[str]:

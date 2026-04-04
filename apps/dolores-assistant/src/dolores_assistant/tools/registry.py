@@ -20,6 +20,7 @@ async def load_tools(integrations: list[dict], http_client: httpx.AsyncClient) -
 
     if integrations:
         from .openapi_discovery import discover_tools
+
         discovered = await discover_tools(integrations, http_client)
 
     TOOLS = discovered
@@ -30,6 +31,7 @@ async def load_tools(integrations: list[dict], http_client: httpx.AsyncClient) -
 def _load_web_tools() -> None:
     """Append built-in web tools to the global TOOLS list."""
     from .web_tools import PageFetchTool, WebSearchTool
+
     web_tools: list[Tool] = [WebSearchTool(), PageFetchTool()]
     TOOLS.extend(web_tools)
     log.info("web_tools_loaded", names=[t.name for t in web_tools])
@@ -43,11 +45,7 @@ def get_tool_definitions(name_filter: set[str] | None = None) -> list[dict]:
     """
     if name_filter is None:
         return [tool.to_openai_function() for tool in TOOLS]
-    return [
-        tool.to_openai_function()
-        for tool in TOOLS
-        if any(f in tool.name for f in name_filter)
-    ]
+    return [tool.to_openai_function() for tool in TOOLS if any(f in tool.name for f in name_filter)]
 
 
 def get_tool_by_name(name: str) -> Tool | None:

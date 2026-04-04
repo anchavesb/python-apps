@@ -2,7 +2,11 @@
 
 from __future__ import annotations
 
+from typing import Literal
+
 from pydantic import BaseModel, Field
+
+EmotionType = Literal["happy", "sad", "angry", "neutral"]
 
 
 class SynthesizeRequest(BaseModel):
@@ -10,6 +14,7 @@ class SynthesizeRequest(BaseModel):
     voice_id: str = "default"
     output_format: str = "wav"  # wav or opus (future)
     sample_rate: int = 24000
+    emotion: EmotionType | None = None
 
 
 class VoiceProfile(BaseModel):
