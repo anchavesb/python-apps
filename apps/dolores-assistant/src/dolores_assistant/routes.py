@@ -22,8 +22,14 @@ from .tools.openapi_discovery import current_user_token
 from .tools.registry import get_tool_definitions
 
 SPEAKER_NAME_RE = re.compile(r"^[a-zA-Z0-9 ]{1,32}$")
+_SPEAKER_TAG_RE = re.compile(r"^\[Speaker:[^\]]+\]\s*")
 
 _SPEAKER_CONFIDENCE_THRESHOLD = 0.70
+
+
+def _strip_for_intent(text: str) -> str:
+    """Strip [Speaker: X] prefix before intent classification."""
+    return _SPEAKER_TAG_RE.sub("", text).strip()
 
 log = get_logger(__name__)
 
@@ -491,7 +497,7 @@ async def _process_image_message(
 
 def _detect_tool_filter(message: str) -> set[str] | None:
     """Classify message intent and return tool name filter, or None for chat."""
-    _, tool_filter, _ = classify_intent(message)
+    _, tool_filter, _ = classify_intent(_strip_for_intent(message))
     return tool_filter
 
 
@@ -655,7 +661,7 @@ async def _process_and_respond(
 ) -> None:
     """Send user text to brain, stream response text, and optionally TTS audio."""
     try:
-        intent_name, tool_filter, confidence = classify_intent(user_text)
+        intent_name, tool_filter, confidence = classify_intent(_strip_for_intent(user_text))
     except Exception:
         intent_name, tool_filter, confidence = None, None, 0.0
 
