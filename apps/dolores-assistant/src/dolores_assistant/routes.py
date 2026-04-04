@@ -23,13 +23,16 @@ from .tools.registry import get_tool_definitions
 
 SPEAKER_NAME_RE = re.compile(r"^[a-zA-Z0-9 ]{1,32}$")
 _SPEAKER_TAG_RE = re.compile(r"^\[Speaker:[^\]]+\]\s*")
+_VOCATIVE_RE = re.compile(r"^dolores,?\s*", re.IGNORECASE)
 
 _SPEAKER_CONFIDENCE_THRESHOLD = 0.70
 
 
 def _strip_for_intent(text: str) -> str:
-    """Strip [Speaker: X] prefix before intent classification."""
-    return _SPEAKER_TAG_RE.sub("", text).strip()
+    """Strip [Speaker: X] prefix and leading vocative address before intent classification."""
+    text = _SPEAKER_TAG_RE.sub("", text)
+    text = _VOCATIVE_RE.sub("", text)
+    return text.strip()
 
 log = get_logger(__name__)
 
