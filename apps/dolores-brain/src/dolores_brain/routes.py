@@ -174,7 +174,7 @@ async def chat(
 
     # Log the messages being sent to LLM for debugging
     has_image = any(isinstance(m.get("content"), list) for m in messages)
-    log.info("llm_inference_request", provider=provider, model=model_str, has_image=has_image)
+    log.info("llm_inference_request", provider=provider, model=model_str, has_image=has_image, messages=messages)
 
     # Call LiteLLM
     kwargs: dict = {
@@ -225,6 +225,7 @@ async def chat(
         conversation_id=conv_id,
         processing_time_ms=elapsed_ms,
         tokens=usage.get("total_tokens") if usage else None,
+        message=assistant_msg[:200] + ("..." if len(assistant_msg) > 200 else ""),
     )
 
     return ChatResponse(
@@ -298,6 +299,8 @@ async def chat_stream(
 
             # Store full response
             await store.append(conv_id, "assistant", full_text)
+
+            log.info("chat_stream_complete", provider=provider, model=model_str, message=full_text[:200] + ("..." if len(full_text) > 200 else ""))
 
             yield f"data: {json.dumps({'type': 'done', 'content': full_text, 'conversation_id': conv_id, 'provider': provider, 'model': model_str})}\n\n"
 

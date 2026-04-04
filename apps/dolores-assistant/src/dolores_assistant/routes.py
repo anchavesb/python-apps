@@ -721,10 +721,14 @@ async def _process_and_respond(
         if m:
             emotion = m.group(1)
             if emotion in _VALID_EMOTIONS:
+                log.info("emotion_parsed", emotion=emotion)
                 await websocket.send_json({"type": "response.emotion", "emotion": emotion})
             else:
+                log.warning("invalid_emotion_tag", emotion=emotion)
                 emotion = None
             full_text = full_text[m.end() :]
+        else:
+            log.info("no_emotion_tag_found", text=full_text[:50])
 
         if full_text:
             await websocket.send_json({"type": "response.text", "content": full_text})
@@ -762,7 +766,10 @@ async def _process_and_respond(
                     _candidate = match.group(1)
                     if _candidate in _VALID_EMOTIONS:
                         emotion = _candidate
+                        log.info("emotion_parsed_stream", emotion=emotion)
                         await websocket.send_json({"type": "response.emotion", "emotion": emotion})
+                    else:
+                        log.warning("invalid_emotion_tag_stream", emotion=_candidate)
                     # Strip the tag and send the remainder
                     remainder = emotion_buffer[match.end() :]
                     emotion_parsed = True
@@ -802,7 +809,10 @@ async def _process_and_respond(
             _candidate = match.group(1)
             if _candidate in _VALID_EMOTIONS:
                 emotion = _candidate
+                log.info("emotion_parsed_stream_flush", emotion=emotion)
                 await websocket.send_json({"type": "response.emotion", "emotion": emotion})
+            else:
+                log.warning("invalid_emotion_tag_stream_flush", emotion=_candidate)
             remainder = emotion_buffer[match.end() :]
             if remainder:
                 full_text = remainder
