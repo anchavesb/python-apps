@@ -19,7 +19,6 @@ from .intent import classify_intent
 from .pipeline import ServiceClient, run_tool_loop, split_sentences
 from .schemas import TextChatRequest, TextChatResponse
 from .tools.openapi_discovery import current_user_token
-from .tools.registry import get_tool_definitions
 
 SPEAKER_NAME_RE = re.compile(r"^[a-zA-Z0-9 ]{1,32}$")
 
@@ -91,17 +90,47 @@ async def text_chat(
     user_jwt = request.headers.get("x-user-token", "")
     token = current_user_token.set(user_jwt or None)
     try:
-        tool_filter = _detect_tool_filter(req.message) if user_jwt else None
+        intent_name, tool_filter, _ = classify_intent(req.message)
+
+        # Web browsing, news and weather don't require a token.
+        require_token = True
+        if intent_name in ("web_browse", "weather", "news"):
+            require_token = False
+
         result = await run_tool_loop(
             client=client,
             initial_message=req.message,
             conversation_id=req.conversation_id,
             provider=req.provider,
             tool_filter=tool_filter,
+            require_token=require_token,
+            intent=intent_name,
         )
 
+        full_text = result.get("message", "")
+        # Initial emotion extraction (also strips technical tags)
+        _, full_text = _extract_emotion_and_clean(full_text)
+
+        # AGGRESSIVE SANITIZER: If the response is JSON, extract the payload.
+        if full_text.strip().startswith("{") or full_text.strip().startswith("["):
+            try:
+                from .pipeline import _heuristic_extract_text, _parse_json_objects
+                objs = _parse_json_objects(full_text)
+                for data in objs:
+                    extracted = _heuristic_extract_text(data)
+                    if extracted:
+                        full_text = extracted
+                        # Check for tags again in the extracted text
+                        _, full_text = _extract_emotion_and_clean(full_text)
+                        break
+            except Exception:
+                pass
+
+        # Final cleanup to ensure no tags are returned
+        _, full_text = _extract_emotion_and_clean(full_text)
+
         return TextChatResponse(
-            message=result.get("message", ""),
+            message=full_text,
             conversation_id=result.get("conversation_id", ""),
         )
     finally:
@@ -218,89 +247,40 @@ async def delete_speaker(
     return Response(status_code=204)
 
 
-# --- WebSocket conversation ---
+# --- Conversation (Main WebSocket) ---
 
 
 @router.websocket("/conversation")
 async def conversation_ws(websocket: WebSocket) -> None:
-    """Full-duplex WebSocket for voice + text conversation.
-
-    Protocol:
-    Client -> Server:
-      JSON: {type: "session.start", voice_id, provider, mode, token, conversation_id?}
-      JSON: {type: "audio.start"}
-      Binary: audio chunks
-      JSON: {type: "audio.end"}
-      JSON: {type: "text.send", text: "..."}
-      JSON: {type: "session.end"}
-
-    Server -> Client:
-      JSON: {type: "session.created", session_id, conversation_id}
-      JSON: {type: "transcription.partial", text}
-      JSON: {type: "transcription.final", text}
-      JSON: {type: "response.text", content}
-      Binary: TTS audio chunks
-      JSON: {type: "response.end", full_text}
-      JSON: {type: "error", code, message}
-    """
+    """Bidi streaming conversation: Audio/Text in -> Emotion/Text/Audio/Structured out."""
     await websocket.accept()
 
-    client = _service_client
-    if client is None:
-        await websocket.send_json({"type": "error", "code": "service_unavailable", "message": "Service not ready"})
-        await websocket.close()
-        return
+    # Validate API key
+    await validate_ws_token(websocket)
+
+    # Get client from app state (injected via main lifespan)
+    client = get_service_client()
+
+    # Initial session state
+    conversation_id: str | None = None
+    provider: str = settings.default_provider
+    voice_id: str = settings.default_voice_id
+    mode: str = "audio"  # 'audio' or 'text'
 
     session_id = str(uuid.uuid4())
-    conversation_id = None
-    voice_id = settings.default_voice_id
-    provider = settings.default_provider
-    mode = "both"
+    log.info("ws_connected", session_id=session_id)
+
     audio_buffer = bytearray()
     _cv_token = current_user_token.set(None)
 
     try:
-        # Wait for session.start
-        raw = await websocket.receive_text()
-        msg = json.loads(raw)
-
-        if msg.get("type") != "session.start":
-            await websocket.send_json({"type": "error", "code": "protocol_error", "message": "Expected session.start"})
-            await websocket.close()
-            return
-
-        # Validate API key
-        await validate_ws_token(websocket)
-
-        voice_id = msg.get("voice_id", voice_id)
-        provider = msg.get("provider", provider)
-        mode = msg.get("mode", mode)
-        conversation_id = msg.get("conversation_id") or str(uuid.uuid4())
-
-        # Capture user's OIDC JWT for forwarding to downstream services (e.g. todo API)
-        # Separate from "token" which is the API key for assistant auth
-        _cv_token = current_user_token.set(msg.get("user_token"))
-
-        await websocket.send_json(
-            {
-                "type": "session.created",
-                "session_id": session_id,
-                "conversation_id": conversation_id,
-            }
-        )
-
-        log.info("session_started", session_id=session_id, mode=mode, provider=provider)
-
-        # Main message loop
         while True:
             message = await websocket.receive()
 
             if message["type"] == "websocket.disconnect":
-                log.info("ws_client_disconnected", session_id=session_id)
                 break
 
             if "bytes" in message:
-                # Accumulate audio chunks
                 audio_buffer.extend(message["bytes"])
                 continue
 
@@ -308,48 +288,17 @@ async def conversation_ws(websocket: WebSocket) -> None:
                 continue
 
             data = json.loads(message["text"])
-            msg_type = data.get("type", "")
+            msg_type = data.get("type")
 
-            if msg_type == "session.end":
-                break
-
-            elif msg_type == "audio.start":
+            if msg_type == "audio.start":
                 audio_buffer = bytearray()
 
             elif msg_type == "audio.end":
-                # Grab buffer and reset immediately to avoid stale data
                 audio_data = bytes(audio_buffer)
                 audio_buffer = bytearray()
                 content_type = data.get("content_type", "audio/webm")
-
                 if not audio_data:
-                    await websocket.send_json(
-                        {"type": "error", "code": "no_audio", "message": "No audio data received"}
-                    )
                     continue
-
-                # Validate audio magic bytes
-                valid = False
-                if len(audio_data) >= 4:
-                    header = audio_data[:4]
-                    # WebM/MKV (EBML): 0x1A45DFA3
-                    if header == b"\x1a\x45\xdf\xa3":
-                        valid = True
-                    # MP4/M4A (ftyp): bytes 4-7 are 'ftyp' but byte 0-3 is box size
-                    elif len(audio_data) >= 8 and audio_data[4:8] == b"ftyp":
-                        valid = True
-                    # OGG: 'OggS'
-                    elif header == b"OggS":
-                        valid = True
-
-                if not valid:
-                    log.warning(
-                        "unrecognized_audio_header",
-                        size=len(audio_data),
-                        header=audio_data[:8].hex() if len(audio_data) >= 8 else audio_data.hex(),
-                        content_type=content_type,
-                    )
-                    # Still attempt transcription — let STT service decide
 
                 # STT + Speaker ID in parallel
                 transcription, speaker_result = await asyncio.gather(
@@ -357,7 +306,7 @@ async def conversation_ws(websocket: WebSocket) -> None:
                     client.identify_speaker(audio_data, content_type=content_type),
                     return_exceptions=True,
                 )
-                # Handle exceptions gracefully — speaker failure doesn't block transcription
+                # Handle exceptions gracefully
                 if isinstance(transcription, Exception):
                     transcription = None
                 if isinstance(speaker_result, Exception):
@@ -368,7 +317,7 @@ async def conversation_ws(websocket: WebSocket) -> None:
                         {
                             "type": "error",
                             "code": "stt_unavailable",
-                            "message": "Speech recognition failed, please type instead",
+                            "message": "Speech recognition failed",
                         }
                     )
                     continue
@@ -385,7 +334,7 @@ async def conversation_ws(websocket: WebSocket) -> None:
                 if not user_text.strip():
                     continue
 
-                # Inject speaker context into message for Brain (sanitized)
+                # Inject speaker context
                 brain_text = inject_speaker_context(user_text, speaker_result)
 
                 # Brain -> response
@@ -394,55 +343,60 @@ async def conversation_ws(websocket: WebSocket) -> None:
             elif msg_type == "session.update":
                 if "mode" in data:
                     mode = data["mode"]
-                    log.info("session_mode_updated", session_id=session_id, mode=mode)
+                if "voice_id" in data:
+                    voice_id = data["voice_id"]
+                if "provider" in data:
+                    provider = data["provider"]
                 continue
 
             elif msg_type == "session.update_token":
                 new_token = data.get("user_token")
                 _cv_token = current_user_token.set(new_token)
-                log.info("token_updated", session_id=session_id)
                 continue
 
             elif msg_type == "text.send":
                 user_text = data.get("text", "").strip()
                 if not user_text:
                     continue
-
                 await _process_and_respond(websocket, client, user_text, conversation_id, provider, voice_id, mode)
 
             elif msg_type == "image.send":
                 user_text = data.get("text", "").strip() or "Describe this image."
                 image_data = data.get("image_data", "")
                 if not image_data:
-                    await websocket.send_json(
-                        {"type": "error", "code": "no_image", "message": "No image data provided"}
-                    )
                     continue
-                await _process_image_message(
-                    websocket, client, user_text, image_data, conversation_id, provider, voice_id, mode
-                )
+                await _process_image_message(websocket, client, user_text, image_data, conversation_id, provider, voice_id, mode)
 
     except WebSocketDisconnect:
         log.info("ws_disconnected", session_id=session_id)
     except Exception as e:
-        log.error("ws_error", session_id=session_id, error=str(e))
-        try:
-            await websocket.send_json({"type": "error", "code": "internal_error", "message": str(e)})
-        except Exception:
-            pass
+        log.error("ws_error", error=str(e))
     finally:
-        current_user_token.reset(_cv_token)
+        if _cv_token:
+            current_user_token.reset(_cv_token)
 
 
-_EMOTION_TAG_RE = re.compile(r"^\[emotion:(\w+)\]\s*")
+_EMOTION_TAG_RE = re.compile(r"\[emotion:(\w+)\]")
+_TOOL_TAG_RE = re.compile(r"\[(tool|news):[\w_]+\]")
 _VALID_EMOTIONS = {"happy", "sad", "angry", "neutral"}
-_RENDER_MODE_RE = re.compile(r"\b(show|open|fetch|give me the page|display|load|go to|navigate to)\b", re.IGNORECASE)
-_URL_RE = re.compile(r"https?://\S+")
 
 
-def _is_render_mode(text: str) -> bool:
-    """Return True when the user wants raw results/page displayed rather than summarized."""
-    return bool(_RENDER_MODE_RE.search(text)) or bool(_URL_RE.search(text))
+def _extract_emotion_and_clean(text: str) -> tuple[str | None, str]:
+    """Capture the first valid emotion tag and strip ALL technical tags from the string."""
+    # Find the first valid emotion to use for UI/TTS
+    emotion = None
+    all_emotions = _EMOTION_TAG_RE.findall(text)
+    for cand in all_emotions:
+        if cand in _VALID_EMOTIONS:
+            emotion = cand
+            break
+
+    # Strip all [emotion:...] tags globally
+    text = _EMOTION_TAG_RE.sub("", text)
+    # Strip all [tool:...] or [news:...] tags globally
+    text = _TOOL_TAG_RE.sub("", text)
+
+    return emotion, text.strip()
 
 
 async def _process_image_message(
@@ -470,13 +424,7 @@ async def _process_image_message(
         elif event.get("type") == "done":
             full_text = event.get("content", full_text)
         elif event.get("type") == "error":
-            await websocket.send_json(
-                {
-                    "type": "error",
-                    "code": "brain_error",
-                    "message": event.get("error", "Unknown error"),
-                }
-            )
+            await websocket.send_json({"type": "error", "code": "brain_error", "message": event.get("error", "Unknown error")})
             return
 
     if mode != "text" and full_text.strip():
@@ -486,161 +434,6 @@ async def _process_image_message(
             if audio:
                 await websocket.send_bytes(audio)
 
-    await websocket.send_json({"type": "response.end", "full_text": full_text})
-
-
-def _detect_tool_filter(message: str) -> set[str] | None:
-    """Classify message intent and return tool name filter, or None for chat."""
-    _, tool_filter, _ = classify_intent(message)
-    return tool_filter
-
-
-async def _process_web_browse_render(websocket: WebSocket, user_text: str) -> None:
-    """Render-mode web browse: run tools directly and emit response.web_results.
-
-    If the message contains a URL, fetches that page; otherwise runs a search.
-    Skips Brain — results go straight to the frontend as structured JSON.
-    """
-    from .tools.registry import get_tool_by_name
-
-    url_match = _URL_RE.search(user_text)
-
-    if url_match:
-        url = url_match.group(0).rstrip(".,;)")
-        tool = get_tool_by_name("web_browse_fetch")
-        if tool is None:
-            await websocket.send_json(
-                {"type": "error", "code": "tool_unavailable", "message": "Page fetch tool not available"}
-            )
-            await websocket.send_json({"type": "response.end", "full_text": ""})
-            return
-        await websocket.send_json({"type": "response.text", "content": f"Fetching {url}..."})
-        page_content = await tool.execute(url=url)
-        await websocket.send_json(
-            {
-                "type": "response.web_results",
-                "page_content": page_content,
-                "url": url,
-            }
-        )
-    else:
-        # Strip common browse keywords to extract the bare query
-        query = (
-            re.sub(
-                r"^\s*(browse|search the web for|search for|look up|find|google|web search|search online for)\s+",
-                "",
-                user_text,
-                flags=re.IGNORECASE,
-            ).strip()
-            or user_text
-        )
-
-        tool = get_tool_by_name("web_browse_search")
-        if tool is None:
-            await websocket.send_json(
-                {"type": "error", "code": "tool_unavailable", "message": "Web search tool not available"}
-            )
-            await websocket.send_json({"type": "response.end", "full_text": ""})
-            return
-        await websocket.send_json({"type": "response.text", "content": f'Searching for "{query}"...'})
-        raw = await tool.execute(query=query)
-        try:
-            import json as _json
-
-            results = _json.loads(raw)
-        except Exception:
-            results = []
-        await websocket.send_json(
-            {
-                "type": "response.web_results",
-                "results": results,
-                "query": query,
-            }
-        )
-
-    await websocket.send_json({"type": "response.end", "full_text": ""})
-
-
-async def _process_web_browse_verbal(
-    websocket: WebSocket,
-    client: ServiceClient,
-    user_text: str,
-    conversation_id: str | None,
-    provider: str,
-    voice_id: str,
-    mode: str,
-) -> None:
-    """Verbal web browse: call tool directly, then ask Brain to summarize results."""
-    from .tools.registry import get_tool_by_name
-
-    url_match = _URL_RE.search(user_text)
-
-    if url_match:
-        url = url_match.group(0).rstrip(".,;)")
-        tool = get_tool_by_name("web_browse_fetch")
-        if tool is None:
-            await websocket.send_json(
-                {"type": "error", "code": "tool_unavailable", "message": "Page fetch tool not available"}
-            )
-            await websocket.send_json({"type": "response.end", "full_text": ""})
-            return
-        page_content = await tool.execute(url=url)
-        summary_prompt = (
-            f"The user asked: {user_text}\n\n"
-            f"Here is the content fetched from {url}:\n\n{page_content}\n\n"
-            "Please summarize the key information from this page in response to the user's request."
-        )
-    else:
-        search_tool = get_tool_by_name("web_browse_search")
-        fetch_tool = get_tool_by_name("web_browse_fetch")
-        if search_tool is None:
-            await websocket.send_json(
-                {"type": "error", "code": "tool_unavailable", "message": "Web search tool not available"}
-            )
-            await websocket.send_json({"type": "response.end", "full_text": ""})
-            return
-
-        raw = await search_tool.execute(query=user_text)
-
-        # Try to fetch the top result for actual content, not just snippets
-        page_content = ""
-        if fetch_tool is not None:
-            try:
-                import json as _json
-
-                results = _json.loads(raw)
-                if results and results[0].get("url"):
-                    page_content = await fetch_tool.execute(url=results[0]["url"])
-            except Exception:
-                pass
-
-        context = f"Search results:\n{raw}"
-        if page_content and not page_content.startswith("Failed"):
-            context += f"\n\nTop result page content:\n{page_content}"
-
-        summary_prompt = (
-            f"The user asked: {user_text}\n\n"
-            f"Here is live data retrieved from the web:\n\n{context}\n\n"
-            "Using only the information above, answer the user's question concisely. "
-            "Do not say you cannot browse the internet — the data is already provided."
-        )
-
-    log.info("web_browse_summary_prompt", prompt=summary_prompt[:300])
-    result = await client.chat(
-        message=summary_prompt,
-        conversation_id=None,
-        provider=provider,
-    )
-    full_text = result.get("message", "") if result else ""
-
-    if full_text:
-        await websocket.send_json({"type": "response.text", "content": full_text})
-    if mode != "text" and full_text.strip():
-        sentences = split_sentences(full_text)
-        for sentence in sentences:
-            audio = await client.synthesize(sentence, voice_id=voice_id)
-            if audio:
-                await websocket.send_bytes(audio)
     await websocket.send_json({"type": "response.end", "full_text": full_text})
 
 
@@ -663,77 +456,89 @@ async def _process_and_respond(
 
     if intent_name == "generate_image":
         await websocket.send_json({"type": "response.text", "content": "Generating your image..."})
-        # Use 512x512 for better performance on Metal
         image_bytes = await client.generate_image(user_text, width=512, height=512)
         if image_bytes:
             image_b64 = base64.b64encode(image_bytes).decode()
-            await websocket.send_json(
-                {
-                    "type": "response.image",
-                    "image_data": f"data:image/png;base64,{image_b64}",
-                    "prompt": user_text,
-                }
-            )
+            await websocket.send_json({"type": "response.image", "image_data": f"data:image/png;base64,{image_b64}", "prompt": user_text})
         else:
-            await websocket.send_json(
-                {
-                    "type": "response.text",
-                    "content": "I wasn't able to generate the image. Please try again.",
-                }
-            )
+            await websocket.send_json({"type": "response.text", "content": "I wasn't able to generate the image."})
         await websocket.send_json({"type": "response.end", "full_text": ""})
         return
 
-    if intent_name == "web_browse" and _is_render_mode(user_text):
-        await _process_web_browse_render(websocket, user_text)
-        return
+    async def on_tool_result(name: str, args: dict, result: str):
+        if name == "web_browse_search":
+            try:
+                raw_data = json.loads(result)
+                results = raw_data.get("results") if isinstance(raw_data, dict) else raw_data
+                await websocket.send_json({"type": "response.web_results", "results": results, "query": args.get("query")})
+            except Exception:
+                pass
+        elif name == "web_browse_fetch":
+            await websocket.send_json({"type": "response.web_results", "page_content": result, "url": args.get("url")})
+        elif name == "weather_get":
+            try:
+                weather_data = json.loads(result)
+                await websocket.send_json({
+                    "type": "response.web_results",
+                    "results": [{
+                        "title": f"Weather for {weather_data.get('location')}",
+                        "snippet": weather_data.get("text"),
+                        "url": "https://www.bom.gov.au" if "Meteorology" in weather_data.get("source", "") else "https://openweathermap.org"
+                    }],
+                    "query": f"Weather in {args.get('location')}",
+                })
+            except Exception:
+                pass
 
-    if intent_name == "web_browse":
-        await _process_web_browse_verbal(websocket, client, user_text, conversation_id, provider, voice_id, mode)
-        return
+    # Web browsing, news and weather don't require a token.
+    require_token = True
+    if intent_name in ("web_browse", "weather", "news"):
+        require_token = False
 
-    has_user_token = current_user_token.get() is not None
-    if tool_filter and has_user_token and get_tool_definitions(tool_filter):
+    if tool_filter:
         result = await run_tool_loop(
             client=client,
             initial_message=user_text,
             conversation_id=conversation_id,
             provider=provider,
             tool_filter=tool_filter,
+            on_tool_result=on_tool_result,
+            require_token=require_token,
+            intent=intent_name,
         )
 
-        # Handle session expiry with a dedicated event so the UI can prompt re-login
         if result.get("session_expired"):
-            await websocket.send_json(
-                {
-                    "type": "error",
-                    "code": "session_expired",
-                    "message": result.get("message", "Your session has expired."),
-                }
-            )
+            await websocket.send_json({"type": "error", "code": "session_expired", "message": result.get("message")})
             return
 
         full_text = result.get("message", "")
-        emotion = None
 
-        # Parse and strip emotion tag
-        m = _EMOTION_TAG_RE.match(full_text)
-        if m:
-            emotion = m.group(1)
-            if emotion in _VALID_EMOTIONS:
-                log.info("emotion_parsed", emotion=emotion)
-                await websocket.send_json({"type": "response.emotion", "emotion": emotion})
-            else:
-                log.warning("invalid_emotion_tag", emotion=emotion)
-                emotion = None
-            full_text = full_text[m.end() :]
-        else:
-            log.info("no_emotion_tag_found", text=full_text[:50])
+        # Initial emotion extraction
+        emotion, full_text = _extract_emotion_and_clean(full_text)
+        if emotion:
+            await websocket.send_json({"type": "response.emotion", "emotion": emotion})
+
+        # AGGRESSIVE SANITIZER: If the remaining text is still JSON, extract the payload.
+        if full_text.strip().startswith("{") or full_text.strip().startswith("["):
+            try:
+                from .pipeline import _heuristic_extract_text, _parse_json_objects
+                objs = _parse_json_objects(full_text)
+                for data in objs:
+                    extracted = _heuristic_extract_text(data)
+                    if extracted:
+                        full_text = extracted
+                        # Check for tags again in the extracted text
+                        _, full_text = _extract_emotion_and_clean(full_text)
+                        break
+            except Exception:
+                pass
+
+        # Final cleanup to ensure no tags whatsoever are sent to the UI
+        _, full_text = _extract_emotion_and_clean(full_text)
 
         if full_text:
             await websocket.send_json({"type": "response.text", "content": full_text})
 
-        # TTS
         if mode != "text" and full_text.strip():
             sentences = split_sentences(full_text)
             for sentence in sentences:
@@ -744,84 +549,23 @@ async def _process_and_respond(
         await websocket.send_json({"type": "response.end", "full_text": full_text})
         return
 
-    # No tools — use streaming path for faster response
+    # No tools path - buffer response to ensure no technical tags are leaked
     full_text = ""
-    emotion: str | None = None
-    emotion_parsed = False
-    emotion_buffer = ""  # Buffer initial tokens to detect emotion tag
-
-    async for event in client.chat_stream(
-        message=user_text,
-        conversation_id=conversation_id,
-        provider=provider,
-    ):
+    async for event in client.chat_stream(message=user_text, conversation_id=conversation_id, provider=provider):
         if event.get("type") == "token":
-            content = event.get("content", "")
-
-            if not emotion_parsed:
-                # Buffer tokens until we can check for emotion tag
-                emotion_buffer += content
-                match = _EMOTION_TAG_RE.match(emotion_buffer)
-                if match:
-                    _candidate = match.group(1)
-                    if _candidate in _VALID_EMOTIONS:
-                        emotion = _candidate
-                        log.info("emotion_parsed_stream", emotion=emotion)
-                        await websocket.send_json({"type": "response.emotion", "emotion": emotion})
-                    else:
-                        log.warning("invalid_emotion_tag_stream", emotion=_candidate)
-                    # Strip the tag and send the remainder
-                    remainder = emotion_buffer[match.end() :]
-                    emotion_parsed = True
-                    if remainder:
-                        full_text += remainder
-                        await websocket.send_json({"type": "response.text", "content": remainder})
-                elif len(emotion_buffer) > 30:
-                    # No tag found within first 30 chars, flush buffer
-                    emotion_parsed = True
-                    full_text += emotion_buffer
-                    await websocket.send_json({"type": "response.text", "content": emotion_buffer})
-            else:
-                full_text += content
-                await websocket.send_json({"type": "response.text", "content": content})
-
+            full_text += event.get("content", "")
         elif event.get("type") == "done":
             full_text = event.get("content", full_text)
-            # Strip emotion tag from final text if present
-            m = _EMOTION_TAG_RE.match(full_text)
-            if m:
-                full_text = full_text[m.end() :]
-
         elif event.get("type") == "error":
-            await websocket.send_json(
-                {
-                    "type": "error",
-                    "code": "brain_error",
-                    "message": event.get("error", "Unknown error"),
-                }
-            )
+            await websocket.send_json({"type": "error", "code": "brain_error", "message": event.get("error")})
             return
 
-    # Flush any remaining buffer (short responses)
-    if not emotion_parsed and emotion_buffer:
-        match = _EMOTION_TAG_RE.match(emotion_buffer)
-        if match:
-            _candidate = match.group(1)
-            if _candidate in _VALID_EMOTIONS:
-                emotion = _candidate
-                log.info("emotion_parsed_stream_flush", emotion=emotion)
-                await websocket.send_json({"type": "response.emotion", "emotion": emotion})
-            else:
-                log.warning("invalid_emotion_tag_stream_flush", emotion=_candidate)
-            remainder = emotion_buffer[match.end() :]
-            if remainder:
-                full_text = remainder
-                await websocket.send_json({"type": "response.text", "content": remainder})
-        else:
-            full_text = emotion_buffer
-            await websocket.send_json({"type": "response.text", "content": emotion_buffer})
+    emotion, full_text = _extract_emotion_and_clean(full_text)
+    if emotion:
+        await websocket.send_json({"type": "response.emotion", "emotion": emotion})
+    if full_text:
+        await websocket.send_json({"type": "response.text", "content": full_text})
 
-    # TTS: synthesize sentences and send audio
     if mode != "text" and full_text.strip():
         sentences = split_sentences(full_text)
         for sentence in sentences:
