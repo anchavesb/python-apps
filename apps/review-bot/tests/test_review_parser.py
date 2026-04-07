@@ -23,6 +23,7 @@ class TestParseReviewValidJson:
         diff = _make_diff_metadata(("src/foo.py", [10, 11, 12]))
         raw = json.dumps(
             {
+                "thought": "I should check if constants are used.",
                 "summary": "Looks good overall.",
                 "comments": [{"path": "src/foo.py", "line": 11, "body": "Use a constant here."}],
             }
@@ -30,6 +31,7 @@ class TestParseReviewValidJson:
 
         result = parse_review(raw, diff, _MODEL)
 
+        assert result.thought == "I should check if constants are used."
         assert len(result.inline_comments) == 1
         comment = result.inline_comments[0]
         assert comment.path == "src/foo.py"

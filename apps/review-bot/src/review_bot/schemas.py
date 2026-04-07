@@ -20,6 +20,7 @@ class InlineComment(BaseModel):
 
 
 class ReviewResult(BaseModel):
+    thought: str | None = None
     summary: str
     inline_comments: list[InlineComment] = []
 
