@@ -11,7 +11,7 @@ import json
 import os
 import re
 import time
-from typing import AsyncGenerator
+from typing import Any, AsyncGenerator
 
 import httpx
 
@@ -396,48 +396,129 @@ def split_sentences(text: str) -> list[str]:
     return [s.strip() for s in sentences if s.strip()]
 
 
+def _parse_json_objects(text: str) -> list[dict | list]:
+    """Extract all top-level JSON objects and arrays from a string."""
+    objs = []
+    decoder = json.JSONDecoder()
+    idx = 0
+    text = text.strip()
+    while idx < len(text):
+        next_brace = text.find('{', idx)
+        next_bracket = text.find('[', idx)
+        if next_brace == -1 and next_bracket == -1:
+            break
+        if next_brace != -1 and next_bracket != -1:
+            start_idx = min(next_brace, next_bracket)
+        else:
+            start_idx = max(next_brace, next_bracket)
+
+        try:
+            obj, end = decoder.raw_decode(text, start_idx)
+            objs.append(obj)
+            idx = end
+        except json.JSONDecodeError:
+            idx = start_idx + 1
+    return objs
+
+
 def _extract_tool_calls_from_text(text: str) -> list[dict] | None:
     """Try to parse tool calls from message text (for models that output JSON)."""
-    text = text.strip()
-    if not text.startswith("{") and not text.startswith("["):
-        return None
-
     # Strip trailing model tags like <|python_tag|>, <|eot_id|>, etc.
-    text = re.sub(r"<\|[^>]+\|>\s*$", "", text).rstrip()
+    text = re.sub(r"<\|[^>]+\|>\s*$", "", text).strip()
 
-    try:
-        data = json.loads(text)
-    except json.JSONDecodeError:
+    objs = _parse_json_objects(text)
+    if not objs:
         return None
 
-    # Handle {"tool_calls": [...]} wrapper
-    if isinstance(data, dict) and "tool_calls" in data:
-        data = data["tool_calls"]
+    calls = []
+    for data in objs:
+        # Handle {"tool_calls": [...]} wrapper
+        if isinstance(data, dict) and "tool_calls" in data:
+            if isinstance(data["tool_calls"], list):
+                calls.extend(data["tool_calls"])
+            continue
 
-    # Handle single tool call dict: {"name": "...", "arguments": {...}}
-    if isinstance(data, dict) and data.get("name"):
-        data = [data]
+        # Handle single tool call dict
+        if isinstance(data, dict):
+            fn_name = data.get("name") or data.get("function", {}).get("name")
+            if fn_name:
+                calls.append(data)
+            continue
 
-    # Handle direct list of tool calls
+        # Handle direct list of tool calls
+        if isinstance(data, list):
+            for item in data:
+                if isinstance(item, dict):
+                    fn_name = item.get("name") or item.get("function", {}).get("name")
+                    if fn_name:
+                        calls.append(item)
+
+    if not calls:
+        return None
+
+    formatted_calls = []
+    for item in calls:
+        fn = item.get("function", {})
+        name = fn.get("name") or item.get("name")
+        args = fn.get("arguments", item.get("arguments", "{}"))
+        formatted_calls.append(
+            {
+                "id": item.get("id", "call_parsed"),
+                "type": "function",
+                "function": {
+                    "name": name,
+                    "arguments": args,
+                },
+            }
+        )
+    return formatted_calls if formatted_calls else None
+
+
+def _heuristic_extract_text(data: Any) -> str | None:
+    """Recursively search for the most likely human-readable text in a JSON structure."""
+    if isinstance(data, str):
+        # Skip strings that look like JSON themselves
+        trimmed = data.strip()
+        if (trimmed.startswith("{") and trimmed.endswith("}")) or (trimmed.startswith("[") and trimmed.endswith("]")):
+            try:
+                inner = json.loads(trimmed)
+                return _heuristic_extract_text(inner)
+            except Exception:
+                pass
+        return data
+
+    if isinstance(data, dict):
+        # 1. Check known content keys first
+        for key in ["response", "text", "message", "content", "answer", "value"]:
+            val = data.get(key)
+            if val:
+                extracted = _heuristic_extract_text(val)
+                if extracted:
+                    return extracted
+
+        # 2. Check colon-prefixed keys
+        for k, v in data.items():
+            if k.startswith(":") and isinstance(v, str):
+                return v
+
+        # 3. Recurse into all values and pick the longest result
+        candidates = []
+        for v in data.values():
+            res = _heuristic_extract_text(v)
+            if res:
+                candidates.append(res)
+        if candidates:
+            return max(candidates, key=len)
+
     if isinstance(data, list):
-        calls = []
+        # Recurse into items and pick the longest
+        candidates = []
         for item in data:
-            # Support both {"function": {"name": ...}} and {"name": ...} formats
-            fn = item.get("function", {})
-            name = fn.get("name") or item.get("name")
-            if name:
-                args = fn.get("arguments", item.get("arguments", "{}"))
-                calls.append(
-                    {
-                        "id": item.get("id", "call_parsed"),
-                        "type": "function",
-                        "function": {
-                            "name": name,
-                            "arguments": args,
-                        },
-                    }
-                )
-        return calls if calls else None
+            res = _heuristic_extract_text(item)
+            if res:
+                candidates.append(res)
+        if candidates:
+            return max(candidates, key=len)
 
     return None
 
@@ -450,6 +531,8 @@ async def run_tool_loop(
     max_iterations: int = 5,
     tool_filter: set[str] | None = None,
     require_token: bool = True,
+    on_tool_result: Any | None = None,
+    intent: str | None = None,
 ) -> dict:
     """Run the agent tool-calling loop.
 
@@ -472,16 +555,17 @@ async def run_tool_loop(
         }
     token_ok = not require_token or has_token
     tools = (get_tool_definitions(tool_filter) or None) if (tool_filter and token_ok) else None
-    message = initial_message
 
-    # Use a fresh conversation for tool calls so stale history doesn't
-    # confuse the LLM into generating text instead of calling tools.
-    tool_conv_id = None
+    # We use a temporary list of messages for the tool-calling loop.
+    # We include the initial message to start the conversation.
+    messages = [{"role": "user", "content": initial_message}]
 
     for i in range(max_iterations):
+        # We need to pass the tools in every iteration if we want the model to
+        # be able to call them again.
         result = await client.chat(
-            message=message,
-            conversation_id=tool_conv_id,
+            message=messages[-1]["content"] if messages[-1]["role"] == "user" else "",
+            conversation_id=conversation_id,
             provider=provider,
             tools=tools,
         )
@@ -492,7 +576,7 @@ async def run_tool_loop(
                 "conversation_id": conversation_id or "",
             }
 
-        tool_conv_id = result.get("conversation_id", tool_conv_id)
+        conversation_id = result.get("conversation_id", conversation_id)
 
         # Some models output tool calls as JSON text instead of structured
         # tool_calls. Detect and parse them from the message.
@@ -502,9 +586,21 @@ async def run_tool_loop(
                 result["tool_calls"] = parsed
 
         if not result.get("tool_calls"):
-            result["conversation_id"] = conversation_id or ""
-            return result
+            # Final attempt to extract a plain text response if the model insisted on JSON
+            final_text = result.get("message", "")
+            if final_text.strip().startswith("{") or final_text.strip().startswith("["):
+                try:
+                    objs = _parse_json_objects(final_text)
+                    for data in objs:
+                        extracted = _heuristic_extract_text(data)
+                        if extracted:
+                            final_text = extracted
+                            break
+                except Exception:
+                    pass
+            return {"message": final_text, "conversation_id": conversation_id or ""}
 
+        # Log tool calls and execute them
         tool_results = []
         for tc in result["tool_calls"]:
             fn = tc.get("function", {})
@@ -512,10 +608,13 @@ async def run_tool_loop(
             raw_args = fn.get("arguments", "{}")
             tool_args = raw_args if isinstance(raw_args, dict) else json.loads(raw_args)
 
+            log.info("executing_tool", name=tool_name, args=tool_args)
             tool = get_tool_by_name(tool_name)
             if tool:
                 try:
                     tool_result = await tool.execute(**tool_args)
+                    if on_tool_result:
+                        await on_tool_result(tool_name, tool_args, tool_result)
                 except PermissionError:
                     log.warning("tool_auth_failed", tool=tool_name)
                     return {
@@ -530,9 +629,26 @@ async def run_tool_loop(
 
             tool_results.append(f"[{tool_name}]: {tool_result}")
 
-        # Send tool results back as a new message (without tools, so LLM
-        # generates a natural language response instead of more tool calls)
-        message = "\n".join(tool_results)
-        tools = None
+        # Update the message for the next iteration with the tool results
+        messages.append({"role": "assistant", "content": result.get("message", "")})
+
+        guidance = "Now, provide a helpful, conversational response as Dolores. "
+        if intent == "news":
+            guidance += (
+                "You are providing a news update. If you found search results, please choose the "
+                "most relevant articles and use web_browse_fetch to get their content for a high-quality summary. "
+            )
+        elif intent == "weather":
+            guidance += "Summarize the weather data clearly for the user. "
+
+        message = (
+            "I have retrieved the following real-time information: \n" + "\n".join(tool_results) + "\n\n"
+            + guidance +
+            "Include relevant source URLs as plain clickable links (e.g. https://...). "
+            "IMPORTANT: YOUR RESPONSE MUST BE PLAIN NATURAL LANGUAGE. DO NOT OUTPUT JSON. "
+            "DO NOT USE TAGS LIKE [emotion:...] or [tool:...]. "
+            "DO NOT USE PLACEHOLDERS. USE THE ACTUAL DATA RETRIEVED."
+        )
+        messages.append({"role": "user", "content": message})
 
     return {"message": result.get("message", ""), "conversation_id": conversation_id or ""}

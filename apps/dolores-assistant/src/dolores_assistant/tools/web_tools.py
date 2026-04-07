@@ -118,8 +118,14 @@ class WebSearchTool(Tool):
         if not results:
             return "No results found."
 
+        # Add a text summary to help the LLM
+        summary_lines = [f"- {r['title']}: {r['snippet']} ({r['url']})" for r in results]
+        text_summary = "I found these results on the web:\n" + "\n".join(summary_lines)
+
+        final_data = {"results": results, "text": text_summary}
+
         log.info("web_search_done", query=query[:80], count=len(results))
-        return json.dumps(results, ensure_ascii=False)
+        return json.dumps(final_data, ensure_ascii=False)
 
 
 _UDDG_RE = re.compile(r"uddg=([^&]+)")

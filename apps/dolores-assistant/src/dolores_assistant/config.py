@@ -35,6 +35,9 @@ class AssistantConfig:
     imagen_url: str = get_env("DOLORES_IMAGEN_URL", "http://localhost:8005")
     imagen_timeout: int = get_env_int("IMAGEN_TIMEOUT", 300)
 
+    # Weather
+    owm_api_key: str = get_env("OPENWEATHERMAP_API_KEY", "")
+
     # Integrations — JSON array of {name, url, spec_path?, auth?}
     # Example: [{"name":"todo","url":"http://todo:5000","spec_path":"/api/openapi.json"}]
     @property

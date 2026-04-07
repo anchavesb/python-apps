@@ -30,9 +30,10 @@ async def load_tools(integrations: list[dict], http_client: httpx.AsyncClient) -
 
 def _load_web_tools() -> None:
     """Append built-in web tools to the global TOOLS list."""
+    from .weather import WeatherTool
     from .web_tools import PageFetchTool, WebSearchTool
 
-    web_tools: list[Tool] = [WebSearchTool(), PageFetchTool()]
+    web_tools: list[Tool] = [WebSearchTool(), PageFetchTool(), WeatherTool()]
     TOOLS.extend(web_tools)
     log.info("web_tools_loaded", names=[t.name for t in web_tools])
 
