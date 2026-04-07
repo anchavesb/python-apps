@@ -49,8 +49,12 @@ def parse_review(raw_response: str, diff_metadata: DiffMetadata, model_id: str) 
         summary = f"{header}\n\nNote: inline comments could not be parsed (malformed JSON response)."
         return ReviewResult(summary=summary, inline_comments=[])
 
+    raw_thought: str | None = data.get("thought")
     raw_summary: str = data.get("summary", "")
     raw_comments: list[dict] = data.get("comments", [])
+
+    if raw_thought:
+        log.info("review_thought_extracted", model_id=model_id, thought=raw_thought)
 
     valid_comments: list[InlineComment] = []
     demoted_footnotes: list[str] = []
@@ -89,6 +93,7 @@ def parse_review(raw_response: str, diff_metadata: DiffMetadata, model_id: str) 
         )
 
     return ReviewResult(
+        thought=raw_thought,
         summary="".join(summary_parts),
         inline_comments=valid_comments,
     )
