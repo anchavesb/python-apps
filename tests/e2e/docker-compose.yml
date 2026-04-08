@@ -1,0 +1,127 @@
+services:
+  # --- Core Dolores Ecosystem ---
+
+  dolores-assistant:
+    build:
+      context: ../..
+      dockerfile: apps/dolores-assistant/Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      - DOLORES_STT_URL=http://dolores-stt:8001
+      - DOLORES_TTS_URL=http://dolores-tts:8002
+      - DOLORES_BRAIN_URL=http://dolores-brain:8003
+      - DOLORES_IMAGEN_URL=http://dolores-imagen:8005
+      - DOLORES_INTEGRATIONS=[{"name":"todo","url":"http://todo:5000","spec_path":"/api/openapi.json"}]
+      - LOG_LEVEL=INFO
+      - OPENWEATHERMAP_API_KEY=mock-key
+    depends_on:
+      - dolores-stt
+      - dolores-tts
+      - dolores-brain
+      - todo
+
+  dolores-stt:
+    build:
+      context: ../..
+      dockerfile: apps/dolores-stt/Dockerfile
+    ports:
+      - "8001:8001"
+    environment:
+      - STT_MODEL_SIZE=tiny
+      - STT_DEVICE=cpu
+      - SPEAKER_ID_ENABLED=1
+      - LOG_LEVEL=INFO
+    volumes:
+      - stt-data:/app/data
+
+  dolores-tts:
+    build:
+      context: ../..
+      dockerfile: apps/dolores-tts/Dockerfile
+    ports:
+      - "8002:8002"
+    environment:
+      - TTS_ENGINE=mock
+      - TTS_DEVICE=cpu
+      - LOG_LEVEL=INFO
+    volumes:
+      - tts-data:/app/data
+
+  dolores-brain:
+    build:
+      context: ../..
+      dockerfile: apps/dolores-brain/Dockerfile
+    ports:
+      - "8003:8003"
+    environment:
+      - DEFAULT_PROVIDER=ollama
+      - DEFAULT_MODEL=llama3.2
+      - OLLAMA_BASE_URL=http://ollama:11434
+      - OLLAMA_MODEL=llama3.2
+      - LOG_LEVEL=INFO
+    volumes:
+      - brain-data:/app/data
+    depends_on:
+      - ollama
+
+  dolores-imagen:
+    build:
+      context: ../..
+      dockerfile: apps/dolores-imagen/Dockerfile
+    ports:
+      - "8005:8005"
+    environment:
+      - IMAGEN_ENGINE=mock
+      - LOG_LEVEL=INFO
+
+  # --- Infrastructure & Mocking ---
+
+  ollama:
+    image: ollama/ollama:latest
+    container_name: ollama-e2e
+    ports:
+      - "11434:11434"
+
+  # Pre-pull model for Ollama
+  ollama-puller:
+    image: curlimages/curl:latest
+    depends_on:
+      - ollama
+    entrypoint: [ "sh", "-c", "curl -X POST http://ollama:11434/api/pull -d '{\"name\": \"llama3.2\"}'" ]
+
+  # --- Integrations (Real) ---
+
+  todo:
+    build:
+      context: ../../apps/todo
+    environment:
+      - DATABASE_URL=postgresql://postgres:postgres@todo-db:5432/postgres
+      - STORAGE_BACKEND=postgres
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:5000/health').read()"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+    depends_on:
+      todo-db:
+        condition: service_healthy
+
+  todo-db:
+    image: postgres:16-alpine
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=postgres
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+volumes:
+  stt-data:
+  tts-data:
+  brain-data:
+  todo-db-data:

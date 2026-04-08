@@ -38,6 +38,10 @@ def _create_engine():
         from .engines.f5_tts import F5TTSEngine
 
         return F5TTSEngine(voices_dir=settings.voices_dir)
+    elif settings.engine == "mock":
+        from .engines.mock import MockEngine
+
+        return MockEngine()
     else:
         raise ValueError(f"Unknown TTS engine: {settings.engine}")
 

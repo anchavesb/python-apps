@@ -25,5 +25,5 @@ RUN mkdir -p /app/data && chown -R appuser:appuser /app
 USER appuser
 
 # Use gunicorn with a WSGI module
-# Alternatively, you can use the app factory form: todo_app:create_app()
-CMD ["sh", "-c", "exec gunicorn -w ${GUNICORN_WORKERS:-2} -b 0.0.0.0:${PORT:-5000} todo_app.wsgi:app"]
+# Use 1 worker to avoid race conditions during init_db() in E2E tests
+CMD ["sh", "-c", "exec gunicorn -w 1 -b 0.0.0.0:${PORT:-5000} todo_app.wsgi:app"]
