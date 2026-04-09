@@ -40,6 +40,12 @@ lint: install-dev
 test: install-all
 	$(PYTEST) -q
 
+test-e2e: install-all
+	@echo "Cleaning up previous E2E state..."
+	docker-compose -f tests/e2e/docker-compose.yml down -v || true
+	@echo "Running E2E tests... this may take a few minutes for Ollama model pulling."
+	$(PYTEST) tests/e2e -v -s
+
 run-todo: install
 	$(VENV)/bin/todo-app
 

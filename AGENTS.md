@@ -13,7 +13,10 @@ This repository uses a monorepo structure where shared logic is centralized in `
 - **Clean environment:** `make clean`
 
 ## Testing Instructions
-- **Run all tests:** `make test` or `pytest` from the root.
+- **Run Unit Tests:** `make test` or `pytest` from the root.
+- **Run E2E Tests:** `make test-e2e` (Requires Docker).
+- **Run Linter:** `make lint` (Uses Ruff).
+- **PR Requirement:** You **MUST** run `make lint` and `make test-e2e` successfully before pushing any branch for a PR.
 - The root `pytest.ini` and `conftest.py` manage the `pythonpath` for the monorepo.
 
 ## Code Style & Conventions
