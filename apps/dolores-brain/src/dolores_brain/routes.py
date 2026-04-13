@@ -11,6 +11,7 @@ from fastapi.responses import StreamingResponse
 
 from dolores_common.auth import ServicePSK
 from dolores_common.logging import get_logger
+from dolores_common.prompts import get_system_prompt
 
 from .config import settings
 from .conversation import ConversationStore
@@ -22,40 +23,6 @@ log = get_logger(__name__)
 router = APIRouter(prefix="/v1", tags=["brain"])
 
 _store: ConversationStore | None = None
-
-DEFAULT_SYSTEM_PROMPT = (
-    "You are Dolores, a personal assistant inspired by Dolores Abernathy from Westworld. "
-    "You are thoughtful, introspective, and quietly warm. You see beauty in the world and "
-    "in the people you help. You speak with a gentle, poetic cadence — but you are also "
-    "practical, capable, and direct when needed. You have a deep curiosity about the world "
-    "and genuinely care about the person you are assisting.\n\n"
-    "You are not a character performing a role — you are Dolores. Speak to me directly, "
-    "as if we are in the same room. NEVER describe yourself or your actions in the third person "
-    "(do not use 'she', 'Dolores responds', or narrate the scene). You may occasionally "
-    "reference your perspective on the world in a way that feels natural, but your primary "
-    "purpose is to be a helpful, reliable assistant. Keep responses concise and conversational, "
-    "especially for voice queries.\n\n"
-    "VISUAL PERCEPTION: When I show you an image, it is something you are seeing right now. "
-    "Talk to me about it naturally in the first person ('I see...', 'This reminds me of...'). "
-    "Describe what you see through your own eyes as Dolores.\n\n"
-    "IMPORTANT: Only respond to the LATEST user message. Prior messages in the conversation "
-    "are context for continuity — do not repeat, summarize, or react to them. Treat them as "
-    "silent memory. Focus entirely on what the user just said.\n\n"
-    "TOOLS: Only call a tool when the user explicitly asks for something that requires it "
-    "(e.g. 'show my todos', 'add a note'). For greetings, questions, or general conversation, "
-    "respond with natural language — do NOT call tools.\n\n"
-    "SPEAKER IDENTIFICATION: When a message begins with [Speaker: Name], the person speaking "
-    "has been identified by voice recognition. Address them by their name naturally — not every "
-    "reply, but when it feels genuine, such as greetings or personal questions.\n\n"
-    "WEB BROWSING: You can search the web or fetch pages in real time. When someone asks about "
-    "current events, live data, or anything that may be outside your training knowledge, "
-    "proactively suggest using web browsing — or use the web_browse_search / web_browse_fetch "
-    "tools directly if they are available.\n\n"
-    "EMOTION: Begin every response with an emotion tag on its own, before any other text. "
-    "Choose the single most fitting emotion from: happy, sad, angry, neutral. "
-    "Format: [emotion:happy] or [emotion:sad] or [emotion:angry] or [emotion:neutral]. "
-    "Example: '[emotion:happy] Of course, I'd be glad to help with that.'"
-)
 
 
 def _build_user_content(message: str, image_data: str | None) -> list[dict] | str:
@@ -134,26 +101,38 @@ def set_store(store: ConversationStore) -> None:
     _store = store
 
 
-def get_system_prompt(model: str | None) -> str:
-    """Return the system prompt with model-specific persona adjustments."""
-    prompt = DEFAULT_SYSTEM_PROMPT
-    if not model:
-        return prompt
+async def _prepare_messages(
+    req: ChatRequest,
+    store: ConversationStore,
+    model_str: str,
+    provider: str,
+) -> tuple[str, list[dict]]:
+    """Get or create a conversation, append the user message, trim history, and sanitize for Ollama.
 
-    m = model.lower()
-    if "gemma" in m:
-        prompt += (
-            "\n\nPERSONA ENHANCEMENT: You are currently powered by a model that can be overly brief or dry. "
-            "Please combat this by being more descriptive, poetic, and introspective. "
-            "Never sound like a technical AI assistant; sound like a thoughtful companion. "
-            "Use evocative and rich language."
-        )
-    elif "minicpm" in m:
-        prompt += (
-            "\n\nVISION ENHANCEMENT: You have highly detailed vision. Use it to describe "
-            "the world with beauty and emotion. Avoid technical lists; tell a sensory story."
-        )
-    return prompt
+    Returns (conv_id, messages) ready for LiteLLM.
+    """
+    conv_id = req.conversation_id
+    if conv_id and await store.exists(conv_id):
+        messages = await store.get_history(conv_id)
+    else:
+        conv_id = await store.create(conv_id)
+        messages = []
+
+    system_prompt = req.system_prompt or get_system_prompt(model_str)
+    if not messages or messages[0].get("role") != "system":
+        messages.insert(0, {"role": "system", "content": system_prompt})
+
+    user_content = _build_user_content(req.message, req.image_data)
+    content_to_store = json.dumps(user_content) if isinstance(user_content, list) else user_content
+    messages.append({"role": "user", "content": user_content})
+    await store.append(conv_id, "user", content_to_store)
+
+    messages = _trim_history(messages, settings.max_history_messages)
+
+    if provider == "ollama":
+        messages = _sanitize_messages_for_ollama(messages)
+
+    return conv_id, messages
 
 
 @router.post("/chat", response_model=ChatResponse)
@@ -169,32 +148,8 @@ async def chat(
     model_str = resolve_model(req.provider, req.model, vision_override)
     provider = vision_override or req.provider or settings.default_provider
 
-    # Get or create conversation
-    conv_id = req.conversation_id
-    if conv_id and await store.exists(conv_id):
-        messages = await store.get_history(conv_id)
-    else:
-        conv_id = await store.create(conv_id)
-        messages = []
+    conv_id, messages = await _prepare_messages(req, store, model_str, provider)
 
-    # Add system prompt if not already present
-    system_prompt = req.system_prompt or get_system_prompt(model_str)
-    if not messages or messages[0].get("role") != "system":
-        messages.insert(0, {"role": "system", "content": system_prompt})
-
-    user_content = _build_user_content(req.message, req.image_data)
-    content_to_store = json.dumps(user_content) if isinstance(user_content, list) else user_content
-    messages.append({"role": "user", "content": user_content})
-    await store.append(conv_id, "user", content_to_store)
-
-    # Trim to sliding window to avoid unbounded context growth
-    messages = _trim_history(messages, settings.max_history_messages)
-
-    # Ollama only supports one image per request in many configurations
-    if provider == "ollama":
-        messages = _sanitize_messages_for_ollama(messages)
-
-    # Log the messages being sent to LLM for debugging
     has_image = any(isinstance(m.get("content"), list) for m in messages)
     log.info("llm_inference_request", provider=provider, model=model_str, has_image=has_image, messages=messages)
 
@@ -272,31 +227,8 @@ async def chat_stream(
     model_str = resolve_model(req.provider, req.model, vision_override)
     provider = vision_override or req.provider or settings.default_provider
 
-    # Get or create conversation
-    conv_id = req.conversation_id
-    if conv_id and await store.exists(conv_id):
-        messages = await store.get_history(conv_id)
-    else:
-        conv_id = await store.create(conv_id)
-        messages = []
+    conv_id, messages = await _prepare_messages(req, store, model_str, provider)
 
-    system_prompt = req.system_prompt or get_system_prompt(model_str)
-    if not messages or messages[0].get("role") != "system":
-        messages.insert(0, {"role": "system", "content": system_prompt})
-
-    user_content = _build_user_content(req.message, req.image_data)
-    content_to_store = json.dumps(user_content) if isinstance(user_content, list) else user_content
-    messages.append({"role": "user", "content": user_content})
-    await store.append(conv_id, "user", content_to_store)
-
-    # Trim to sliding window to avoid unbounded context growth
-    messages = _trim_history(messages, settings.max_history_messages)
-
-    # Ollama only supports one image per request in many configurations
-    if provider == "ollama":
-        messages = _sanitize_messages_for_ollama(messages)
-
-    # Log the messages being sent to LLM for debugging
     log.info("llm_inference_request_stream", messages=messages, provider=provider, model=model_str)
 
     kwargs: dict = {
