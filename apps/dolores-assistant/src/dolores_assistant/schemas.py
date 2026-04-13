@@ -11,6 +11,7 @@ class TextChatRequest(BaseModel):
     message: str
     conversation_id: str | None = None
     provider: str | None = None
+    model: str | None = None
     tts: bool = False
     voice_id: str = "default"
 
@@ -27,6 +28,7 @@ class WSSessionStart(BaseModel):
     type: str = "session.start"
     voice_id: str = "default"
     provider: str | None = None
+    model: str | None = None
     mode: str = "both"  # voice, text, or both
     token: str | None = None
     conversation_id: str | None = None

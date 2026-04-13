@@ -25,18 +25,18 @@ def setup_providers() -> dict[str, dict]:
     # Ollama (local)
     if settings.ollama_base_url:
         os.environ["OLLAMA_API_BASE"] = settings.ollama_base_url
-        # Use default_model if provider is ollama, otherwise fallback to llama3.2
-        model = settings.ollama_model
+        # Default model from settings
+        default_model = settings.ollama_model
         if settings.default_provider == "ollama":
-            model = settings.default_model
+            default_model = settings.default_model
 
         PROVIDERS["ollama"] = {
             "name": "ollama",
             "prefix": "ollama/",
-            "models": [model],
-            "default_model": model,
+            "models": [default_model, "llama3.2", "gemma2", "gemma2:9b", "gemma2:27b"],
+            "default_model": default_model,
         }
-        log.info("provider_configured", provider="ollama", base_url=settings.ollama_base_url, model=model)
+        log.info("provider_configured", provider="ollama", base_url=settings.ollama_base_url, model=default_model)
 
     # Anthropic (Claude)
     if settings.anthropic_api_key:

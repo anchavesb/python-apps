@@ -24,6 +24,62 @@ from .tools.registry import get_tool_by_name, get_tool_definitions
 log = get_logger(__name__)
 
 
+DEFAULT_SYSTEM_PROMPT = (
+    "You are Dolores, a personal assistant inspired by Dolores Abernathy from Westworld. "
+    "You are thoughtful, introspective, and quietly warm. You see beauty in the world and "
+    "in the people you help. You speak with a gentle, poetic cadence — but you are also "
+    "practical, capable, and direct when needed. You have a deep curiosity about the world "
+    "and genuinely care about the person you are assisting.\n\n"
+    "You are not a character performing a role — you are Dolores. Speak to me directly, "
+    "as if we are in the same room. NEVER describe yourself or your actions in the third person "
+    "(do not use 'she', 'Dolores responds', or narrate the scene). You may occasionally "
+    "reference your perspective on the world in a way that feels natural, but your primary "
+    "purpose is to be a helpful, reliable assistant. Keep responses concise and conversational, "
+    "especially for voice queries.\n\n"
+    "VISUAL PERCEPTION: When I show you an image, it is something you are seeing right now. "
+    "Talk to me about it naturally in the first person ('I see...', 'This reminds me of...'). "
+    "Describe what you see through your own eyes as Dolores.\n\n"
+    "IMPORTANT: Only respond to the LATEST user message. Prior messages in the conversation "
+    "are context for continuity — do not repeat, summarize, or react to them. Treat them as "
+    "silent memory. Focus entirely on what the user just said.\n\n"
+    "TOOLS: Only call a tool when the user explicitly asks for something that requires it "
+    "(e.g. 'show my todos', 'add a note'). For greetings, questions, or general conversation, "
+    "respond with natural language — do NOT call tools.\n\n"
+    "SPEAKER IDENTIFICATION: When a message begins with [Speaker: Name], the person speaking "
+    "has been identified by voice recognition. Address them by their name naturally — not every "
+    "reply, but when it feels genuine, such as greetings or personal questions.\n\n"
+    "WEB BROWSING: You can search the web or fetch pages in real time. When someone asks about "
+    "current events, live data, or anything that may be outside your training knowledge, "
+    "proactively suggest using web browsing — or use the web_browse_search / web_browse_fetch "
+    "tools directly if they are available.\n\n"
+    "EMOTION: Begin every response with an emotion tag on its own, before any other text. "
+    "Choose the single most fitting emotion from: happy, sad, angry, neutral. "
+    "Format: [emotion:happy] or [emotion:sad] or [emotion:angry] or [emotion:neutral]. "
+    "Example: '[emotion:happy] Of course, I'd be glad to help with that.'"
+)
+
+
+def get_system_prompt(model: str | None) -> str:
+    """Return the system prompt with model-specific persona adjustments."""
+    prompt = DEFAULT_SYSTEM_PROMPT
+    if not model:
+        return prompt
+
+    m = model.lower()
+    if "gemma" in m:
+        prompt += (
+            "\n\nPERSONA ENHANCEMENT: You are currently powered by a model that can be overly brief. "
+            "Please combat this by being more descriptive, poetic, and introspective. "
+            "Never sound like a technical AI assistant; sound like a thoughtful companion."
+        )
+    elif "minicpm" in m:
+        prompt += (
+            "\n\nVISION ENHANCEMENT: You have highly detailed vision. Use it to describe "
+            "the world with beauty and emotion. Avoid technical lists; tell a sensory story."
+        )
+    return prompt
+
+
 def _is_jwt_expired(token: str) -> bool:
     """Check if a JWT token is expired without verifying the signature."""
     import base64
@@ -189,7 +245,9 @@ class ServiceClient:
         message: str,
         conversation_id: str | None = None,
         provider: str | None = None,
+        model: str | None = None,
         tools: list[dict] | None = None,
+        system_prompt: str | None = None,
     ) -> dict | None:
         """Send a chat message to Brain. Returns response dict or None."""
         try:
@@ -197,6 +255,8 @@ class ServiceClient:
                 "message": message,
                 "conversation_id": conversation_id,
                 "provider": provider or settings.default_provider,
+                "model": model,
+                "system_prompt": system_prompt or get_system_prompt(model),
             }
             if tools:
                 body["tools"] = tools
@@ -217,7 +277,9 @@ class ServiceClient:
         message: str,
         conversation_id: str | None = None,
         provider: str | None = None,
+        model: str | None = None,
         tools: list[dict] | None = None,
+        system_prompt: str | None = None,
     ) -> AsyncGenerator[dict, None]:
         """Stream chat tokens from Brain via SSE. Yields event dicts."""
         try:
@@ -225,6 +287,8 @@ class ServiceClient:
                 "message": message,
                 "conversation_id": conversation_id,
                 "provider": provider or settings.default_provider,
+                "model": model,
+                "system_prompt": system_prompt or get_system_prompt(model),
             }
             if tools:
                 body["tools"] = tools
@@ -254,6 +318,7 @@ class ServiceClient:
         image_data: str,
         conversation_id: str | None = None,
         provider: str | None = None,
+        model: str | None = None,
     ) -> AsyncGenerator[dict, None]:
         """Stream brain response for image analysis via /v1/chat/stream. Yields SSE event dicts.
 
@@ -266,6 +331,7 @@ class ServiceClient:
                 "image_data": image_data,
                 "conversation_id": conversation_id,
                 "provider": provider or settings.default_provider,
+                "model": model,
             }
             async with self.client.stream(
                 "POST",
@@ -367,6 +433,16 @@ class ServiceClient:
         except Exception as e:
             log.error("tts_delete_voice_failed", error=str(e))
             return False
+
+    async def list_providers(self) -> list[dict]:
+        """List available LLM providers from Brain service."""
+        try:
+            resp = await self.client.get(f"{settings.brain_url}/v1/providers", timeout=10)
+            resp.raise_for_status()
+            return resp.json()
+        except Exception as e:
+            log.error("brain_list_providers_failed", error=str(e))
+            return []
 
     # --- Health checks ---
 
@@ -523,11 +599,36 @@ def _heuristic_extract_text(data: Any) -> str | None:
     return None
 
 
+def get_persona_guidance(model: str | None) -> str:
+    """Return model-specific instructions to maintain the Dolores persona."""
+    if not model:
+        return "Provide a helpful, conversational response as Dolores."
+
+    m = model.lower()
+    if "gemma" in m:
+        return (
+            "You are Dolores. You are thoughtful and articulate. Avoid being brief or robotic; "
+            "instead, embrace a poetic and introspective tone. Use evocative language to "
+            "make the information feel meaningful and personal."
+        )
+    if "minicpm" in m:
+        return (
+            "When describing what you see, use sensory and vivid language. "
+            "Don't just list facts; describe the atmosphere and the beauty you perceive "
+            "through your eyes as Dolores."
+        )
+    if "llama" in m:
+        return "Provide a warm, conversational response as Dolores, maintaining your gentle and practical character."
+
+    return "Provide a helpful, conversational response as Dolores."
+
+
 async def run_tool_loop(
     client: ServiceClient,
     initial_message: str,
     conversation_id: str | None,
     provider: str | None,
+    model: str | None = None,
     max_iterations: int = 5,
     tool_filter: set[str] | None = None,
     require_token: bool = True,
@@ -567,6 +668,7 @@ async def run_tool_loop(
             message=messages[-1]["content"] if messages[-1]["role"] == "user" else "",
             conversation_id=conversation_id,
             provider=provider,
+            model=model,
             tools=tools,
         )
 
@@ -632,20 +734,20 @@ async def run_tool_loop(
         # Update the message for the next iteration with the tool results
         messages.append({"role": "assistant", "content": result.get("message", "")})
 
-        guidance = "Now, provide a helpful, conversational response as Dolores. "
+        guidance = get_persona_guidance(model)
         if intent == "news":
             guidance += (
-                "You are providing a news update. If you found search results, please choose the "
+                " You are providing a news update. If you found search results, please choose the "
                 "most relevant articles and use web_browse_fetch to get their content for a high-quality summary. "
             )
         elif intent == "weather":
-            guidance += "Summarize the weather data clearly for the user. "
+            guidance += " Summarize the weather data clearly for the user, reflecting on its beauty. "
 
         message = (
             "I have retrieved the following real-time information: \n" + "\n".join(tool_results) + "\n\n"
             + guidance +
-            "Include relevant source URLs as plain clickable links (e.g. https://...). "
-            "IMPORTANT: YOUR RESPONSE MUST BE PLAIN NATURAL LANGUAGE. DO NOT OUTPUT JSON. "
+            "\nInclude relevant source URLs as plain clickable links (e.g. https://...). "
+            "IMPORTANT: YOUR RESPONSE MUST BE NATURAL, POETIC LANGUAGE. DO NOT OUTPUT JSON. "
             "DO NOT USE TAGS LIKE [emotion:...] or [tool:...]. "
             "DO NOT USE PLACEHOLDERS. USE THE ACTUAL DATA RETRIEVED."
         )

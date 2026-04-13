@@ -26,6 +26,7 @@ class AssistantConfig:
     # Defaults
     default_voice_id: str = get_env("DEFAULT_VOICE_ID", "default")
     default_provider: str = get_env("DEFAULT_PROVIDER", "ollama")
+    default_model: str = get_env("DEFAULT_MODEL", "llama3.2")
 
     # Logging
     log_level: str = get_env("LOG_LEVEL", "INFO")
