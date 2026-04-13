@@ -6,10 +6,11 @@ import os
 
 from dolores_common.logging import get_logger
 
-from .schemas import AgentsFile, EffectiveConfig
+from .schemas import AgentsFile, DiffMetadata, EffectiveConfig
 
 log = get_logger(__name__)
 _base_prompt: str = ""
+_verification_prompt: str = ""
 
 
 def load_base_prompt(prompts_dir: str) -> str:
@@ -24,10 +25,28 @@ def load_base_prompt(prompts_dir: str) -> str:
     return _base_prompt
 
 
+def load_verification_prompt(prompts_dir: str) -> str:
+    """Read verification_review.md from prompts_dir and store it as module-level.
+
+    Used during the second stage of the agentic review pipeline.
+    """
+    global _verification_prompt
+    path = os.path.join(prompts_dir, "verification_review.md")
+    try:
+        with open(path) as f:
+            _verification_prompt = f.read()
+    except FileNotFoundError:
+        log.warning("verification_prompt_not_found", path=path)
+        _verification_prompt = ""
+    return _verification_prompt
+
+
 def assemble_prompt(
     config: EffectiveConfig,
     agents_files: list[AgentsFile],
     diff_text: str,
+    diff_meta: DiffMetadata,
+    verification_draft: str | None = None,
 ) -> list[dict]:
     """Build the LiteLLM messages list for a PR review.
 
@@ -36,12 +55,18 @@ def assemble_prompt(
             - mode="base"    → base prompt only
             - mode="extend"  → base prompt + per-repo extension appended
             - mode="replace" → per-repo extension only (base prompt absent)
+            - If *verification_draft* is present, uses _verification_prompt instead.
       [2] AGENTS.md block (user message prefix): root first, then subdirectories
-      [3] Diff text (user message suffix)
+      [3] Full File Context (optional): The complete source code of changed files
+      [4] Draft Review (optional): Present only during the verification stage
+      [5] Diff text (user message suffix)
 
     Returns a list of dicts in LiteLLM messages format.
     """
-    active_prompt = _build_active_prompt(config)
+    if verification_draft:
+        active_prompt = _verification_prompt
+    else:
+        active_prompt = _build_active_prompt(config)
 
     user_content_parts: list[str] = []
 
@@ -51,7 +76,24 @@ def assemble_prompt(
             agents_block_lines.append(f"## {af.path}\n\n{af.content}\n")
         user_content_parts.append("\n".join(agents_block_lines))
 
-    user_content_parts.append(diff_text)
+    # Add Full File Context
+    file_context_lines: list[str] = ["# Full File Context\n"]
+    file_context_lines.append(
+        "The following blocks contain the FULL source code of the files changed in this PR (at the current head). "
+        "Use this for deep analysis of data flow, memory management, and architectural consistency.\n"
+    )
+    for filename, file_data in diff_meta.files.items():
+        if file_data.content:
+            file_context_lines.append(f"## File: {filename}\n\n```\n{file_data.content}\n```\n")
+
+    if len(file_context_lines) > 2:  # only add if we actually have content
+        user_content_parts.append("\n".join(file_context_lines))
+
+    # If verifying, include the draft
+    if verification_draft:
+        user_content_parts.append("# DRAFT REVIEW FOR VERIFICATION\n\n" + verification_draft)
+
+    user_content_parts.append("# PR Diff\n" + diff_text)
     user_content = "\n\n".join(user_content_parts)
 
     # Log estimated token count (rough heuristic: 4 chars per token)

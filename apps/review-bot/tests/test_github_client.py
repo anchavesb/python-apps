@@ -8,7 +8,7 @@ to assert on structured log output (rate-limit warnings).
 from __future__ import annotations
 
 import base64
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import httpx
 import pytest
@@ -146,18 +146,22 @@ _PATCH = "@@ -1,3 +1,5 @@\n line1\n+added_line\n line2\n+another_added\n line3"
 
 
 class TestGetDiffFull:
-    async def test_full_mode_returns_diff_text_and_metadata(self, _mock_client):
+    @patch("review_bot.github_client.fetch_file_contents")
+    async def test_full_mode_returns_diff_text_and_metadata(self, mock_fetch, _mock_client):
         _mock_client.get.return_value = _make_response(json_data=[{"filename": "src/main.py", "patch": _PATCH}])
+        mock_fetch.return_value = "full source code"
 
-        diff_text, meta = await get_diff("o", "r", 1, "full", None, None, "tok")
+        diff_text, meta = await get_diff("o", "r", 1, "full", None, "sha_after", "tok")
 
         assert "src/main.py" in diff_text
         assert "src/main.py" in meta.files
+        assert meta.files["src/main.py"].content == "full source code"
         # Lines 2 and 4 are added lines in the patch (new-file numbering)
         assert 2 in meta.files["src/main.py"].changed_lines
         assert 4 in meta.files["src/main.py"].changed_lines
 
-    async def test_full_mode_paginates(self, _mock_client):
+    @patch("review_bot.github_client.fetch_file_contents")
+    async def test_full_mode_paginates(self, mock_fetch, _mock_client):
         """A first page of 100 files must trigger a second request."""
         page1 = [{"filename": f"f{i}.py", "patch": "@@ -1 +1 @@\n+x"} for i in range(100)]
         page2 = [{"filename": "last.py", "patch": "@@ -1 +1 @@\n+y"}]
@@ -165,19 +169,24 @@ class TestGetDiffFull:
             _make_response(json_data=page1),
             _make_response(json_data=page2),
         ]
+        mock_fetch.return_value = "source"
 
-        _, meta = await get_diff("o", "r", 1, "full", None, None, "tok")
+        _, meta = await get_diff("o", "r", 1, "full", None, "sha_after", "tok")
 
         assert len(meta.files) == 101
         assert "last.py" in meta.files
+        assert meta.files["last.py"].content == "source"
 
-    async def test_file_without_patch_has_no_changed_lines(self, _mock_client):
+    @patch("review_bot.github_client.fetch_file_contents")
+    async def test_file_without_patch_has_no_changed_lines(self, mock_fetch, _mock_client):
         """Binary/deleted files often have no patch field."""
         _mock_client.get.return_value = _make_response(json_data=[{"filename": "image.png"}])
+        mock_fetch.return_value = "binary content"
 
-        _, meta = await get_diff("o", "r", 1, "full", None, None, "tok")
+        _, meta = await get_diff("o", "r", 1, "full", None, "sha_after", "tok")
 
         assert meta.files["image.png"].changed_lines == []
+        assert meta.files["image.png"].content == "binary content"
 
 
 # ---------------------------------------------------------------------------
@@ -197,25 +206,32 @@ _INCREMENTAL_DIFF = (
 
 
 class TestGetDiffIncremental:
-    async def test_incremental_returns_raw_diff_and_metadata(self, _mock_client):
+    @patch("review_bot.github_client.fetch_file_contents")
+    async def test_incremental_returns_raw_diff_and_metadata(self, mock_fetch, _mock_client):
         _mock_client.get.return_value = _make_response(text=_INCREMENTAL_DIFF)
+        mock_fetch.return_value = "source content"
 
         diff_text, meta = await get_diff("o", "r", 1, "incremental", "sha_before", "sha_after", "tok")
 
         assert diff_text == _INCREMENTAL_DIFF
         assert "src/utils.py" in meta.files
+        assert meta.files["src/utils.py"].content == "source content"
         assert 11 in meta.files["src/utils.py"].changed_lines
 
-    async def test_incremental_uses_compare_url(self, _mock_client):
+    @patch("review_bot.github_client.fetch_file_contents")
+    async def test_incremental_uses_compare_url(self, mock_fetch, _mock_client):
         _mock_client.get.return_value = _make_response(text=_INCREMENTAL_DIFF)
+        mock_fetch.return_value = "source"
 
         await get_diff("org", "rep", 5, "incremental", "before_sha", "after_sha", "tok")
 
         url, *_ = _mock_client.get.call_args.args
         assert "compare/before_sha...after_sha" in url
 
-    async def test_incremental_uses_diff_accept_header(self, _mock_client):
+    @patch("review_bot.github_client.fetch_file_contents")
+    async def test_incremental_uses_diff_accept_header(self, mock_fetch, _mock_client):
         _mock_client.get.return_value = _make_response(text=_INCREMENTAL_DIFF)
+        mock_fetch.return_value = "source"
 
         await get_diff("o", "r", 1, "incremental", "b", "a", "tok")
 

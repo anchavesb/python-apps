@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import base64
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -285,9 +286,18 @@ class TestPollerIntegration:
                     json=[{"filename": "src/foo.py", "patch": PATCH_TEXT}],
                 )
             )
-            # AGENTS.md not present at root (src/foo.py has only one dir level,
-            # so no subdir AGENTS.md candidate is generated under the two-component
-            # prefix logic)
+            # Mock source code fetch for src/foo.py
+            github_mock.get("https://api.github.com/repos/owner/repo/contents/src/foo.py").mock(
+                return_value=httpx.Response(
+                    200,
+                    json={
+                        "content": base64.b64encode(b"line1\nline2\nline3\n").decode(),
+                        "encoding": "base64",
+                    },
+                )
+            )
+
+            # AGENTS.md not present at root
             github_mock.get("https://api.github.com/repos/owner/repo/contents/AGENTS.md").mock(
                 return_value=httpx.Response(404)
             )

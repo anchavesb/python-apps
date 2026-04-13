@@ -48,10 +48,12 @@ class RepoEntry(BaseModel):
 
     repo: str
     model: str | None = None
+    verification_mode: bool | None = None
 
 
 class _Defaults(BaseModel):
     model: str
+    verification_mode: bool = False
 
 
 class RepoRegistry(BaseModel):
@@ -142,16 +144,20 @@ def resolve_effective_config(
     model: str = registry.defaults.model
     prompt_mode: str = "base"
     prompt_extension: str | None = None
+    verification_mode: bool = registry.defaults.verification_mode
 
     # Layer 2 — per-repo registry entry
     if entry.model is not None:
         model = entry.model
+    if entry.verification_mode is not None:
+        verification_mode = entry.verification_mode
 
     effective = EffectiveConfig(
         repo=repo,
         model=model,
         prompt_mode=prompt_mode,
         prompt_extension=prompt_extension,
+        verification_mode=verification_mode,
         api_key=_resolve_api_key(model, repo),
         github_token=_resolve_github_token(repo),
     )
@@ -179,6 +185,7 @@ def merge_per_repo_config(effective: EffectiveConfig, per_repo_raw: str) -> Effe
         return effective
 
     model: str = data.get("model") or effective.model
+    verification_mode: bool = data.get("verification_mode", effective.verification_mode)
 
     prompt_section: dict = data.get("prompt") or {}
     prompt_mode: str = prompt_section.get("mode") or effective.prompt_mode
@@ -189,6 +196,7 @@ def merge_per_repo_config(effective: EffectiveConfig, per_repo_raw: str) -> Effe
         model=model,
         prompt_mode=prompt_mode,
         prompt_extension=prompt_extension,
+        verification_mode=verification_mode,
         api_key=_resolve_api_key(model, effective.repo),
         github_token=effective.github_token,
     )
