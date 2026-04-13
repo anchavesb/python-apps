@@ -48,6 +48,7 @@ class TestProcessImageMessage:
                 "data:image/jpeg;base64,abc",
                 "conv-1",
                 "ollama",
+                None,
                 "default",
                 "text",
             )
@@ -72,6 +73,7 @@ class TestProcessImageMessage:
                 "data:image/png;base64,xyz",
                 None,
                 "ollama",
+                None,
                 "default",
                 "text",
             )
@@ -94,6 +96,7 @@ class TestProcessImageMessage:
                 "data:image/jpeg;base64,abc",
                 None,
                 "ollama",
+                None,
                 "default",
                 "text",
             )
@@ -132,6 +135,7 @@ class TestImageGenerationPipeline:
                     "generate a red fox in snow",
                     "conv-1",
                     "ollama",
+                    None,
                     "default",
                     "text",
                 )
@@ -153,6 +157,7 @@ class TestImageGenerationPipeline:
                     "generate a red fox in snow",
                     "conv-1",
                     "ollama",
+                    None,
                     "default",
                     "text",
                 )
@@ -176,6 +181,7 @@ class TestImageGenerationPipeline:
                     "make a picture of a cat",
                     "conv-1",
                     "ollama",
+                    None,
                     "default",
                     "text",
                 )
@@ -199,6 +205,7 @@ class TestImageGenerationPipeline:
                     "draw a sunset",
                     None,
                     "ollama",
+                    None,
                     "default",
                     "text",
                 )
