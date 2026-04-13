@@ -68,27 +68,6 @@ def set_service_client(client: ServiceClient) -> None:
     _service_client = client
 
 
-def get_system_prompt(model: str | None) -> str:
-    """Return the system prompt with model-specific persona adjustments."""
-    prompt = DEFAULT_SYSTEM_PROMPT
-    if not model:
-        return prompt
-
-    m = model.lower()
-    if "gemma" in m:
-        prompt += (
-            "\n\nPERSONA ENHANCEMENT: You are currently powered by a model that can be overly brief. "
-            "Please combat this by being more descriptive, poetic, and introspective. "
-            "Never sound like a technical AI assistant; sound like a thoughtful companion."
-        )
-    elif "minicpm" in m:
-        prompt += (
-            "\n\nVISION ENHANCEMENT: You have highly detailed vision. Use it to describe "
-            "the world with beauty and emotion. Avoid technical lists; tell a sensory story."
-        )
-    return prompt
-
-
 @router.get("/settings")
 async def get_backend_settings():
     """Expose backend defaults to frontend."""
