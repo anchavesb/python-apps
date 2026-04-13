@@ -68,13 +68,44 @@ def set_service_client(client: ServiceClient) -> None:
     _service_client = client
 
 
+def get_system_prompt(model: str | None) -> str:
+    """Return the system prompt with model-specific persona adjustments."""
+    prompt = DEFAULT_SYSTEM_PROMPT
+    if not model:
+        return prompt
+
+    m = model.lower()
+    if "gemma" in m:
+        prompt += (
+            "\n\nPERSONA ENHANCEMENT: You are currently powered by a model that can be overly brief. "
+            "Please combat this by being more descriptive, poetic, and introspective. "
+            "Never sound like a technical AI assistant; sound like a thoughtful companion."
+        )
+    elif "minicpm" in m:
+        prompt += (
+            "\n\nVISION ENHANCEMENT: You have highly detailed vision. Use it to describe "
+            "the world with beauty and emotion. Avoid technical lists; tell a sensory story."
+        )
+    return prompt
+
+
 @router.get("/settings")
 async def get_backend_settings():
     """Expose backend defaults to frontend."""
     return {
         "default_provider": settings.default_provider,
+        "default_model": getattr(settings, "default_model", "llama3.2"),
         "default_voice_id": settings.default_voice_id,
     }
+
+
+@router.get("/providers")
+async def list_providers(
+    _auth: ClientAPIKey = None,
+    client: ServiceClient = Depends(get_service_client),
+):
+    """List available LLM providers (proxies to Brain service)."""
+    return await client.list_providers()
 
 
 @router.post("/chat", response_model=TextChatResponse)
@@ -102,6 +133,7 @@ async def text_chat(
             initial_message=req.message,
             conversation_id=req.conversation_id,
             provider=req.provider,
+            model=req.model,
             tool_filter=tool_filter,
             require_token=require_token,
             intent=intent_name,
@@ -264,6 +296,7 @@ async def conversation_ws(websocket: WebSocket) -> None:
     # Initial session state
     conversation_id: str | None = None
     provider: str = settings.default_provider
+    model: str | None = None
     voice_id: str = settings.default_voice_id
     mode: str = "audio"  # 'audio' or 'text'
 
@@ -290,7 +323,28 @@ async def conversation_ws(websocket: WebSocket) -> None:
             data = json.loads(message["text"])
             msg_type = data.get("type")
 
-            if msg_type == "audio.start":
+            if msg_type == "session.start":
+                if "provider" in data:
+                    provider = data["provider"]
+                if "model" in data:
+                    model = data["model"]
+                if "voice_id" in data:
+                    voice_id = data["voice_id"]
+                if "mode" in data:
+                    mode = data["mode"]
+                if "conversation_id" in data:
+                    conversation_id = data["conversation_id"]
+
+                # Acknowledge session start and send IDs back to client
+                # conversation_id might be None, in which case the frontend gets a placeholder
+                await websocket.send_json({
+                    "type": "session.created",
+                    "session_id": session_id,
+                    "conversation_id": conversation_id or str(uuid.uuid4())
+                })
+                continue
+
+            elif msg_type == "audio.start":
                 audio_buffer = bytearray()
 
             elif msg_type == "audio.end":
@@ -338,7 +392,7 @@ async def conversation_ws(websocket: WebSocket) -> None:
                 brain_text = inject_speaker_context(user_text, speaker_result)
 
                 # Brain -> response
-                await _process_and_respond(websocket, client, brain_text, conversation_id, provider, voice_id, mode)
+                await _process_and_respond(websocket, client, brain_text, conversation_id, provider, model, voice_id, mode)
 
             elif msg_type == "session.update":
                 if "mode" in data:
@@ -347,6 +401,8 @@ async def conversation_ws(websocket: WebSocket) -> None:
                     voice_id = data["voice_id"]
                 if "provider" in data:
                     provider = data["provider"]
+                if "model" in data:
+                    model = data["model"]
                 continue
 
             elif msg_type == "session.update_token":
@@ -358,14 +414,14 @@ async def conversation_ws(websocket: WebSocket) -> None:
                 user_text = data.get("text", "").strip()
                 if not user_text:
                     continue
-                await _process_and_respond(websocket, client, user_text, conversation_id, provider, voice_id, mode)
+                await _process_and_respond(websocket, client, user_text, conversation_id, provider, model, voice_id, mode)
 
             elif msg_type == "image.send":
                 user_text = data.get("text", "").strip() or "Describe this image."
                 image_data = data.get("image_data", "")
                 if not image_data:
                     continue
-                await _process_image_message(websocket, client, user_text, image_data, conversation_id, provider, voice_id, mode)
+                await _process_image_message(websocket, client, user_text, image_data, conversation_id, provider, model, voice_id, mode)
 
     except WebSocketDisconnect:
         log.info("ws_disconnected", session_id=session_id)
@@ -406,6 +462,7 @@ async def _process_image_message(
     image_data: str,
     conversation_id: str | None,
     provider: str,
+    model: str | None,
     voice_id: str,
     mode: str,
 ) -> None:
@@ -416,6 +473,7 @@ async def _process_image_message(
         image_data=image_data,
         conversation_id=conversation_id,
         provider=provider,
+        model=model,
     ):
         if event.get("type") == "token":
             content = event.get("content", "")
@@ -443,6 +501,7 @@ async def _process_and_respond(
     user_text: str,
     conversation_id: str | None,
     provider: str,
+    model: str | None,
     voice_id: str,
     mode: str,
 ) -> None:
@@ -501,6 +560,7 @@ async def _process_and_respond(
             initial_message=user_text,
             conversation_id=conversation_id,
             provider=provider,
+            model=model,
             tool_filter=tool_filter,
             on_tool_result=on_tool_result,
             require_token=require_token,
@@ -551,7 +611,7 @@ async def _process_and_respond(
 
     # No tools path - buffer response to ensure no technical tags are leaked
     full_text = ""
-    async for event in client.chat_stream(message=user_text, conversation_id=conversation_id, provider=provider):
+    async for event in client.chat_stream(message=user_text, conversation_id=conversation_id, provider=provider, model=model):
         if event.get("type") == "token":
             full_text += event.get("content", "")
         elif event.get("type") == "done":

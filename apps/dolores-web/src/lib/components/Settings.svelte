@@ -11,10 +11,23 @@
     app.state.settingsOpen = false;
   }
 
+  $effect(() => {
+    // Automatically set default model when provider changes
+    const p = providers.find(pr => pr.name === app.state.provider);
+    if (p && (!app.state.model || !p.models.includes(app.state.model))) {
+      app.state.model = p.default_model;
+    }
+  });
+
   let loginError = $state('');
   let voices = $state<{ id: string; name: string }[]>([]);
   let loadingVoices = $state(false);
   let voiceError = $state('');
+
+  // Provider/Model state
+  let providers = $state<{ name: string; models: string[]; default_model: string }[]>([]);
+  let loadingProviders = $state(false);
+  let providerError = $state('');
 
   // Speaker state
   let speakers = $state<SpeakerProfile[]>([]);
@@ -37,6 +50,24 @@
       loadingVoices = false;
     }
   }
+
+  async function loadProviders() {
+    loadingProviders = true;
+    providerError = '';
+    try {
+      providers = await DoloresClient.listProviders(app.state.serverUrl, app.state.apiKey);
+    } catch (e: any) {
+      providerError = e.message || 'Failed to load providers';
+    } finally {
+      loadingProviders = false;
+    }
+  }
+
+  $effect(() => {
+    if (app.state.settingsOpen && providers.length === 0) {
+      loadProviders();
+    }
+  });
 
   async function loadSpeakers() {
     loadingSpeakers = true;
@@ -164,11 +195,44 @@
 
     <label>
       LLM Provider
-      <select bind:value={app.state.provider}>
-        <option value="ollama">Ollama (Local)</option>
-        <option value="anthropic">Anthropic (Claude)</option>
-        <option value="openai">OpenAI</option>
-      </select>
+      <div class="voice-row">
+        {#if providers.length > 0}
+          <select bind:value={app.state.provider}>
+            {#each providers as p}
+              <option value={p.name}>{p.name.charAt(0).toUpperCase() + p.name.slice(1)}</option>
+            {/each}
+          </select>
+        {:else}
+          <select bind:value={app.state.provider}>
+            <option value="ollama">Ollama (Local)</option>
+            <option value="anthropic">Anthropic (Claude)</option>
+            <option value="openai">OpenAI</option>
+          </select>
+        {/if}
+        <button class="voice-load-btn" onclick={loadProviders} disabled={loadingProviders}>
+          {loadingProviders ? '...' : 'Load'}
+        </button>
+      </div>
+    </label>
+
+    <label>
+      LLM Model
+      <div class="voice-row">
+        {#if providers.length > 0}
+          {@const currentProvider = providers.find(p => p.name === app.state.provider)}
+          {#if currentProvider}
+            <select bind:value={app.state.model}>
+              {#each currentProvider.models as m}
+                <option value={m}>{m}</option>
+              {/each}
+            </select>
+          {:else}
+            <input type="text" bind:value={app.state.model} placeholder="Model name" />
+          {/if}
+        {:else}
+          <input type="text" bind:value={app.state.model} placeholder="Model name" />
+        {/if}
+      </div>
     </label>
 
     <fieldset>

@@ -39,6 +39,7 @@ interface AppState {
   userToken: string;
   voiceId: string;
   provider: string;
+  model: string;
   ttsEnabled: boolean;
   audioPlaying: boolean;
   emotion: AvatarEmotion;
@@ -74,6 +75,7 @@ function createAppState() {
     userToken: auth?.accessToken || '',
     voiceId: saved.voiceId || 'default',
     provider: saved.provider || 'ollama',
+    model: saved.model || '',
     ttsEnabled: saved.ttsEnabled !== false,
     audioPlaying: false,
     emotion: 'neutral',
@@ -95,9 +97,10 @@ function createAppState() {
   const hasSaved = !!localStorage.getItem('dolores-settings');
   if (!hasSaved) {
     DoloresClient.getSettings(state.serverUrl, state.apiKey)
-      .then((defaults) => {
-        state.provider = defaults.default_provider;
-        state.voiceId = defaults.default_voice_id;
+      .then((defaults: any) => {
+        state.provider = defaults.default_provider || 'ollama';
+        state.model = defaults.default_model || '';
+        state.voiceId = defaults.default_voice_id || 'default';
       })
       .catch((e) => console.error('Failed to fetch backend defaults:', e));
   }
@@ -253,6 +256,7 @@ function createAppState() {
         apiKey: state.apiKey,
         voiceId: state.voiceId,
         provider: state.provider,
+        model: state.model || undefined,
         mode: state.ttsEnabled ? 'both' : 'text',
         conversationId: state.conversationId || undefined,
         userToken: state.userToken || undefined,
@@ -336,6 +340,7 @@ function createAppState() {
       apiKey: state.apiKey,
       voiceId: state.voiceId,
       provider: state.provider,
+      model: state.model,
       viewMode: state.viewMode,
       conversationId: state.conversationId,
       oidcIssuer: state.oidcIssuer,

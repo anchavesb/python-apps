@@ -27,6 +27,7 @@ export interface SessionConfig {
   apiKey: string;
   voiceId: string;
   provider: string;
+  model?: string;
   mode: 'voice' | 'text' | 'both';
   conversationId?: string;
   userToken?: string;  // OIDC access token forwarded to downstream services
@@ -55,6 +56,7 @@ export class DoloresClient {
           type: 'session.start',
           voice_id: config.voiceId,
           provider: config.provider,
+          model: config.model,
           mode: config.mode,
           token: config.apiKey,
           user_token: config.userToken,
@@ -180,7 +182,15 @@ export class DoloresClient {
     if (!resp.ok) throw new Error(`Failed to delete speaker: ${resp.status}`);
   }
 
-  static async getSettings(serverUrl: string, apiKey: string): Promise<{ default_provider: string, default_voice_id: string }> {
+  static async listProviders(serverUrl: string, apiKey: string): Promise<{ name: string; models: string[]; default_model: string }[]> {
+    const resp = await fetch(`${serverUrl}/v1/providers`, {
+      headers: apiKey ? { 'Authorization': `Bearer ${apiKey}` } : {},
+    });
+    if (!resp.ok) throw new Error(`Failed to fetch providers: ${resp.status}`);
+    return resp.json();
+  }
+
+  static async getSettings(serverUrl: string, apiKey: string): Promise<{ default_provider: string, default_model: string, default_voice_id: string }> {
     const resp = await fetch(`${serverUrl}/v1/settings`, {
       headers: apiKey ? { 'Authorization': `Bearer ${apiKey}` } : {},
     });

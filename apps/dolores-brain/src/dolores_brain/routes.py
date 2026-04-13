@@ -134,6 +134,28 @@ def set_store(store: ConversationStore) -> None:
     _store = store
 
 
+def get_system_prompt(model: str | None) -> str:
+    """Return the system prompt with model-specific persona adjustments."""
+    prompt = DEFAULT_SYSTEM_PROMPT
+    if not model:
+        return prompt
+
+    m = model.lower()
+    if "gemma" in m:
+        prompt += (
+            "\n\nPERSONA ENHANCEMENT: You are currently powered by a model that can be overly brief or dry. "
+            "Please combat this by being more descriptive, poetic, and introspective. "
+            "Never sound like a technical AI assistant; sound like a thoughtful companion. "
+            "Use evocative and rich language."
+        )
+    elif "minicpm" in m:
+        prompt += (
+            "\n\nVISION ENHANCEMENT: You have highly detailed vision. Use it to describe "
+            "the world with beauty and emotion. Avoid technical lists; tell a sensory story."
+        )
+    return prompt
+
+
 @router.post("/chat", response_model=ChatResponse)
 async def chat(
     req: ChatRequest,
@@ -156,7 +178,7 @@ async def chat(
         messages = []
 
     # Add system prompt if not already present
-    system_prompt = req.system_prompt or DEFAULT_SYSTEM_PROMPT
+    system_prompt = req.system_prompt or get_system_prompt(model_str)
     if not messages or messages[0].get("role") != "system":
         messages.insert(0, {"role": "system", "content": system_prompt})
 
@@ -258,7 +280,7 @@ async def chat_stream(
         conv_id = await store.create(conv_id)
         messages = []
 
-    system_prompt = req.system_prompt or DEFAULT_SYSTEM_PROMPT
+    system_prompt = req.system_prompt or get_system_prompt(model_str)
     if not messages or messages[0].get("role") != "system":
         messages.insert(0, {"role": "system", "content": system_prompt})
 

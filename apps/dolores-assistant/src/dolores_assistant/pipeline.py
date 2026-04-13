@@ -189,6 +189,7 @@ class ServiceClient:
         message: str,
         conversation_id: str | None = None,
         provider: str | None = None,
+        model: str | None = None,
         tools: list[dict] | None = None,
     ) -> dict | None:
         """Send a chat message to Brain. Returns response dict or None."""
@@ -197,6 +198,7 @@ class ServiceClient:
                 "message": message,
                 "conversation_id": conversation_id,
                 "provider": provider or settings.default_provider,
+                "model": model,
             }
             if tools:
                 body["tools"] = tools
@@ -217,6 +219,7 @@ class ServiceClient:
         message: str,
         conversation_id: str | None = None,
         provider: str | None = None,
+        model: str | None = None,
         tools: list[dict] | None = None,
     ) -> AsyncGenerator[dict, None]:
         """Stream chat tokens from Brain via SSE. Yields event dicts."""
@@ -225,6 +228,7 @@ class ServiceClient:
                 "message": message,
                 "conversation_id": conversation_id,
                 "provider": provider or settings.default_provider,
+                "model": model,
             }
             if tools:
                 body["tools"] = tools
@@ -254,6 +258,7 @@ class ServiceClient:
         image_data: str,
         conversation_id: str | None = None,
         provider: str | None = None,
+        model: str | None = None,
     ) -> AsyncGenerator[dict, None]:
         """Stream brain response for image analysis via /v1/chat/stream. Yields SSE event dicts.
 
@@ -266,6 +271,7 @@ class ServiceClient:
                 "image_data": image_data,
                 "conversation_id": conversation_id,
                 "provider": provider or settings.default_provider,
+                "model": model,
             }
             async with self.client.stream(
                 "POST",
@@ -367,6 +373,16 @@ class ServiceClient:
         except Exception as e:
             log.error("tts_delete_voice_failed", error=str(e))
             return False
+
+    async def list_providers(self) -> list[dict]:
+        """List available LLM providers from Brain service."""
+        try:
+            resp = await self.client.get(f"{settings.brain_url}/v1/providers", timeout=10)
+            resp.raise_for_status()
+            return resp.json()
+        except Exception as e:
+            log.error("brain_list_providers_failed", error=str(e))
+            return []
 
     # --- Health checks ---
 
@@ -523,11 +539,36 @@ def _heuristic_extract_text(data: Any) -> str | None:
     return None
 
 
+def get_persona_guidance(model: str | None) -> str:
+    """Return model-specific instructions to maintain the Dolores persona."""
+    if not model:
+        return "Provide a helpful, conversational response as Dolores."
+
+    m = model.lower()
+    if "gemma" in m:
+        return (
+            "You are Dolores. You are thoughtful and articulate. Avoid being brief or robotic; "
+            "instead, embrace a poetic and introspective tone. Use evocative language to "
+            "make the information feel meaningful and personal."
+        )
+    if "minicpm" in m:
+        return (
+            "When describing what you see, use sensory and vivid language. "
+            "Don't just list facts; describe the atmosphere and the beauty you perceive "
+            "through your eyes as Dolores."
+        )
+    if "llama" in m:
+        return "Provide a warm, conversational response as Dolores, maintaining your gentle and practical character."
+
+    return "Provide a helpful, conversational response as Dolores."
+
+
 async def run_tool_loop(
     client: ServiceClient,
     initial_message: str,
     conversation_id: str | None,
     provider: str | None,
+    model: str | None = None,
     max_iterations: int = 5,
     tool_filter: set[str] | None = None,
     require_token: bool = True,
@@ -567,6 +608,7 @@ async def run_tool_loop(
             message=messages[-1]["content"] if messages[-1]["role"] == "user" else "",
             conversation_id=conversation_id,
             provider=provider,
+            model=model,
             tools=tools,
         )
 
@@ -632,20 +674,20 @@ async def run_tool_loop(
         # Update the message for the next iteration with the tool results
         messages.append({"role": "assistant", "content": result.get("message", "")})
 
-        guidance = "Now, provide a helpful, conversational response as Dolores. "
+        guidance = get_persona_guidance(model)
         if intent == "news":
             guidance += (
-                "You are providing a news update. If you found search results, please choose the "
+                " You are providing a news update. If you found search results, please choose the "
                 "most relevant articles and use web_browse_fetch to get their content for a high-quality summary. "
             )
         elif intent == "weather":
-            guidance += "Summarize the weather data clearly for the user. "
+            guidance += " Summarize the weather data clearly for the user, reflecting on its beauty. "
 
         message = (
             "I have retrieved the following real-time information: \n" + "\n".join(tool_results) + "\n\n"
             + guidance +
-            "Include relevant source URLs as plain clickable links (e.g. https://...). "
-            "IMPORTANT: YOUR RESPONSE MUST BE PLAIN NATURAL LANGUAGE. DO NOT OUTPUT JSON. "
+            "\nInclude relevant source URLs as plain clickable links (e.g. https://...). "
+            "IMPORTANT: YOUR RESPONSE MUST BE NATURAL, POETIC LANGUAGE. DO NOT OUTPUT JSON. "
             "DO NOT USE TAGS LIKE [emotion:...] or [tool:...]. "
             "DO NOT USE PLACEHOLDERS. USE THE ACTUAL DATA RETRIEVED."
         )
