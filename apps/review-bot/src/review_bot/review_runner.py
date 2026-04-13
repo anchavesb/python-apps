@@ -18,7 +18,7 @@ from .github_client import fetch_file_contents, get_diff, post_review
 from .llm_client import call_llm
 from .prompt import assemble_prompt
 from .review_parser import parse_review
-from .schemas import DiffFile, ReviewResult
+from .schemas import DiffFile
 from .state_store import get_state_store
 
 log = get_logger(__name__)
