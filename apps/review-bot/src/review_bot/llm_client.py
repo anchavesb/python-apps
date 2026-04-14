@@ -8,7 +8,6 @@ import time
 from typing import Any, Callable
 
 import litellm
-from fastapi import HTTPException
 
 from dolores_common.logging import get_logger
 
