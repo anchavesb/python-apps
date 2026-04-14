@@ -207,10 +207,12 @@ async def get_diff(
     ``mode="full"``
         Uses ``GET /repos/{o}/{r}/pulls/{n}/files`` (paginated).  Reconstructs
         a unified diff string from the ``patch`` field of each file entry.
+        Also fetches the full source content of each file at ``after_sha``.
 
     ``mode="incremental"``
         Uses ``GET /repos/{o}/{r}/compare/{before}...{after}`` with the
         ``application/vnd.github.diff`` accept header to retrieve a raw diff.
+        Also fetches the full source content of each file at ``after_sha``.
     """
     client = get_github_client()
 
@@ -238,7 +240,13 @@ async def get_diff(
                 patch: str = file_entry.get("patch", "")
                 diff_parts.append(f"diff --git a/{filename} b/{filename}\n{patch}")
                 changed = _parse_changed_lines_from_patch(patch) if patch else []
-                files_meta[filename] = DiffFile(path=filename, changed_lines=changed)
+
+                content = None
+                if after_sha:
+                    # Fetch full source at the current head SHA
+                    content = await fetch_file_contents(owner, repo, filename, after_sha, token)
+
+                files_meta[filename] = DiffFile(path=filename, changed_lines=changed, content=content)
 
             if len(batch) < 100:
                 break
@@ -261,7 +269,14 @@ async def get_diff(
             raise HTTPException(status_code=502, detail=f"GitHub API error: {exc}") from exc
 
         diff_text = response.text
-        return diff_text, _parse_diff_metadata_from_text(diff_text)
+        meta = _parse_diff_metadata_from_text(diff_text)
+
+        # For incremental mode, we also want the full content of changed files at after_sha
+        for filename in meta.files.keys():
+            content = await fetch_file_contents(owner, repo, filename, after_sha, token)
+            meta.files[filename].content = content
+
+        return diff_text, meta
 
 
 async def fetch_file_contents(owner: str, repo: str, path: str, ref: str, token: str) -> str | None:

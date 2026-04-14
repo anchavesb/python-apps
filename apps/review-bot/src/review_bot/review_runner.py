@@ -18,11 +18,13 @@ from .github_client import fetch_file_contents, get_diff, post_review
 from .llm_client import call_llm
 from .prompt import assemble_prompt
 from .review_parser import parse_review
+from .schemas import DiffFile
 from .state_store import get_state_store
 
 log = get_logger(__name__)
 
 _semaphore: asyncio.Semaphore | None = None
+MAX_DISCOVERY_ROUNDS = 2
 
 
 def init_semaphore(max_concurrent: int) -> None:
@@ -91,10 +93,50 @@ async def run_review(
                 head_sha,
                 effective.github_token,
             )
-            messages = assemble_prompt(effective, agents_files, diff_text)
-            raw = await call_llm(effective.model, messages, effective.api_key)
-            result = parse_review(raw, diff_meta, effective.model)
-            await post_review(owner, name, pr_number, result, effective.github_token)
+
+            # --- Agentic Discovery Loop (Stage 1) ---
+            discovery_round = 0
+            discovered_paths: set[str] = set()
+            raw_response = ""
+
+            while True:
+                messages = assemble_prompt(effective, agents_files, diff_text, diff_meta)
+                raw_response = await call_llm(effective.model, messages, effective.api_key)
+                result = parse_review(raw_response, diff_meta, effective.model)
+
+                # Are there new files we need to fetch?
+                new_files = [f for f in result.required_files if f not in diff_meta.files and f not in discovered_paths]
+
+                if not new_files or discovery_round >= MAX_DISCOVERY_ROUNDS:
+                    break
+
+                discovery_round += 1
+                log.info(
+                    "discovery_round_fetching",
+                    repo=repo,
+                    pr_number=pr_number,
+                    round=discovery_round,
+                    files=new_files,
+                )
+
+                for path in new_files:
+                    discovered_paths.add(path)
+                    content = await fetch_file_contents(owner, name, path, head_sha, effective.github_token)
+                    if content:
+                        # Inject into diff_meta so it appears in the next prompt's Full File Context
+                        diff_meta.files[path] = DiffFile(path=path, changed_lines=[], content=content)
+
+            # Stage 2: Verification Pass (Optional)
+            final_result = result
+            if effective.verification_mode:
+                log.info("verification_pass_start", repo=repo, pr_number=pr_number)
+                verify_messages = assemble_prompt(
+                    effective, agents_files, diff_text, diff_meta, verification_draft=raw_response
+                )
+                raw_verify = await call_llm(effective.model, verify_messages, effective.api_key)
+                final_result = parse_review(raw_verify, diff_meta, effective.model)
+
+            await post_review(owner, name, pr_number, final_result, effective.github_token)
             await store.set_sha(repo, pr_number, head_sha)
 
             elapsed = round(time.monotonic() - start, 3)

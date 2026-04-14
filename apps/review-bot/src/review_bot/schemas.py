@@ -23,11 +23,13 @@ class ReviewResult(BaseModel):
     thought: str | None = None
     summary: str
     inline_comments: list[InlineComment] = []
+    required_files: list[str] = []
 
 
 class DiffFile(BaseModel):
     path: str
     changed_lines: list[int]
+    content: str | None = None
 
 
 class DiffMetadata(BaseModel):
@@ -41,6 +43,7 @@ class EffectiveConfig(BaseModel):
     model: str
     prompt_mode: str = "base"
     prompt_extension: str | None = None
+    verification_mode: bool = False
     api_key: str
     github_token: str
 

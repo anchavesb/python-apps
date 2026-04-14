@@ -14,7 +14,7 @@ from dolores_common.middleware import add_common_middleware
 from .config import load_registry, settings
 from .github_client import set_github_client
 from .poller import run_polling_loop
-from .prompt import load_base_prompt
+from .prompt import load_base_prompt, load_verification_prompt
 from .review_runner import init_semaphore
 from .routes import router as review_router
 from .state_store import StateStore, set_state_store
@@ -25,6 +25,7 @@ async def lifespan(app: FastAPI):
     setup_logging("review-bot", settings.log_level, json_output=settings.log_format == "json")
     load_registry(settings.registry_path)
     load_base_prompt(settings.prompts_dir)
+    load_verification_prompt(settings.prompts_dir)
     client = httpx.AsyncClient(timeout=30.0)
     set_github_client(client)
     store = StateStore(settings.state_db_path)
