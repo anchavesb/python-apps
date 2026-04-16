@@ -1,7 +1,5 @@
 # Claude Code
 .claude/worktrees/
-!/.claude/worktrees/upgrade-review-bot-to-agentic/
-!/.claude/worktrees/fix-review-bot-rate-limit/
 
 # Python
 .dolores-venv/
