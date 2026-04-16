@@ -34,11 +34,11 @@ class ReviewBotConfig:
     """Review bot service configuration from environment variables."""
 
     def __init__(self) -> None:
-        self.poll_interval_seconds: int = get_env_int("REVIEW_BOT_POLL_INTERVAL_SECONDS", 60)
+        self.poll_interval_seconds: int = get_env_int("REVIEW_BOT_POLL_INTERVAL_SECONDS", 300)
         self.state_db_path: str = get_env("REVIEW_BOT_STATE_DB_PATH", "data/state.db")
         self.registry_path: str = get_env("REVIEW_BOT_REGISTRY_PATH", "config/repos.yml")
         self.prompts_dir: str = get_env("REVIEW_BOT_PROMPTS_DIR", "prompts")
-        self.max_concurrent_reviews: int = get_env_int("REVIEW_BOT_MAX_CONCURRENT", 3)
+        self.max_concurrent_reviews: int = get_env_int("REVIEW_BOT_MAX_CONCURRENT", 1)
         self.log_level: str = get_env("REVIEW_BOT_LOG_LEVEL", "INFO")
         self.log_format: str = get_env("REVIEW_BOT_LOG_FORMAT", "json")
 
