@@ -58,7 +58,7 @@ def retry_with_backoff(
     return decorator
 
 
-@retry_with_backoff(max_retries=3, initial_delay=5.0)
+@retry_with_backoff(max_retries=3, initial_delay=15.0)
 async def call_llm(model: str, messages: list[dict], api_key: str) -> str:
     """Call the LLM via LiteLLM and return the response text.
 
