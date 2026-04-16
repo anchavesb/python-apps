@@ -54,6 +54,8 @@ def inject_speaker_context(
 
 router = APIRouter(prefix="/v1", tags=["assistant"])
 
+_NO_TOKEN_INTENTS = frozenset({"web_browse", "weather", "news"})
+
 _service_client: ServiceClient | None = None
 
 
@@ -102,10 +104,7 @@ async def text_chat(
     try:
         intent_name, tool_filter, _ = classify_intent(req.message)
 
-        # Web browsing, news and weather don't require a token.
-        require_token = True
-        if intent_name in ("web_browse", "weather", "news"):
-            require_token = False
+        require_token = intent_name not in _NO_TOKEN_INTENTS
 
         result = await run_tool_loop(
             client=client,
@@ -118,27 +117,7 @@ async def text_chat(
             intent=intent_name,
         )
 
-        full_text = result.get("message", "")
-        # Initial emotion extraction (also strips technical tags)
-        _, full_text = _extract_emotion_and_clean(full_text)
-
-        # AGGRESSIVE SANITIZER: If the response is JSON, extract the payload.
-        if full_text.strip().startswith("{") or full_text.strip().startswith("["):
-            try:
-                from .pipeline import _heuristic_extract_text, _parse_json_objects
-                objs = _parse_json_objects(full_text)
-                for data in objs:
-                    extracted = _heuristic_extract_text(data)
-                    if extracted:
-                        full_text = extracted
-                        # Check for tags again in the extracted text
-                        _, full_text = _extract_emotion_and_clean(full_text)
-                        break
-            except Exception:
-                pass
-
-        # Final cleanup to ensure no tags are returned
-        _, full_text = _extract_emotion_and_clean(full_text)
+        _, full_text = _sanitize_response(result.get("message", ""))
 
         return TextChatResponse(
             message=full_text,
@@ -434,6 +413,42 @@ def _extract_emotion_and_clean(text: str) -> tuple[str | None, str]:
     return emotion, text.strip()
 
 
+def _sanitize_response(text: str) -> tuple[str | None, str]:
+    """Strip emotion/tool tags and extract plain text from JSON if the model returned JSON.
+
+    Returns (emotion, clean_text).
+    """
+    emotion, text = _extract_emotion_and_clean(text)
+    if text.strip().startswith(("{", "[")):
+        try:
+            from .pipeline import _heuristic_extract_text, _parse_json_objects
+            objs = _parse_json_objects(text)
+            for data in objs:
+                extracted = _heuristic_extract_text(data)
+                if extracted:
+                    _, text = _extract_emotion_and_clean(extracted)
+                    break
+        except Exception:
+            pass
+    return emotion, text
+
+
+async def _synthesize_and_send(
+    websocket: WebSocket,
+    client: ServiceClient,
+    text: str,
+    voice_id: str,
+    emotion: str | None,
+    mode: str,
+) -> None:
+    """Split text into sentences and send TTS audio bytes over the WebSocket."""
+    if mode != "text" and text.strip():
+        for sentence in split_sentences(text):
+            audio = await client.synthesize(sentence, voice_id=voice_id, emotion=emotion)
+            if audio:
+                await websocket.send_bytes(audio)
+
+
 async def _process_image_message(
     websocket: WebSocket,
     client: ServiceClient,
@@ -464,13 +479,7 @@ async def _process_image_message(
             await websocket.send_json({"type": "error", "code": "brain_error", "message": event.get("error", "Unknown error")})
             return
 
-    if mode != "text" and full_text.strip():
-        sentences = split_sentences(full_text)
-        for sentence in sentences:
-            audio = await client.synthesize(sentence, voice_id=voice_id)
-            if audio:
-                await websocket.send_bytes(audio)
-
+    await _synthesize_and_send(websocket, client, full_text, voice_id, None, mode)
     await websocket.send_json({"type": "response.end", "full_text": full_text})
 
 
@@ -528,10 +537,7 @@ async def _process_and_respond(
             except Exception:
                 pass
 
-    # Web browsing, news and weather don't require a token.
-    require_token = True
-    if intent_name in ("web_browse", "weather", "news"):
-        require_token = False
+    require_token = intent_name not in _NO_TOKEN_INTENTS
 
     if tool_filter:
         result = await run_tool_loop(
@@ -550,41 +556,14 @@ async def _process_and_respond(
             await websocket.send_json({"type": "error", "code": "session_expired", "message": result.get("message")})
             return
 
-        full_text = result.get("message", "")
-
-        # Initial emotion extraction
-        emotion, full_text = _extract_emotion_and_clean(full_text)
+        emotion, full_text = _sanitize_response(result.get("message", ""))
         if emotion:
             await websocket.send_json({"type": "response.emotion", "emotion": emotion})
-
-        # AGGRESSIVE SANITIZER: If the remaining text is still JSON, extract the payload.
-        if full_text.strip().startswith("{") or full_text.strip().startswith("["):
-            try:
-                from .pipeline import _heuristic_extract_text, _parse_json_objects
-                objs = _parse_json_objects(full_text)
-                for data in objs:
-                    extracted = _heuristic_extract_text(data)
-                    if extracted:
-                        full_text = extracted
-                        # Check for tags again in the extracted text
-                        _, full_text = _extract_emotion_and_clean(full_text)
-                        break
-            except Exception:
-                pass
-
-        # Final cleanup to ensure no tags whatsoever are sent to the UI
-        _, full_text = _extract_emotion_and_clean(full_text)
 
         if full_text:
             await websocket.send_json({"type": "response.text", "content": full_text})
 
-        if mode != "text" and full_text.strip():
-            sentences = split_sentences(full_text)
-            for sentence in sentences:
-                audio = await client.synthesize(sentence, voice_id=voice_id, emotion=emotion)
-                if audio:
-                    await websocket.send_bytes(audio)
-
+        await _synthesize_and_send(websocket, client, full_text, voice_id, emotion, mode)
         await websocket.send_json({"type": "response.end", "full_text": full_text})
         return
 
@@ -599,17 +578,11 @@ async def _process_and_respond(
             await websocket.send_json({"type": "error", "code": "brain_error", "message": event.get("error")})
             return
 
-    emotion, full_text = _extract_emotion_and_clean(full_text)
+    emotion, full_text = _sanitize_response(full_text)
     if emotion:
         await websocket.send_json({"type": "response.emotion", "emotion": emotion})
     if full_text:
         await websocket.send_json({"type": "response.text", "content": full_text})
 
-    if mode != "text" and full_text.strip():
-        sentences = split_sentences(full_text)
-        for sentence in sentences:
-            audio = await client.synthesize(sentence, voice_id=voice_id, emotion=emotion)
-            if audio:
-                await websocket.send_bytes(audio)
-
+    await _synthesize_and_send(websocket, client, full_text, voice_id, emotion, mode)
     await websocket.send_json({"type": "response.end", "full_text": full_text})
