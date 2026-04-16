@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "review-bot"
-version = "0.2.3"
+version = "0.2.4"
 description = "Automated PR review bot service"
 authors = [{ name = "Achaves" }]
 requires-python = ">=3.10"
