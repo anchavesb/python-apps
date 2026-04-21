@@ -444,21 +444,30 @@ function createAppState() {
     }
   }
 
-  // Echo prevention (reactive)
+  // VAD management (reactive)
   $effect(() => {
     if (state.vadMode && state.connected) {
-      if (state.audioPlaying || state.recording) vadRecorder.pause();
-      else vadRecorder.start();
+      if (!vadRecorder.initialized) {
+        initVAD();
+      } else {
+        if (state.audioPlaying || state.recording) vadRecorder.pause();
+        else vadRecorder.start();
+      }
+    } else {
+      vadRecorder.pause();
     }
   });
 
   // Tab visibility
-  if (typeof document !== 'undefined') {
-    document.addEventListener('visibilitychange', () => {
+  $effect(() => {
+    if (typeof document === 'undefined') return;
+    const handleVisibility = () => {
       if (!state.vadMode || !state.connected) return;
       document.hidden ? vadRecorder.pause() : vadRecorder.start();
-    });
-  }
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+    return () => document.removeEventListener('visibilitychange', handleVisibility);
+  });
 
   return {
     get state() { return state; },
