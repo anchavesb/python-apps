@@ -96,6 +96,20 @@ function createAppState() {
   player.onPlaybackStart(() => { state.audioPlaying = true; });
   player.onPlaybackEnd(() => { state.audioPlaying = false; });
 
+  let thinkingTimer: any = null;
+  function setThinking(val: boolean) {
+    state.thinking = val;
+    if (thinkingTimer) clearTimeout(thinkingTimer);
+    if (val) {
+      thinkingTimer = setTimeout(() => {
+        state.thinking = false;
+        thinkingTimer = null;
+      }, 15000); // 15s watchdog
+    } else {
+      thinkingTimer = null;
+    }
+  }
+
   // Fetch backend defaults on startup if no local settings are saved
   const hasSaved = !!localStorage.getItem('dolores-settings');
   if (!hasSaved) {
@@ -129,7 +143,7 @@ function createAppState() {
 
       case 'transcription.final':
         state.transcription = msg.text;
-        state.thinking = true; // wait for response.text
+        setThinking(true); // wait for response.text
         state.messages = [...state.messages, {
           role: 'user',
           content: msg.text,
@@ -144,7 +158,7 @@ function createAppState() {
 
       case 'response.text':
         state.streamingText += msg.content;
-        state.thinking = false;
+        setThinking(false);
         break;
       case 'response.image':
         state.messages = [...state.messages, {
@@ -154,7 +168,7 @@ function createAppState() {
           imageUrl: msg.image_data,
           isGeneratedImage: true,
         }];
-        state.thinking = false;
+        setThinking(false);
         break;
       case 'response.web_results':
         state.messages = [...state.messages, {
@@ -168,7 +182,7 @@ function createAppState() {
             url: msg.url,
           },
         }];
-        state.thinking = false;
+        setThinking(false);
         break;
       case 'response.end': {
         const fullText = msg.full_text || state.streamingText;
@@ -187,7 +201,7 @@ function createAppState() {
           }
         }
         state.streamingText = '';
-        state.thinking = false;
+        setThinking(false);
         break;
       }
       case 'error':
@@ -229,7 +243,7 @@ function createAppState() {
             timestamp: new Date(),
           }];
         }
-        state.thinking = false;
+        setThinking(false);
         break;
     }
   });
@@ -248,7 +262,7 @@ function createAppState() {
         const blob = VADAudioRecorder.encodeWav(audio);
         const buffer = await blob.arrayBuffer();
         if (buffer.byteLength < 1000) return; // too short, ignore
-        state.thinking = true;
+        setThinking(true);
         state.transcription = '';
         state.streamingText = '';
         state.emotion = 'neutral';
@@ -321,7 +335,7 @@ function createAppState() {
     if (!client.connected) return;
     state.messages = [...state.messages, { role: 'user', content: text, timestamp: new Date() }];
     state.streamingText = '';
-    state.thinking = true;
+    setThinking(true);
     state.emotion = 'neutral'; // reset for new response
     client.sendText(text);
   }
@@ -335,7 +349,7 @@ function createAppState() {
       imageUrl: imageData,
     }];
     state.streamingText = '';
-    state.thinking = true;
+    setThinking(true);
     state.emotion = 'neutral';
     client.sendImage(imageData, text);
   }
@@ -365,7 +379,7 @@ function createAppState() {
     const buffer = await blob.arrayBuffer();
     if (buffer.byteLength === 0) return; // Nothing recorded (too short)
 
-    state.thinking = true;
+    setThinking(true);
     state.transcription = '';
     state.streamingText = '';
     state.emotion = 'neutral'; // reset for new response

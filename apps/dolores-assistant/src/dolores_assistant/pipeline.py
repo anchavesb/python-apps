@@ -171,7 +171,11 @@ class ServiceClient:
 
         ws_url = settings.stt_url.replace("http", "ws")
         try:
-            async with websockets.connect(f"{ws_url}/v1/stream") as ws:
+            async with websockets.connect(
+                f"{ws_url}/v1/stream",
+                extra_headers=_auth_headers(),
+                open_timeout=10,
+            ) as ws:
                 # Send audio as binary
                 await ws.send(audio_data)
                 # Signal end

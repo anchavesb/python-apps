@@ -336,41 +336,49 @@ async def conversation_ws(websocket: WebSocket) -> None:
                 # Start Speaker ID in background
                 speaker_task = asyncio.create_task(client.identify_speaker(audio_data, content_type=content_type))
 
-                # Stream transcription partials
-                user_text = ""
-                async for chunk in client.transcribe_stream(audio_data, content_type=content_type):
-                    if chunk["type"] == "partial":
-                        await websocket.send_json({"type": "transcription.partial", "text": chunk["text"]})
-                    elif chunk["type"] == "final":
-                        user_text = chunk["text"]
-                    elif chunk["type"] == "error":
-                        await websocket.send_json({"type": "error", "code": "stt_error", "message": chunk["error"]})
-                        break
-
-                if not user_text:
-                    continue
-
-                # Wait for speaker ID
                 try:
-                    speaker_result = await speaker_task
-                except Exception:
-                    speaker_result = None
+                    # Stream transcription partials
+                    user_text = ""
+                    async for chunk in client.transcribe_stream(audio_data, content_type=content_type):
+                        if chunk["type"] == "partial":
+                            await websocket.send_json({"type": "transcription.partial", "text": chunk["text"]})
+                        elif chunk["type"] == "final":
+                            user_text = chunk["text"]
+                        elif chunk["type"] == "error":
+                            await websocket.send_json({"type": "error", "code": "stt_error", "message": chunk["error"]})
+                            break
 
-                # Enrich transcription.final with speaker info
-                final_event = {"type": "transcription.final", "text": user_text}
-                if speaker_result and speaker_result.get("speaker_name"):
-                    final_event["speaker_name"] = speaker_result["speaker_name"]
-                    final_event["speaker_confidence"] = speaker_result.get("confidence", 0)
-                await websocket.send_json(final_event)
+                    if not user_text:
+                        continue
 
-                if not user_text.strip():
-                    continue
+                    # Wait for speaker ID
+                    try:
+                        speaker_result = await speaker_task
+                    except Exception:
+                        speaker_result = None
 
-                # Inject speaker context
-                brain_text = inject_speaker_context(user_text, speaker_result)
+                    # Enrich transcription.final with speaker info
+                    final_event = {"type": "transcription.final", "text": user_text}
+                    if speaker_result and speaker_result.get("speaker_name"):
+                        final_event["speaker_name"] = speaker_result["speaker_name"]
+                        final_event["speaker_confidence"] = speaker_result.get("confidence", 0)
+                    await websocket.send_json(final_event)
 
-                # Brain -> response
-                await _process_and_respond(websocket, client, brain_text, conversation_id, provider, model, voice_id, mode)
+                    if not user_text.strip():
+                        continue
+
+                    # Inject speaker context
+                    brain_text = inject_speaker_context(user_text, speaker_result)
+
+                    # Brain -> response
+                    await _process_and_respond(websocket, client, brain_text, conversation_id, provider, model, voice_id, mode)
+                finally:
+                    if not speaker_task.done():
+                        speaker_task.cancel()
+                        try:
+                            await speaker_task
+                        except asyncio.CancelledError:
+                            pass
 
             elif msg_type == "session.update":
                 if "mode" in data:
