@@ -165,7 +165,9 @@
       >
         {app.state.ttsEnabled ? '🔊' : '🔇'}
       </button>
-      <VoiceButton />
+      {#if !app.state.vadMode}
+        <VoiceButton />
+      {/if}
     </div>
   </div>
 </div>

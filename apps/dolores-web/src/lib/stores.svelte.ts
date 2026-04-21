@@ -1,5 +1,5 @@
 import { DoloresClient, type MessageEvent, type WebResult } from './DoloresClient';
-import { AudioRecorder } from './AudioRecorder';
+import { AudioRecorder, VADAudioRecorder } from './AudioRecorder';
 import { AudioPlayer } from './AudioPlayer';
 import { detectEmotion } from './avatar/EmotionDetector';
 import { handleCallback, loadAuth, login, logout, isTokenExpired, refreshAccessToken, type OIDCConfig } from './auth';
@@ -45,6 +45,7 @@ interface AppState {
   emotion: AvatarEmotion;
   viewMode: 'chat' | 'avatar';
   conversationId: string;
+  vadMode: boolean;   // false = push-to-talk (default), true = auto-listen
   // OIDC
   oidcIssuer: string;
   oidcClientId: string;
@@ -81,6 +82,7 @@ function createAppState() {
     emotion: 'neutral',
     viewMode: (saved.viewMode as 'chat' | 'avatar') || 'chat',
     conversationId: saved.conversationId || '',
+    vadMode: saved.vadMode === true,
     oidcIssuer: saved.oidcIssuer || '',
     oidcClientId: saved.oidcClientId || '',
     oidcUser: auth?.userName || null,
@@ -88,6 +90,7 @@ function createAppState() {
 
   const client = new DoloresClient();
   const recorder = new AudioRecorder();
+  const vadRecorder = new VADAudioRecorder();
   const player = new AudioPlayer();
 
   player.onPlaybackStart(() => { state.audioPlaying = true; });
@@ -224,6 +227,30 @@ function createAppState() {
     }
   });
 
+  async function initVAD(): Promise<void> {
+    await vadRecorder.init({
+      onSpeechStart: () => {
+        if (state.audioPlaying) return; // Dolores speaking → ignore
+        player.stop();
+        state.recording = true;
+        client.sendAudioStart();
+      },
+      onSpeechEnd: async (audio: Float32Array) => {
+        if (!state.recording) return;
+        state.recording = false;
+        const blob = VADAudioRecorder.encodeWav(audio);
+        const buffer = await blob.arrayBuffer();
+        if (buffer.byteLength < 1000) return; // too short, ignore
+        state.thinking = true;
+        state.streamingText = '';
+        state.emotion = 'neutral';
+        client.sendAudioChunk(buffer);
+        client.sendAudioEnd('audio/wav');
+      },
+    });
+    vadRecorder.start();
+  }
+
   async function connect() {
     try {
       // Refresh expired OIDC token before connecting
@@ -250,7 +277,11 @@ function createAppState() {
       }
 
       // Acquire mic permission early and keep stream alive to avoid re-prompting on iOS
-      await recorder.init();
+      if (state.vadMode) {
+        await initVAD();
+      } else {
+        await recorder.init();
+      }
       await client.connect({
         serverUrl: state.serverUrl,
         apiKey: state.apiKey,
@@ -274,6 +305,7 @@ function createAppState() {
   function disconnect() {
     client.disconnect();
     recorder.destroy();
+    vadRecorder.destroy();
     state.connected = false;
   }
 
@@ -346,6 +378,7 @@ function createAppState() {
       oidcIssuer: state.oidcIssuer,
       oidcClientId: state.oidcClientId,
       ttsEnabled: state.ttsEnabled,
+      vadMode: state.vadMode,
     }));
   }
 
@@ -410,6 +443,31 @@ function createAppState() {
       connect();
     }
   }
+
+  // VAD management (reactive)
+  $effect(() => {
+    if (state.vadMode && state.connected) {
+      if (!vadRecorder.initialized) {
+        initVAD();
+      } else {
+        if (state.audioPlaying || state.recording) vadRecorder.pause();
+        else vadRecorder.start();
+      }
+    } else {
+      vadRecorder.pause();
+    }
+  });
+
+  // Tab visibility
+  $effect(() => {
+    if (typeof document === 'undefined') return;
+    const handleVisibility = () => {
+      if (!state.vadMode || !state.connected) return;
+      document.hidden ? vadRecorder.pause() : vadRecorder.start();
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+    return () => document.removeEventListener('visibilitychange', handleVisibility);
+  });
 
   return {
     get state() { return state; },

@@ -139,7 +139,7 @@ export class AvatarRenderer {
         a.blinkActive = false;
         // Random next blink: 2-6 seconds
         a.blinkTimer = 2000 + Math.random() * 4000;
-        if (phase === 'sad') a.blinkTimer *= 1.5; // slower blink when sad
+        if (emotion === 'sad') a.blinkTimer *= 1.5; // slower blink when sad
       }
       targetEyeOpen = 0.05;
     }
