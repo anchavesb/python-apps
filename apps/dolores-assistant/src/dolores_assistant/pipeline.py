@@ -638,7 +638,8 @@ async def run_tool_loop(
     memories = await client.memory.search_memories(initial_message, limit=3)
     memory_context = ""
     if memories:
-        facts = "\n".join([f"- {m['text']}" for m in memories])
+        # Truncate long facts to avoid context window pressure
+        facts = "\n".join([f"- {m['text'][:200]}..." if len(m['text']) > 200 else f"- {m['text']}" for m in memories])
         memory_context = f"\n\nLONG-TERM MEMORY (RELEVANT FACTS):\n{facts}\n"
 
     current_message = initial_message

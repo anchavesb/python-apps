@@ -36,6 +36,9 @@ class AssistantConfig:
     imagen_url: str = get_env("DOLORES_IMAGEN_URL", "http://localhost:8005")
     imagen_timeout: int = get_env_int("IMAGEN_TIMEOUT", 300)
 
+    # Long-term memory
+    memory_db_path: str = get_env("MEMORY_DB_PATH", "data/memory.db")
+
     # Weather
     owm_api_key: str = get_env("OPENWEATHERMAP_API_KEY", "")
 

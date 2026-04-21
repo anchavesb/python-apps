@@ -1,5 +1,5 @@
 import json
-import sqlite3
+import uuid
 from pathlib import Path
 from typing import List, Optional
 
@@ -7,6 +7,7 @@ import aiosqlite
 import numpy as np
 
 from dolores_common.logging import get_logger
+from .config import settings
 from .intent import get_embedding
 
 log = get_logger(__name__)
@@ -14,8 +15,8 @@ log = get_logger(__name__)
 class MemoryStore:
     """Long-term memory using SQLite + embeddings for semantic search."""
 
-    def __init__(self, db_path: str = "data/memory.db"):
-        self.db_path = db_path
+    def __init__(self, db_path: Optional[str] = None):
+        self.db_path = db_path or settings.memory_db_path
         self._initialized = False
 
     async def ensure_initialized(self):
@@ -44,7 +45,6 @@ class MemoryStore:
         """Store a new fact with its embedding."""
         await self.ensure_initialized()
         
-        import uuid
         memory_id = str(uuid.uuid4())
         embedding = get_embedding(text)
         embedding_blob = np.array(embedding, dtype=np.float32).tobytes()
@@ -59,14 +59,20 @@ class MemoryStore:
         log.info("memory_added", text=text[:50])
 
     async def search_memories(self, query: str, limit: int = 5, min_score: float = 0.5) -> List[dict]:
-        """Find relevant memories using cosine similarity."""
+        """Find relevant memories using cosine similarity.
+        
+        Optimized by limiting scan to most recent 100 entries to avoid Python overhead.
+        """
         await self.ensure_initialized()
         
         query_embedding = np.array(get_embedding(query), dtype=np.float32)
         
         memories = []
         async with aiosqlite.connect(self.db_path) as db:
-            async with db.execute("SELECT text, embedding, metadata, timestamp FROM memories") as cursor:
+            # Avoid full table scan as it grows - scan most recent first
+            async with db.execute(
+                "SELECT text, embedding, metadata, timestamp FROM memories ORDER BY timestamp DESC LIMIT 100"
+            ) as cursor:
                 async for row in cursor:
                     text, emb_blob, meta_json, ts = row
                     emb = np.frombuffer(emb_blob, dtype=np.float32)
