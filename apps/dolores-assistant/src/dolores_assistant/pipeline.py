@@ -161,6 +161,31 @@ class ServiceClient:
                 log.error("stt_call_failed", error=str(e), audio_size=len(audio_data), content_type=content_type)
                 return None
 
+    async def transcribe_stream(
+        self, audio_data: bytes, content_type: str = "audio/webm"
+    ) -> AsyncGenerator[dict, None]:
+        """Stream transcription partials from STT service via WebSocket."""
+        # Note: Current dolores-stt /v1/stream expects full audio but yields partials.
+        # Future: switch to true bidi streaming.
+        import websockets
+
+        ws_url = settings.stt_url.replace("http", "ws")
+        try:
+            async with websockets.connect(f"{ws_url}/v1/stream") as ws:
+                # Send audio as binary
+                await ws.send(audio_data)
+                # Signal end
+                await ws.send(json.dumps({"type": "audio.end", "content_type": content_type}))
+
+                async for message in ws:
+                    data = json.loads(message)
+                    yield data
+                    if data.get("type") == "final":
+                        break
+        except Exception as e:
+            log.error("stt_stream_failed", error=str(e))
+            yield {"type": "error", "text": "", "error": str(e)}
+
     # --- Speaker identification ---
 
     async def identify_speaker(self, audio_data: bytes, content_type: str) -> dict | None:

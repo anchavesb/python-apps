@@ -31,8 +31,8 @@ interface AppState {
   connected: boolean;
   recording: boolean;
   thinking: boolean;
-  streamingText: string;
-  transcription: string;
+  transcription: string; // current/last speech-to-text result
+  streamingText: string; // current assistant response being streamed
   settingsOpen: boolean;
   serverUrl: string;
   apiKey: string;
@@ -123,8 +123,13 @@ function createAppState() {
           saveSettings();
         }
         break;
+      case 'transcription.partial':
+        state.transcription = msg.text;
+        break;
+
       case 'transcription.final':
         state.transcription = msg.text;
+        state.thinking = true; // wait for response.text
         state.messages = [...state.messages, {
           role: 'user',
           content: msg.text,
@@ -132,9 +137,11 @@ function createAppState() {
           speakerName: msg.speaker_name,
         }];
         break;
+
       case 'response.emotion':
         state.emotion = msg.emotion as AvatarEmotion;
         break;
+
       case 'response.text':
         state.streamingText += msg.content;
         state.thinking = false;
@@ -242,6 +249,7 @@ function createAppState() {
         const buffer = await blob.arrayBuffer();
         if (buffer.byteLength < 1000) return; // too short, ignore
         state.thinking = true;
+        state.transcription = '';
         state.streamingText = '';
         state.emotion = 'neutral';
         client.sendAudioChunk(buffer);
@@ -358,6 +366,7 @@ function createAppState() {
     if (buffer.byteLength === 0) return; // Nothing recorded (too short)
 
     state.thinking = true;
+    state.transcription = '';
     state.streamingText = '';
     state.emotion = 'neutral'; // reset for new response
 

@@ -333,29 +333,28 @@ async def conversation_ws(websocket: WebSocket) -> None:
                 if not audio_data:
                     continue
 
-                # STT + Speaker ID in parallel
-                transcription, speaker_result = await asyncio.gather(
-                    client.transcribe(audio_data, content_type=content_type),
-                    client.identify_speaker(audio_data, content_type=content_type),
-                    return_exceptions=True,
-                )
-                # Handle exceptions gracefully
-                if isinstance(transcription, Exception):
-                    transcription = None
-                if isinstance(speaker_result, Exception):
-                    speaker_result = None
+                # Start Speaker ID in background
+                speaker_task = asyncio.create_task(client.identify_speaker(audio_data, content_type=content_type))
 
-                if transcription is None:
-                    await websocket.send_json(
-                        {
-                            "type": "error",
-                            "code": "stt_unavailable",
-                            "message": "Speech recognition failed",
-                        }
-                    )
+                # Stream transcription partials
+                user_text = ""
+                async for chunk in client.transcribe_stream(audio_data, content_type=content_type):
+                    if chunk["type"] == "partial":
+                        await websocket.send_json({"type": "transcription.partial", "text": chunk["text"]})
+                    elif chunk["type"] == "final":
+                        user_text = chunk["text"]
+                    elif chunk["type"] == "error":
+                        await websocket.send_json({"type": "error", "code": "stt_error", "message": chunk["error"]})
+                        break
+
+                if not user_text:
                     continue
 
-                user_text = transcription.get("text", "")
+                # Wait for speaker ID
+                try:
+                    speaker_result = await speaker_task
+                except Exception:
+                    speaker_result = None
 
                 # Enrich transcription.final with speaker info
                 final_event = {"type": "transcription.final", "text": user_text}
