@@ -95,11 +95,11 @@ export class VADAudioRecorder {
     this.vad = await MicVAD.new({
       positiveSpeechThreshold: 0.85,
       negativeSpeechThreshold: 0.50,
-      minSpeechMs: 150,        // ~150ms minimum utterance
-      preSpeechPadMs: 300,    // 300ms pre-buffer (capture word start)
-      redemptionMs: 240,       // 240ms silence before onSpeechEnd fires
+      minSpeechFrames: 5,        // ~150ms minimum utterance
+      preSpeechPadFrames: 10,    // 300ms pre-buffer (capture word start)
+      redemptionFrames: 8,       // 240ms silence before onSpeechEnd fires
       ...callbacks,
-    });
+    } as any);
   }
 
   start(): void {
@@ -113,6 +113,10 @@ export class VADAudioRecorder {
   destroy(): void {
     this.vad?.destroy();
     this.vad = null;
+  }
+
+  get initialized(): boolean {
+    return this.vad !== null;
   }
 
   /** Encode Float32Array (16kHz mono PCM) → WAV Blob */
