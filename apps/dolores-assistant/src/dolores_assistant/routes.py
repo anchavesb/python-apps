@@ -262,7 +262,7 @@ async def conversation_ws(websocket: WebSocket) -> None:
     log.info("ws_connected", session_id=session_id)
 
     audio_buffer = bytearray()
-    _cv_token = current_user_token.set(None)
+    _initial_cv_token = current_user_token.set(None)
 
     try:
         while True:
@@ -372,7 +372,7 @@ async def conversation_ws(websocket: WebSocket) -> None:
 
             elif msg_type == "session.update_token":
                 new_token = data.get("user_token")
-                _cv_token = current_user_token.set(new_token)
+                current_user_token.set(new_token)
                 continue
 
             elif msg_type == "text.send":
@@ -393,8 +393,8 @@ async def conversation_ws(websocket: WebSocket) -> None:
     except Exception as e:
         log.error("ws_error", error=str(e))
     finally:
-        if _cv_token:
-            current_user_token.reset(_cv_token)
+        if _initial_cv_token:
+            current_user_token.reset(_initial_cv_token)
 
 
 _EMOTION_TAG_RE = re.compile(r"\[emotion:(\w+)\]")

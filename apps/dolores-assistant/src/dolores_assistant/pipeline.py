@@ -19,9 +19,9 @@ from dolores_common.logging import get_logger
 from dolores_common.prompts import get_system_prompt
 
 from .config import settings
+from .memory import MemoryStore
 from .tools.openapi_discovery import current_user_token
 from .tools.registry import get_tool_by_name, get_tool_definitions
-from .memory import MemoryStore
 
 log = get_logger(__name__)
 
@@ -72,6 +72,7 @@ class ServiceClient:
     async def close(self) -> None:
         if self._client:
             await self._client.aclose()
+        await self.memory.close()
 
     @property
     def client(self) -> httpx.AsyncClient:

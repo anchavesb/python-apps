@@ -1,7 +1,9 @@
 from __future__ import annotations
-from .base import Tool
-from ..memory import MemoryStore
+
 from dolores_common.logging import get_logger
+
+from ..memory import MemoryStore
+from .base import Tool
 
 log = get_logger(__name__)
 
@@ -39,6 +41,6 @@ class MemoryStoreTool(Tool):
         fact: str = kwargs.get("fact", "")
         if not fact:
             return "No fact provided."
-        
+
         await self._memory.add_memory(fact)
         return f"Fact stored in long-term memory: {fact}"

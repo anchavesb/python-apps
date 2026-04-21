@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 import httpx
 
 from dolores_common.logging import get_logger
 
 from .base import Tool
 
-from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from ..memory import MemoryStore
 
@@ -34,9 +35,9 @@ async def load_tools(integrations: list[dict], http_client: httpx.AsyncClient, m
 
 def _load_web_tools(memory_store: MemoryStore) -> None:
     """Append built-in web tools to the global TOOLS list."""
+    from .memory import MemoryStoreTool
     from .weather import WeatherTool
     from .web_tools import PageFetchTool, WebSearchTool
-    from .memory import MemoryStoreTool
 
     web_tools: list[Tool] = [
         WebSearchTool(),

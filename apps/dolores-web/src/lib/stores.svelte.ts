@@ -248,29 +248,36 @@ function createAppState() {
     }
   });
 
+  let isInitializingVAD = false;
   async function initVAD(): Promise<void> {
-    await vadRecorder.init({
-      onSpeechStart: () => {
-        if (state.audioPlaying) return; // Dolores speaking → ignore
-        player.stop();
-        state.recording = true;
-        client.sendAudioStart();
-      },
-      onSpeechEnd: async (audio: Float32Array) => {
-        if (!state.recording) return;
-        state.recording = false;
-        const blob = VADAudioRecorder.encodeWav(audio);
-        const buffer = await blob.arrayBuffer();
-        if (buffer.byteLength < 1000) return; // too short, ignore
-        setThinking(true);
-        state.transcription = '';
-        state.streamingText = '';
-        state.emotion = 'neutral';
-        client.sendAudioChunk(buffer);
-        client.sendAudioEnd('audio/wav');
-      },
-    });
-    vadRecorder.start();
+    if (isInitializingVAD) return;
+    isInitializingVAD = true;
+    try {
+      await vadRecorder.init({
+        onSpeechStart: () => {
+          if (state.audioPlaying) return; // Dolores speaking → ignore
+          player.stop();
+          state.recording = true;
+          client.sendAudioStart();
+        },
+        onSpeechEnd: async (audio: Float32Array) => {
+          if (!state.recording) return;
+          state.recording = false;
+          const blob = VADAudioRecorder.encodeWav(audio);
+          const buffer = await blob.arrayBuffer();
+          if (buffer.byteLength < 1000) return; // too short, ignore
+          setThinking(true);
+          state.transcription = '';
+          state.streamingText = '';
+          state.emotion = 'neutral';
+          client.sendAudioChunk(buffer);
+          client.sendAudioEnd('audio/wav');
+        },
+      });
+      vadRecorder.start();
+    } finally {
+      isInitializingVAD = false;
+    }
   }
 
   async function connect() {
