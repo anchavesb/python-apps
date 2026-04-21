@@ -31,8 +31,8 @@ interface AppState {
   connected: boolean;
   recording: boolean;
   thinking: boolean;
-  streamingText: string;
-  transcription: string;
+  transcription: string; // current/last speech-to-text result
+  streamingText: string; // current assistant response being streamed
   settingsOpen: boolean;
   serverUrl: string;
   apiKey: string;
@@ -96,6 +96,20 @@ function createAppState() {
   player.onPlaybackStart(() => { state.audioPlaying = true; });
   player.onPlaybackEnd(() => { state.audioPlaying = false; });
 
+  let thinkingTimer: any = null;
+  function setThinking(val: boolean) {
+    state.thinking = val;
+    if (thinkingTimer) clearTimeout(thinkingTimer);
+    if (val) {
+      thinkingTimer = setTimeout(() => {
+        state.thinking = false;
+        thinkingTimer = null;
+      }, 15000); // 15s watchdog
+    } else {
+      thinkingTimer = null;
+    }
+  }
+
   // Fetch backend defaults on startup if no local settings are saved
   const hasSaved = !!localStorage.getItem('dolores-settings');
   if (!hasSaved) {
@@ -123,8 +137,13 @@ function createAppState() {
           saveSettings();
         }
         break;
+      case 'transcription.partial':
+        state.transcription = msg.text;
+        break;
+
       case 'transcription.final':
         state.transcription = msg.text;
+        setThinking(true); // wait for response.text
         state.messages = [...state.messages, {
           role: 'user',
           content: msg.text,
@@ -132,12 +151,14 @@ function createAppState() {
           speakerName: msg.speaker_name,
         }];
         break;
+
       case 'response.emotion':
         state.emotion = msg.emotion as AvatarEmotion;
         break;
+
       case 'response.text':
         state.streamingText += msg.content;
-        state.thinking = false;
+        setThinking(false);
         break;
       case 'response.image':
         state.messages = [...state.messages, {
@@ -147,7 +168,7 @@ function createAppState() {
           imageUrl: msg.image_data,
           isGeneratedImage: true,
         }];
-        state.thinking = false;
+        setThinking(false);
         break;
       case 'response.web_results':
         state.messages = [...state.messages, {
@@ -161,7 +182,7 @@ function createAppState() {
             url: msg.url,
           },
         }];
-        state.thinking = false;
+        setThinking(false);
         break;
       case 'response.end': {
         const fullText = msg.full_text || state.streamingText;
@@ -180,7 +201,7 @@ function createAppState() {
           }
         }
         state.streamingText = '';
-        state.thinking = false;
+        setThinking(false);
         break;
       }
       case 'error':
@@ -222,7 +243,7 @@ function createAppState() {
             timestamp: new Date(),
           }];
         }
-        state.thinking = false;
+        setThinking(false);
         break;
     }
   });
@@ -241,7 +262,8 @@ function createAppState() {
         const blob = VADAudioRecorder.encodeWav(audio);
         const buffer = await blob.arrayBuffer();
         if (buffer.byteLength < 1000) return; // too short, ignore
-        state.thinking = true;
+        setThinking(true);
+        state.transcription = '';
         state.streamingText = '';
         state.emotion = 'neutral';
         client.sendAudioChunk(buffer);
@@ -313,7 +335,7 @@ function createAppState() {
     if (!client.connected) return;
     state.messages = [...state.messages, { role: 'user', content: text, timestamp: new Date() }];
     state.streamingText = '';
-    state.thinking = true;
+    setThinking(true);
     state.emotion = 'neutral'; // reset for new response
     client.sendText(text);
   }
@@ -327,7 +349,7 @@ function createAppState() {
       imageUrl: imageData,
     }];
     state.streamingText = '';
-    state.thinking = true;
+    setThinking(true);
     state.emotion = 'neutral';
     client.sendImage(imageData, text);
   }
@@ -357,7 +379,8 @@ function createAppState() {
     const buffer = await blob.arrayBuffer();
     if (buffer.byteLength === 0) return; // Nothing recorded (too short)
 
-    state.thinking = true;
+    setThinking(true);
+    state.transcription = '';
     state.streamingText = '';
     state.emotion = 'neutral'; // reset for new response
 

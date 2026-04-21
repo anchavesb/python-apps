@@ -312,45 +312,52 @@ async def conversation_ws(websocket: WebSocket) -> None:
                 if not audio_data:
                     continue
 
-                # STT + Speaker ID in parallel
-                transcription, speaker_result = await asyncio.gather(
-                    client.transcribe(audio_data, content_type=content_type),
-                    client.identify_speaker(audio_data, content_type=content_type),
-                    return_exceptions=True,
-                )
-                # Handle exceptions gracefully
-                if isinstance(transcription, Exception):
-                    transcription = None
-                if isinstance(speaker_result, Exception):
-                    speaker_result = None
+                # Start Speaker ID in background
+                speaker_task = asyncio.create_task(client.identify_speaker(audio_data, content_type=content_type))
 
-                if transcription is None:
-                    await websocket.send_json(
-                        {
-                            "type": "error",
-                            "code": "stt_unavailable",
-                            "message": "Speech recognition failed",
-                        }
-                    )
-                    continue
+                try:
+                    # Stream transcription partials
+                    user_text = ""
+                    async for chunk in client.transcribe_stream(audio_data, content_type=content_type):
+                        if chunk["type"] == "partial":
+                            await websocket.send_json({"type": "transcription.partial", "text": chunk["text"]})
+                        elif chunk["type"] == "final":
+                            user_text = chunk["text"]
+                        elif chunk["type"] == "error":
+                            await websocket.send_json({"type": "error", "code": "stt_error", "message": chunk["error"]})
+                            break
 
-                user_text = transcription.get("text", "")
+                    if not user_text:
+                        continue
 
-                # Enrich transcription.final with speaker info
-                final_event = {"type": "transcription.final", "text": user_text}
-                if speaker_result and speaker_result.get("speaker_name"):
-                    final_event["speaker_name"] = speaker_result["speaker_name"]
-                    final_event["speaker_confidence"] = speaker_result.get("confidence", 0)
-                await websocket.send_json(final_event)
+                    # Wait for speaker ID
+                    try:
+                        speaker_result = await speaker_task
+                    except Exception:
+                        speaker_result = None
 
-                if not user_text.strip():
-                    continue
+                    # Enrich transcription.final with speaker info
+                    final_event = {"type": "transcription.final", "text": user_text}
+                    if speaker_result and speaker_result.get("speaker_name"):
+                        final_event["speaker_name"] = speaker_result["speaker_name"]
+                        final_event["speaker_confidence"] = speaker_result.get("confidence", 0)
+                    await websocket.send_json(final_event)
 
-                # Inject speaker context
-                brain_text = inject_speaker_context(user_text, speaker_result)
+                    if not user_text.strip():
+                        continue
 
-                # Brain -> response
-                await _process_and_respond(websocket, client, brain_text, conversation_id, provider, model, voice_id, mode)
+                    # Inject speaker context
+                    brain_text = inject_speaker_context(user_text, speaker_result)
+
+                    # Brain -> response
+                    await _process_and_respond(websocket, client, brain_text, conversation_id, provider, model, voice_id, mode)
+                finally:
+                    if not speaker_task.done():
+                        speaker_task.cancel()
+                        try:
+                            await speaker_task
+                        except asyncio.CancelledError:
+                            pass
 
             elif msg_type == "session.update":
                 if "mode" in data:
