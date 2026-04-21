@@ -1,3 +1,5 @@
+import { MicVAD, utils } from '@ricky0123/vad-web';
+
 export class AudioRecorder {
   private mediaRecorder: MediaRecorder | null = null;
   private chunks: Blob[] = [];
@@ -80,5 +82,41 @@ export class AudioRecorder {
       if (MediaRecorder.isTypeSupported(type)) return type;
     }
     return '';
+  }
+}
+
+export class VADAudioRecorder {
+  private vad: MicVAD | null = null;
+
+  async init(callbacks: {
+    onSpeechStart: () => void;
+    onSpeechEnd: (audio: Float32Array) => void;
+  }): Promise<void> {
+    this.vad = await MicVAD.new({
+      positiveSpeechThreshold: 0.85,
+      negativeSpeechThreshold: 0.50,
+      minSpeechMs: 150,        // ~150ms minimum utterance
+      preSpeechPadMs: 300,    // 300ms pre-buffer (capture word start)
+      redemptionMs: 240,       // 240ms silence before onSpeechEnd fires
+      ...callbacks,
+    });
+  }
+
+  start(): void {
+    this.vad?.start();
+  }
+
+  pause(): void {
+    this.vad?.pause();
+  }
+
+  destroy(): void {
+    this.vad?.destroy();
+    this.vad = null;
+  }
+
+  /** Encode Float32Array (16kHz mono PCM) → WAV Blob */
+  static encodeWav(float32: Float32Array, sampleRate = 16000): Blob {
+    return new Blob([utils.encodeWAV(float32, sampleRate)], { type: 'audio/wav' });
   }
 }

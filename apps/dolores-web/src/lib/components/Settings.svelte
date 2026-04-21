@@ -235,6 +235,11 @@
       </div>
     </label>
 
+    <label class="checkbox-label">
+      <input type="checkbox" bind:checked={app.state.vadMode} />
+      Auto-listen (VAD)
+    </label>
+
     <fieldset>
       <legend>Speaker Profiles</legend>
       <div class="speaker-list-header">
@@ -327,6 +332,18 @@
     padding: 6px 12px;
     font-size: 0.8rem;
     flex-shrink: 0;
+  }
+  .checkbox-label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+    font-size: 0.9rem;
+    margin: 8px 0;
+  }
+  .checkbox-label input {
+    width: auto;
+    margin: 0;
   }
   .speaker-list {
     list-style: none;
