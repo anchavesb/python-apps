@@ -2,18 +2,23 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 import httpx
 
 from dolores_common.logging import get_logger
 
 from .base import Tool
 
+if TYPE_CHECKING:
+    from ..memory import MemoryStore
+
 log = get_logger(__name__)
 
 TOOLS: list[Tool] = []
 
 
-async def load_tools(integrations: list[dict], http_client: httpx.AsyncClient) -> None:
+async def load_tools(integrations: list[dict], http_client: httpx.AsyncClient, memory_store: MemoryStore) -> None:
     """Fetch OpenAPI specs and populate the global TOOLS list."""
     global TOOLS
     discovered: list[Tool] = []
@@ -24,16 +29,22 @@ async def load_tools(integrations: list[dict], http_client: httpx.AsyncClient) -
         discovered = await discover_tools(integrations, http_client)
 
     TOOLS = discovered
-    _load_web_tools()
+    _load_web_tools(memory_store)
     log.info("tools_loaded", count=len(TOOLS), names=[t.name for t in TOOLS])
 
 
-def _load_web_tools() -> None:
+def _load_web_tools(memory_store: MemoryStore) -> None:
     """Append built-in web tools to the global TOOLS list."""
+    from .memory import MemoryStoreTool
     from .weather import WeatherTool
     from .web_tools import PageFetchTool, WebSearchTool
 
-    web_tools: list[Tool] = [WebSearchTool(), PageFetchTool(), WeatherTool()]
+    web_tools: list[Tool] = [
+        WebSearchTool(),
+        PageFetchTool(),
+        WeatherTool(),
+        MemoryStoreTool(memory_store),
+    ]
     TOOLS.extend(web_tools)
     log.info("web_tools_loaded", names=[t.name for t in web_tools])
 

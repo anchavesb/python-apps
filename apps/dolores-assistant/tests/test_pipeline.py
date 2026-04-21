@@ -49,28 +49,28 @@ class TestServiceClientSynthesize:
 async def test_transcribe_stream_yields_partials_and_final():
     """ServiceClient.transcribe_stream should yield messages from STT WebSocket."""
     client = ServiceClient()
-    
+
     # Mock websockets.connect
     with patch("websockets.connect") as mock_connect:
         mock_ws = AsyncMock()
         mock_connect.return_value.__aenter__.return_value = mock_ws
-        
+
         # Generator for websocket messages
         mock_ws.__aiter__.return_value = [
             json.dumps({"type": "partial", "text": "Hello"}),
             json.dumps({"type": "partial", "text": "Hello world"}),
             json.dumps({"type": "final", "text": "Hello world."}),
         ]
-        
+
         results = []
         async for chunk in client.transcribe_stream(b"audio-data"):
             results.append(chunk)
-            
+
         assert len(results) == 3
         assert results[0]["text"] == "Hello"
         assert results[1]["text"] == "Hello world"
         assert results[2]["type"] == "final"
-        
+
         # Verify audio and end signal were sent
         mock_ws.send.assert_any_call(b"audio-data")
         last_send = mock_ws.send.call_args_list[-1].args[0]

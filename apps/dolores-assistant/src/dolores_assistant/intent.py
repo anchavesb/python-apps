@@ -167,6 +167,19 @@ INTENT_EXAMPLES: dict[str, tuple[set[str], list[str]]] = {
             "what is the forecast",
         ],
     ),
+    "memory": (
+        {"memory"},
+        [
+            "remember that I like coffee",
+            "remind me that my car is in the shop",
+            "don't forget that my wife's birthday is tomorrow",
+            "store a fact about me",
+            "remember this for next time",
+            "save a fact in your long-term memory",
+            "I want you to remember something",
+            "keep this in mind",
+        ],
+    ),
 }
 
 CONFIDENCE_THRESHOLD = 0.48
@@ -291,3 +304,9 @@ def classify_intent(message: str) -> tuple[str | None, set[str] | None, float]:
 
     log.info("intent_classified", message=message[:80], intent=best_intent, score=round(best_score, 3))
     return best_intent, best_filter, best_score
+
+
+def get_embedding(text: str) -> list[float]:
+    """Return all-MiniLM-L6-v2 embedding vector for text. 384-dim float list."""
+    _ensure_loaded()
+    return _encode([text])[0].tolist()
