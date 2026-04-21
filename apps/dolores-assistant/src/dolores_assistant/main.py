@@ -24,7 +24,7 @@ async def lifespan(app: FastAPI):
     setup_logging("dolores-assistant", settings.log_level, json_output=settings.log_format == "json")
     await _service_client.start()
     set_service_client(_service_client)
-    await load_tools(settings.integrations, _service_client.client)
+    await load_tools(settings.integrations, _service_client.client, _service_client.memory)
     yield
     await _service_client.close()
 

@@ -21,6 +21,7 @@ from dolores_common.prompts import get_system_prompt
 from .config import settings
 from .tools.openapi_discovery import current_user_token
 from .tools.registry import get_tool_by_name, get_tool_definitions
+from .memory import MemoryStore
 
 log = get_logger(__name__)
 
@@ -62,9 +63,11 @@ class ServiceClient:
 
     def __init__(self) -> None:
         self._client: httpx.AsyncClient | None = None
+        self.memory = MemoryStore()
 
     async def start(self) -> None:
         self._client = httpx.AsyncClient(headers=_auth_headers(), timeout=60)
+        await self.memory.ensure_initialized()
 
     async def close(self) -> None:
         if self._client:
@@ -631,6 +634,13 @@ async def run_tool_loop(
     token_ok = not require_token or has_token
     tools = (get_tool_definitions(tool_filter) or None) if (tool_filter and token_ok) else None
 
+    # 1. Search memories for context
+    memories = await client.memory.search_memories(initial_message, limit=3)
+    memory_context = ""
+    if memories:
+        facts = "\n".join([f"- {m['text']}" for m in memories])
+        memory_context = f"\n\nLONG-TERM MEMORY (RELEVANT FACTS):\n{facts}\n"
+
     current_message = initial_message
 
     for i in range(max_iterations):
@@ -640,6 +650,7 @@ async def run_tool_loop(
             provider=provider,
             model=model,
             tools=tools,
+            system_prompt=get_system_prompt(model) + memory_context,
         )
 
         if result is None:
