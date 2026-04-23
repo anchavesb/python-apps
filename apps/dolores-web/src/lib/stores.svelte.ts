@@ -474,35 +474,38 @@ function createAppState() {
     }
   }
 
-  // VAD management (reactive)
-  $effect(() => {
-    if (state.vadMode && state.connected) {
-      if (!vadRecorder.initialized) {
-        initVAD();
+  function init() {
+    // VAD management (reactive)
+    $effect(() => {
+      if (state.vadMode && state.connected) {
+        if (!vadRecorder.initialized) {
+          initVAD();
+        } else {
+          if (state.audioPlaying || state.recording) vadRecorder.pause();
+          else vadRecorder.start();
+        }
       } else {
-        if (state.audioPlaying || state.recording) vadRecorder.pause();
-        else vadRecorder.start();
+        vadRecorder.pause();
       }
-    } else {
-      vadRecorder.pause();
-    }
-  });
+    });
 
-  // Tab visibility
-  $effect(() => {
-    if (typeof document === 'undefined') return;
-    const handleVisibility = () => {
-      if (!state.vadMode || !state.connected) return;
-      document.hidden ? vadRecorder.pause() : vadRecorder.start();
-    };
-    document.addEventListener('visibilitychange', handleVisibility);
-    return () => document.removeEventListener('visibilitychange', handleVisibility);
-  });
+    // Tab visibility
+    $effect(() => {
+      if (typeof document === 'undefined') return;
+      const handleVisibility = () => {
+        if (!state.vadMode || !state.connected) return;
+        document.hidden ? vadRecorder.pause() : vadRecorder.start();
+      };
+      document.addEventListener('visibilitychange', handleVisibility);
+      return () => document.removeEventListener('visibilitychange', handleVisibility);
+    });
+  }
 
   return {
     get state() { return state; },
     get avatarPhase(): AvatarPhase { return getAvatarPhase(state); },
     get player() { return player; },
+    init,
     connect,
     disconnect,
     sendText,

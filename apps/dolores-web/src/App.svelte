@@ -4,6 +4,9 @@
   import Settings from './lib/components/Settings.svelte';
   import { app } from './lib/stores.svelte';
 
+  // Initialize background services (VAD, etc)
+  app.init();
+
   // Support ?view=avatar URL param for kiosk mode
   const params = new URLSearchParams(window.location.search);
   if (params.get('view') === 'avatar') {
