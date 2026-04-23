@@ -1,6 +1,7 @@
 # Node.js
 node_modules/
 package-lock.json
+apps/dolores-web/public/vad/
 
 # Claude Code
 .claude/worktrees/

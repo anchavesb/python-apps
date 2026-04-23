@@ -112,8 +112,8 @@ export class VADAudioRecorder {
       minSpeechFrames: 5,        // ~150ms minimum utterance
       preSpeechPadFrames: 10,    // 300ms pre-buffer (capture word start)
       redemptionFrames: 8,       // 240ms silence before onSpeechEnd fires
-      baseAssetPath: '/app/',
-      onnxWASMBasePath: '/app/node_modules/onnxruntime-web/dist/',
+      baseAssetPath: '/app/vad/',
+      onnxWASMBasePath: '/app/vad/',
       audioContext,
       ...callbacks,
     } as any);
