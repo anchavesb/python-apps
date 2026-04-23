@@ -122,7 +122,7 @@ class ServiceClient:
         try:
             async with websockets.connect(
                 f"{ws_url}/v1/stream",
-                extra_headers=_auth_headers(),
+                additional_headers=_auth_headers(),
                 open_timeout=10,
             ) as ws:
                 # Send audio as binary
