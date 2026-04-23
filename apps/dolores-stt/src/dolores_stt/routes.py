@@ -216,6 +216,9 @@ async def stream_transcription(websocket: WebSocket) -> None:
         while True:
             message = await websocket.receive()
 
+            if message["type"] == "websocket.disconnect":
+                break
+
             if "bytes" in message:
                 audio_buffer.write(message["bytes"])
 
@@ -264,3 +267,5 @@ async def stream_transcription(websocket: WebSocket) -> None:
             await websocket.send_json({"type": "error", "text": "", "error": str(e)})
         except Exception:
             pass
+    finally:
+        audio_buffer.close()
