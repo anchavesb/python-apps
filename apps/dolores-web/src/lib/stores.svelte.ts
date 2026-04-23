@@ -308,6 +308,7 @@ function createAppState() {
       // Acquire mic permission early and keep stream alive to avoid re-prompting on iOS
       if (state.vadMode) {
         await initVAD();
+        await vadRecorder.resume();
       } else {
         await recorder.init();
       }
@@ -489,7 +490,7 @@ function createAppState() {
     $effect(() => {
       if (state.vadMode && state.connected && isVisible) {
         if (!vadRecorder.initialized) {
-          initVAD();
+          initVAD().then(() => vadRecorder.resume());
         } else {
           // Pause only if Dolores is speaking
           if (state.audioPlaying) {

@@ -98,6 +98,8 @@ export class VADAudioRecorder {
       minSpeechFrames: 5,        // ~150ms minimum utterance
       preSpeechPadFrames: 10,    // 300ms pre-buffer (capture word start)
       redemptionFrames: 8,       // 240ms silence before onSpeechEnd fires
+      baseAssetPath: '/app/',
+      onnxWASMBasePath: '/app/node_modules/onnxruntime-web/dist/',
       ...callbacks,
     } as any);
   }
@@ -108,6 +110,18 @@ export class VADAudioRecorder {
 
   pause(): void {
     this.vad?.pause();
+  }
+
+  /** Force resume of AudioContext (needed for Safari on first interaction) */
+  async resume(): Promise<void> {
+    if (this.vad) {
+      // @ts-ignore - reaching into internal context to force resume if needed
+      const ctx = this.vad._audioContext as AudioContext;
+      if (ctx?.state === 'suspended') {
+        await ctx.resume();
+      }
+      await this.vad.start();
+    }
   }
 
   destroy(): void {
