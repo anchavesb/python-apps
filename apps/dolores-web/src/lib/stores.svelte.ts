@@ -475,29 +475,32 @@ function createAppState() {
   }
 
   function init() {
+    let isVisible = $state(typeof document !== 'undefined' ? !document.hidden : true);
+
+    // Tab visibility listener
+    $effect(() => {
+      if (typeof document === 'undefined') return;
+      const handleVisibility = () => { isVisible = !document.hidden; };
+      document.addEventListener('visibilitychange', handleVisibility);
+      return () => document.removeEventListener('visibilitychange', handleVisibility);
+    });
+
     // VAD management (reactive)
     $effect(() => {
-      if (state.vadMode && state.connected) {
+      if (state.vadMode && state.connected && isVisible) {
         if (!vadRecorder.initialized) {
           initVAD();
         } else {
-          if (state.audioPlaying || state.recording) vadRecorder.pause();
-          else vadRecorder.start();
+          // Pause only if Dolores is speaking
+          if (state.audioPlaying) {
+            vadRecorder.pause();
+          } else {
+            vadRecorder.start();
+          }
         }
       } else {
         vadRecorder.pause();
       }
-    });
-
-    // Tab visibility
-    $effect(() => {
-      if (typeof document === 'undefined') return;
-      const handleVisibility = () => {
-        if (!state.vadMode || !state.connected) return;
-        document.hidden ? vadRecorder.pause() : vadRecorder.start();
-      };
-      document.addEventListener('visibilitychange', handleVisibility);
-      return () => document.removeEventListener('visibilitychange', handleVisibility);
     });
   }
 
