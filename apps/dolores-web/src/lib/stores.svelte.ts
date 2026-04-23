@@ -1,5 +1,5 @@
 import { DoloresClient, type MessageEvent, type WebResult } from './DoloresClient';
-import { AudioRecorder, VADAudioRecorder } from './AudioRecorder';
+import { AudioRecorder, VADAudioRecorder, getSharedAudioContext } from './AudioRecorder';
 import { AudioPlayer } from './AudioPlayer';
 import { detectEmotion } from './avatar/EmotionDetector';
 import { handleCallback, loadAuth, login, logout, isTokenExpired, refreshAccessToken, type OIDCConfig } from './auth';
@@ -366,6 +366,7 @@ function createAppState() {
 
   async function startRecording() {
     if (!client.connected || state.recording) return;
+    await getSharedAudioContext();
     player.stop(); // Stop TTS playback to prevent echo/feedback
     state.recording = true;
     recordingReady = recorder.start().then(() => {

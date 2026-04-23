@@ -1,4 +1,5 @@
 import { AudioAnalyser } from './avatar/AudioAnalyser';
+import { getSharedAudioContext } from './AudioRecorder';
 
 export class AudioPlayer {
   private audioContext: AudioContext | null = null;
@@ -35,7 +36,7 @@ export class AudioPlayer {
     }
 
     if (!this.audioContext) {
-      this.audioContext = new AudioContext();
+      this.audioContext = await getSharedAudioContext();
     }
 
     const data = this.queue.shift()!;

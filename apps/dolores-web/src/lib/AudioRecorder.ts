@@ -1,5 +1,18 @@
 import { MicVAD, utils } from '@ricky0123/vad-web';
 
+let sharedAudioContext: AudioContext | null = null;
+
+/** Get or create a shared AudioContext. Must be called from a user interaction on Safari. */
+export async function getSharedAudioContext(): Promise<AudioContext> {
+  if (!sharedAudioContext) {
+    sharedAudioContext = new AudioContext();
+  }
+  if (sharedAudioContext.state === 'suspended') {
+    await sharedAudioContext.resume();
+  }
+  return sharedAudioContext;
+}
+
 export class AudioRecorder {
   private mediaRecorder: MediaRecorder | null = null;
   private chunks: Blob[] = [];
@@ -92,6 +105,7 @@ export class VADAudioRecorder {
     onSpeechStart: () => void;
     onSpeechEnd: (audio: Float32Array) => void;
   }): Promise<void> {
+    const audioContext = await getSharedAudioContext();
     this.vad = await MicVAD.new({
       positiveSpeechThreshold: 0.85,
       negativeSpeechThreshold: 0.50,
@@ -100,6 +114,7 @@ export class VADAudioRecorder {
       redemptionFrames: 8,       // 240ms silence before onSpeechEnd fires
       baseAssetPath: '/app/',
       onnxWASMBasePath: '/app/node_modules/onnxruntime-web/dist/',
+      audioContext,
       ...callbacks,
     } as any);
   }
@@ -114,12 +129,8 @@ export class VADAudioRecorder {
 
   /** Force resume of AudioContext (needed for Safari on first interaction) */
   async resume(): Promise<void> {
+    await getSharedAudioContext();
     if (this.vad) {
-      // @ts-ignore - reaching into internal context to force resume if needed
-      const ctx = this.vad._audioContext as AudioContext;
-      if (ctx?.state === 'suspended') {
-        await ctx.resume();
-      }
       await this.vad.start();
     }
   }
