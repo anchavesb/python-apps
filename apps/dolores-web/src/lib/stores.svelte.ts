@@ -46,6 +46,8 @@ interface AppState {
   viewMode: 'chat' | 'avatar';
   conversationId: string;
   vadMode: boolean;   // false = push-to-talk (default), true = auto-listen
+  vadActive: boolean; // true if VAD is currently running
+  vadError: string | null;
   // OIDC
   oidcIssuer: string;
   oidcClientId: string;
@@ -83,6 +85,8 @@ function createAppState() {
     viewMode: (saved.viewMode as 'chat' | 'avatar') || 'chat',
     conversationId: saved.conversationId || '',
     vadMode: saved.vadMode === true,
+    vadActive: false,
+    vadError: null,
     oidcIssuer: saved.oidcIssuer || '',
     oidcClientId: saved.oidcClientId || '',
     oidcUser: auth?.userName || null,
@@ -252,6 +256,7 @@ function createAppState() {
   async function initVAD(): Promise<void> {
     if (isInitializingVAD) return;
     isInitializingVAD = true;
+    state.vadError = null;
     try {
       await vadRecorder.init({
         onSpeechStart: () => {
@@ -274,7 +279,11 @@ function createAppState() {
           client.sendAudioEnd('audio/wav');
         },
       });
-      vadRecorder.start();
+      await vadRecorder.resume();
+      state.vadActive = true;
+    } catch (e) {
+      state.vadError = String(e);
+      console.error('VAD init failed:', e);
     } finally {
       isInitializingVAD = false;
     }
@@ -282,6 +291,7 @@ function createAppState() {
 
   async function connect() {
     try {
+      await getSharedAudioContext();
       // Refresh expired OIDC token before connecting
       if (state.userToken) {
         const auth = loadAuth();
@@ -308,7 +318,6 @@ function createAppState() {
       // Acquire mic permission early and keep stream alive to avoid re-prompting on iOS
       if (state.vadMode) {
         await initVAD();
-        await vadRecorder.resume();
       } else {
         await recorder.init();
       }
@@ -491,17 +500,20 @@ function createAppState() {
     $effect(() => {
       if (state.vadMode && state.connected && isVisible) {
         if (!vadRecorder.initialized) {
-          initVAD().then(() => vadRecorder.resume());
+          initVAD();
         } else {
           // Pause only if Dolores is speaking
           if (state.audioPlaying) {
             vadRecorder.pause();
+            state.vadActive = false;
           } else {
             vadRecorder.start();
+            state.vadActive = true;
           }
         }
       } else {
         vadRecorder.pause();
+        state.vadActive = false;
       }
     });
   }

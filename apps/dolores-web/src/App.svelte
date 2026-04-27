@@ -36,6 +36,12 @@
       </button>
       {#if app.state.connected}
         <span class="status connected">Connected</span>
+        {#if app.state.vadActive}
+          <span class="status listening">Auto-listening</span>
+        {/if}
+        {#if app.state.vadError}
+          <span class="status error" title={app.state.vadError}>VAD Error</span>
+        {/if}
         <button onclick={() => app.disconnect()}>Disconnect</button>
       {:else}
         <span class="status disconnected">Disconnected</span>

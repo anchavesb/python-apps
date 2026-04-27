@@ -75,9 +75,25 @@ header h1 {
   color: var(--success);
 }
 
+.status.listening {
+  background: rgba(83, 52, 131, 0.2);
+  color: #a29bfe;
+  animation: soft-pulse 2s infinite;
+}
+
+.status.error {
+  background: rgba(233, 69, 96, 0.2);
+  color: var(--danger);
+}
+
 .status.disconnected {
   background: rgba(233, 69, 96, 0.15);
   color: var(--danger);
+}
+
+@keyframes soft-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
 }
 
 button {
