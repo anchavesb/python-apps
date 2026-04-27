@@ -1,5 +1,5 @@
 import { DoloresClient, type MessageEvent, type WebResult } from './DoloresClient';
-import { AudioRecorder, VADAudioRecorder, getSharedAudioContext } from './AudioRecorder';
+import { AudioRecorder, VADAudioRecorder, getSharedAudioContext, getSharedStream } from './AudioRecorder';
 import { AudioPlayer } from './AudioPlayer';
 import { detectEmotion } from './avatar/EmotionDetector';
 import { handleCallback, loadAuth, login, logout, isTokenExpired, refreshAccessToken, type OIDCConfig } from './auth';
@@ -292,6 +292,7 @@ function createAppState() {
   async function connect() {
     try {
       await getSharedAudioContext();
+      await getSharedStream();
       // Refresh expired OIDC token before connecting
       if (state.userToken) {
         const auth = loadAuth();

@@ -1,6 +1,7 @@
 import { MicVAD, utils } from '@ricky0123/vad-web';
 
 let sharedAudioContext: AudioContext | null = null;
+let sharedStream: MediaStream | null = null;
 
 /** Get or create a shared AudioContext. Must be called from a user interaction on Safari. */
 export async function getSharedAudioContext(): Promise<AudioContext> {
@@ -13,6 +14,14 @@ export async function getSharedAudioContext(): Promise<AudioContext> {
   return sharedAudioContext;
 }
 
+/** Pre-acquire mic stream to unlock it for Safari. */
+export async function getSharedStream(): Promise<MediaStream> {
+  if (!sharedStream || !sharedStream.active) {
+    sharedStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+  }
+  return sharedStream;
+}
+
 export class AudioRecorder {
   private mediaRecorder: MediaRecorder | null = null;
   private chunks: Blob[] = [];
@@ -22,7 +31,7 @@ export class AudioRecorder {
   /** Acquire mic permission and keep stream alive to avoid re-prompting. */
   async init(): Promise<void> {
     if (this.stream) return;
-    this.stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    this.stream = await getSharedStream();
     this._mimeType = this.getSupportedMimeType();
   }
 
@@ -107,6 +116,7 @@ export class VADAudioRecorder {
   }): Promise<void> {
     const audioContext = await getSharedAudioContext();
     this.vad = await MicVAD.new({
+      model: 'v5',
       positiveSpeechThreshold: 0.85,
       negativeSpeechThreshold: 0.50,
       minSpeechFrames: 5,        // ~150ms minimum utterance
@@ -115,6 +125,7 @@ export class VADAudioRecorder {
       baseAssetPath: '/app/vad/',
       onnxWASMBasePath: '/app/vad/',
       audioContext,
+      getStream: getSharedStream,
       ...callbacks,
     } as any);
   }
