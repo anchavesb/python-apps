@@ -240,6 +240,13 @@
       Auto-listen (VAD)
     </label>
 
+    <div class="test-audio-row">
+      <button class="voice-load-btn" onclick={() => app.testAudio()}>
+        Test Audio Output
+      </button>
+      <span class="hint">Click to "unlock" audio in Safari if auto-listening won't start.</span>
+    </div>
+
     <fieldset>
       <legend>Speaker Profiles</legend>
       <div class="speaker-list-header">
@@ -344,6 +351,12 @@
   .checkbox-label input {
     width: auto;
     margin: 0;
+  }
+  .test-audio-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin: 4px 0 12px 0;
   }
   .speaker-list {
     list-style: none;

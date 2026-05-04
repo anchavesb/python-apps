@@ -565,6 +565,7 @@ function createAppState() {
     oidcLogout,
     oidcHandleCallback,
     toggleTts,
+    testAudio: () => player.testAudio(),
     stopAudio: () => player.stop(),
   };
 }

@@ -6,11 +6,26 @@ let sharedStream: MediaStream | null = null;
 /** Get or create a shared AudioContext. Must be called from a user interaction on Safari. */
 export async function getSharedAudioContext(): Promise<AudioContext> {
   if (!sharedAudioContext) {
-    sharedAudioContext = new AudioContext();
+    // @ts-ignore - Support legacy webkitAudioContext if needed, though AudioContext is standard now
+    const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+    sharedAudioContext = new AudioContextClass();
   }
+  
   if (sharedAudioContext.state === 'suspended') {
     await sharedAudioContext.resume();
   }
+
+  // Safari/iOS "unlock": play a short burst of silence
+  if (sharedAudioContext.state === 'running') {
+    const oscillator = sharedAudioContext.createOscillator();
+    const gain = sharedAudioContext.createGain();
+    gain.gain.value = 0; // silence
+    oscillator.connect(gain);
+    gain.connect(sharedAudioContext.destination);
+    oscillator.start(0);
+    oscillator.stop(0.001);
+  }
+  
   return sharedAudioContext;
 }
 
@@ -115,6 +130,7 @@ export class VADAudioRecorder {
     onSpeechEnd: (audio: Float32Array) => void;
   }): Promise<void> {
     const audioContext = await getSharedAudioContext();
+    const assetPath = window.location.origin + '/app/vad/';
     this.vad = await MicVAD.new({
       model: 'v5',
       positiveSpeechThreshold: 0.85,
@@ -122,8 +138,8 @@ export class VADAudioRecorder {
       minSpeechFrames: 5,        // ~150ms minimum utterance
       preSpeechPadFrames: 10,    // 300ms pre-buffer (capture word start)
       redemptionFrames: 8,       // 240ms silence before onSpeechEnd fires
-      baseAssetPath: '/app/vad/',
-      onnxWASMBasePath: '/app/vad/',
+      baseAssetPath: assetPath,
+      onnxWASMBasePath: assetPath,
       audioContext,
       getStream: getSharedStream,
       ...callbacks,
