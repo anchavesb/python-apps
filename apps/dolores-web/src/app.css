@@ -75,6 +75,13 @@ header h1 {
   color: var(--success);
 }
 
+.status-detail {
+  font-size: 0.8rem;
+  color: var(--text-dim);
+  font-style: italic;
+  margin-right: 4px;
+}
+
 .status.listening {
   background: rgba(83, 52, 131, 0.2);
   color: #a29bfe;

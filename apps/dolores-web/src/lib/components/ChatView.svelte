@@ -85,8 +85,10 @@
   }
 
   $effect(() => {
-    if (app.state.messages.length || app.state.streamingText) {
-      messagesEl?.scrollTo({ top: messagesEl.scrollHeight, behavior: 'smooth' });
+    if (app.state.messages.length || app.state.streamingText || app.state.thinking) {
+      setTimeout(() => {
+        messagesEl?.scrollTo({ top: messagesEl.scrollHeight, behavior: 'smooth' });
+      }, 100);
     }
   });
 </script>

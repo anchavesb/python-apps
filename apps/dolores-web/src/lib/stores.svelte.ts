@@ -47,6 +47,7 @@ interface AppState {
   conversationId: string;
   vadMode: boolean;   // false = push-to-talk (default), true = auto-listen
   vadActive: boolean; // true if VAD is currently running
+  vadStatus: string;  // Detailed status (e.g., 'loading models', 'listening')
   vadError: string | null;
   // OIDC
   oidcIssuer: string;
@@ -66,7 +67,7 @@ function createAppState() {
   const auth = loadAuth();
 
   let state = $state<AppState>({
-    messages: [],
+    messages: (saved.messages || []).map((m: any) => ({ ...m, timestamp: new Date(m.timestamp) })),
     connected: false,
     recording: false,
     thinking: false,
@@ -86,6 +87,7 @@ function createAppState() {
     conversationId: saved.conversationId || '',
     vadMode: saved.vadMode === true,
     vadActive: false,
+    vadStatus: 'idle',
     vadError: null,
     oidcIssuer: saved.oidcIssuer || '',
     oidcClientId: saved.oidcClientId || '',
@@ -112,6 +114,17 @@ function createAppState() {
     } else {
       thinkingTimer = null;
     }
+  }
+
+  function pushMessage(msg: ChatMessage) {
+    const limit = 50;
+    const newMessages = [...state.messages, msg];
+    if (newMessages.length > limit) {
+      state.messages = newMessages.slice(newMessages.length - limit);
+    } else {
+      state.messages = newMessages;
+    }
+    saveSettings();
   }
 
   // Fetch backend defaults on startup if no local settings are saved
@@ -148,12 +161,12 @@ function createAppState() {
       case 'transcription.final':
         state.transcription = msg.text;
         setThinking(true); // wait for response.text
-        state.messages = [...state.messages, {
+        pushMessage({
           role: 'user',
           content: msg.text,
           timestamp: new Date(),
           speakerName: msg.speaker_name,
-        }];
+        });
         break;
 
       case 'response.emotion':
@@ -165,17 +178,17 @@ function createAppState() {
         setThinking(false);
         break;
       case 'response.image':
-        state.messages = [...state.messages, {
+        pushMessage({
           role: 'assistant',
           content: '',
           timestamp: new Date(),
           imageUrl: msg.image_data,
           isGeneratedImage: true,
-        }];
+        });
         setThinking(false);
         break;
       case 'response.web_results':
-        state.messages = [...state.messages, {
+        pushMessage({
           role: 'assistant',
           content: '',
           timestamp: new Date(),
@@ -185,17 +198,17 @@ function createAppState() {
             pageContent: msg.page_content,
             url: msg.url,
           },
-        }];
+        });
         setThinking(false);
         break;
       case 'response.end': {
         const fullText = msg.full_text || state.streamingText;
         if (fullText) {
-          state.messages = [...state.messages, {
+          pushMessage({
             role: 'assistant',
             content: fullText,
             timestamp: new Date(),
-          }];
+          });
         }
         // Fallback emotion detection if no LLM tag was received
         if (state.emotion === 'neutral') {
@@ -218,34 +231,34 @@ function createAppState() {
                 state.userToken = refreshed.accessToken;
                 // Push the new token to the backend so subsequent requests use it
                 client.updateToken(refreshed.accessToken);
-                state.messages = [...state.messages, {
+                pushMessage({
                   role: 'assistant',
                   content: 'Session refreshed. Please try again.',
                   timestamp: new Date(),
-                }];
+                });
               } else {
                 state.userToken = '';
                 state.oidcUser = null;
-                state.messages = [...state.messages, {
+                pushMessage({
                   role: 'assistant',
                   content: 'Your session has expired. Please login again in Settings.',
                   timestamp: new Date(),
-                }];
+                });
               }
             });
           } else {
-            state.messages = [...state.messages, {
+            pushMessage({
               role: 'assistant',
               content: 'Your session has expired. Please login again in Settings.',
               timestamp: new Date(),
-            }];
+            });
           }
         } else {
-          state.messages = [...state.messages, {
+          pushMessage({
             role: 'assistant',
             content: `Error: ${msg.message}`,
             timestamp: new Date(),
-          }];
+          });
         }
         setThinking(false);
         break;
@@ -257,20 +270,27 @@ function createAppState() {
     if (isInitializingVAD) return;
     isInitializingVAD = true;
     state.vadError = null;
+    state.vadStatus = 'Initializing...';
+    console.log('[VAD] Starting initialization...');
     try {
       await vadRecorder.init({
         onSpeechStart: () => {
           if (state.audioPlaying) return; // Dolores speaking → ignore
           player.stop();
           state.recording = true;
+          state.vadStatus = 'Speech detected';
           client.sendAudioStart();
         },
         onSpeechEnd: async (audio: Float32Array) => {
           if (!state.recording) return;
           state.recording = false;
+          state.vadStatus = 'Processing...';
           const blob = VADAudioRecorder.encodeWav(audio);
           const buffer = await blob.arrayBuffer();
-          if (buffer.byteLength < 1000) return; // too short, ignore
+          if (buffer.byteLength < 1000) {
+            state.vadStatus = 'Listening (Auto)';
+            return; // too short, ignore
+          }
           setThinking(true);
           state.transcription = '';
           state.streamingText = '';
@@ -279,11 +299,15 @@ function createAppState() {
           client.sendAudioEnd('audio/wav');
         },
       });
+      console.log('[VAD] Recorder initialized, resuming...');
       await vadRecorder.resume();
       state.vadActive = true;
+      state.vadStatus = 'Listening (Auto)';
+      console.log('[VAD] Ready.');
     } catch (e) {
       state.vadError = String(e);
-      console.error('VAD init failed:', e);
+      state.vadStatus = 'Error';
+      console.error('[VAD] Initialization failed:', e);
     } finally {
       isInitializingVAD = false;
     }
@@ -334,11 +358,11 @@ function createAppState() {
       });
       state.connected = true;
     } catch (e) {
-      state.messages = [...state.messages, {
+      pushMessage({
         role: 'assistant',
         content: `Connection failed: ${e instanceof Error ? e.message : 'Unknown error'}`,
         timestamp: new Date(),
-      }];
+      });
     }
   }
 
@@ -351,7 +375,7 @@ function createAppState() {
 
   async function sendText(text: string) {
     if (!client.connected) return;
-    state.messages = [...state.messages, { role: 'user', content: text, timestamp: new Date() }];
+    pushMessage({ role: 'user', content: text, timestamp: new Date() });
     state.streamingText = '';
     setThinking(true);
     state.emotion = 'neutral'; // reset for new response
@@ -360,12 +384,12 @@ function createAppState() {
 
   async function sendImageMessage(imageData: string, text: string) {
     if (!client.connected) return;
-    state.messages = [...state.messages, {
+    pushMessage({
       role: 'user',
       content: text || 'Image',
       timestamp: new Date(),
       imageUrl: imageData,
-    }];
+    });
     state.streamingText = '';
     setThinking(true);
     state.emotion = 'neutral';
@@ -421,6 +445,7 @@ function createAppState() {
       oidcClientId: state.oidcClientId,
       ttsEnabled: state.ttsEnabled,
       vadMode: state.vadMode,
+      messages: state.messages,
     }));
   }
 
@@ -507,14 +532,17 @@ function createAppState() {
           if (state.audioPlaying) {
             vadRecorder.pause();
             state.vadActive = false;
+            state.vadStatus = 'Speaking (Paused)';
           } else {
             vadRecorder.start();
             state.vadActive = true;
+            state.vadStatus = 'Listening (Auto)';
           }
         }
       } else {
         vadRecorder.pause();
         state.vadActive = false;
+        state.vadStatus = state.vadMode ? 'Idle (VAD off)' : 'Push-to-talk';
       }
     });
   }

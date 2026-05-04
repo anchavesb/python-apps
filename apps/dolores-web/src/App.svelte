@@ -36,9 +36,7 @@
       </button>
       {#if app.state.connected}
         <span class="status connected">Connected</span>
-        {#if app.state.vadActive}
-          <span class="status listening">Auto-listening</span>
-        {/if}
+        <span class="status-detail">{app.state.vadStatus}</span>
         {#if app.state.vadError}
           <span class="status error" title={app.state.vadError}>VAD Error</span>
         {/if}
