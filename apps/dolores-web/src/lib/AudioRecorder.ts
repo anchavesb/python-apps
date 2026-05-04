@@ -1,4 +1,4 @@
-import { MicVAD, utils } from '@ricky0123/vad-web';
+import { MicVAD, utils, ort } from '@ricky0123/vad-web';
 
 let sharedAudioContext: AudioContext | null = null;
 let sharedStream: MediaStream | null = null;
@@ -6,7 +6,7 @@ let sharedStream: MediaStream | null = null;
 /** Get or create a shared AudioContext. Must be called from a user interaction on Safari. */
 export async function getSharedAudioContext(): Promise<AudioContext> {
   if (!sharedAudioContext) {
-    // @ts-ignore - Support legacy webkitAudioContext if needed, though AudioContext is standard now
+    // @ts-ignore - Support legacy webkitAudioContext if needed
     const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
     sharedAudioContext = new AudioContextClass();
   }
@@ -131,6 +131,11 @@ export class VADAudioRecorder {
   }): Promise<void> {
     const audioContext = await getSharedAudioContext();
     const assetPath = window.location.origin + '/vad/';
+    
+    // Configure ONNX to use absolute paths for its internal files
+    // This is critical for Safari to find .mjs and .wasm files
+    ort.env.wasm.wasmPaths = assetPath;
+    
     console.log(`[VAD] Initializing with asset path: ${assetPath}`);
     this.vad = await MicVAD.new({
       model: 'v5',
