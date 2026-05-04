@@ -1,4 +1,4 @@
-import { MicVAD, utils, ort } from '@ricky0123/vad-web';
+import { MicVAD, utils } from '@ricky0123/vad-web';
 
 let sharedAudioContext: AudioContext | null = null;
 let sharedStream: MediaStream | null = null;
@@ -32,7 +32,14 @@ export async function getSharedAudioContext(): Promise<AudioContext> {
 /** Pre-acquire mic stream to unlock it for Safari. */
 export async function getSharedStream(): Promise<MediaStream> {
   if (!sharedStream || !sharedStream.active) {
-    sharedStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    sharedStream = await navigator.mediaDevices.getUserMedia({ 
+      audio: {
+        channelCount: 1,
+        echoCancellation: true,
+        autoGainControl: true,
+        noiseSuppression: true,
+      } 
+    });
   }
   return sharedStream;
 }
@@ -132,23 +139,26 @@ export class VADAudioRecorder {
     const audioContext = await getSharedAudioContext();
     const assetPath = window.location.origin + '/vad/';
     
-    // Configure ONNX to use absolute paths for its internal files
-    // This is critical for Safari to find .mjs and .wasm files
-    ort.env.wasm.wasmPaths = assetPath;
-    
     console.log(`[VAD] Initializing with asset path: ${assetPath}`);
+    
+    // Instead of manual assignment, use the ortConfig callback provided by the library
+    // and pass the correct path variables.
     this.vad = await MicVAD.new({
       model: 'v5',
       positiveSpeechThreshold: 0.85,
       negativeSpeechThreshold: 0.50,
-      minSpeechFrames: 5,        // ~150ms minimum utterance
-      preSpeechPadFrames: 10,    // 300ms pre-buffer (capture word start)
-      redemptionFrames: 8,       // 240ms silence before onSpeechEnd fires
+      minSpeechMs: 150,
+      preSpeechPadMs: 300,
+      redemptionMs: 240,
       baseAssetPath: assetPath,
       onnxWASMBasePath: assetPath,
       workletURL: assetPath + 'vad.worklet.bundle.min.js',
       audioContext,
       getStream: getSharedStream,
+      ortConfig: (ort) => {
+        console.log('[VAD] Configuring internal ORT...');
+        ort.env.wasm.wasmPaths = assetPath;
+      },
       ...callbacks,
     } as any);
   }
