@@ -141,8 +141,6 @@ export class VADAudioRecorder {
     
     console.log(`[VAD] Initializing with asset path: ${assetPath}`);
     
-    // Instead of manual assignment, use the ortConfig callback provided by the library
-    // and pass the correct path variables.
     this.vad = await MicVAD.new({
       model: 'v5',
       positiveSpeechThreshold: 0.85,
@@ -156,8 +154,17 @@ export class VADAudioRecorder {
       audioContext,
       getStream: getSharedStream,
       ortConfig: (ort) => {
-        console.log('[VAD] Configuring internal ORT...');
-        ort.env.wasm.wasmPaths = assetPath;
+        console.log('[VAD] Configuring ORT (disabling threads for Safari)...');
+        ort.env.wasm.numThreads = 1;
+        ort.env.wasm.proxy = false;
+        ort.env.wasm.wasmPaths = {
+          'ort-wasm-simd-threaded.wasm': assetPath + 'ort-wasm-simd-threaded.wasm',
+          'ort-wasm-simd-threaded.mjs': assetPath + 'ort-wasm-simd-threaded.mjs',
+          'ort-wasm-simd.wasm': assetPath + 'ort-wasm-simd.wasm',
+          'ort-wasm-simd.mjs': assetPath + 'ort-wasm-simd.mjs',
+          'ort-wasm.wasm': assetPath + 'ort-wasm.wasm',
+          'ort-wasm.mjs': assetPath + 'ort-wasm.mjs',
+        };
       },
       ...callbacks,
     } as any);
