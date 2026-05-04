@@ -131,6 +131,7 @@ export class VADAudioRecorder {
   }): Promise<void> {
     const audioContext = await getSharedAudioContext();
     const assetPath = window.location.origin + '/app/vad/';
+    console.log(`[VAD] Initializing with asset path: ${assetPath}`);
     this.vad = await MicVAD.new({
       model: 'v5',
       positiveSpeechThreshold: 0.85,
@@ -140,6 +141,7 @@ export class VADAudioRecorder {
       redemptionFrames: 8,       // 240ms silence before onSpeechEnd fires
       baseAssetPath: assetPath,
       onnxWASMBasePath: assetPath,
+      workletURL: assetPath + 'vad.worklet.bundle.min.js',
       audioContext,
       getStream: getSharedStream,
       ...callbacks,
