@@ -162,7 +162,7 @@ export class VADAudioRecorder {
       workletURL: assetPath + 'vad.worklet.bundle.min.js',
       audioContext,
       getStream: getSharedStream,
-      ortConfig: (ort) => {
+      ortConfig: (ort: any) => {
         console.log('[VAD] Configuring ORT (disabling threads for Safari)...');
         ort.env.wasm.numThreads = 1;
         ort.env.wasm.proxy = false;

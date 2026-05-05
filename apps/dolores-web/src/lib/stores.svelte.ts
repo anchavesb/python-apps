@@ -1,5 +1,5 @@
 import { DoloresClient, type MessageEvent, type WebResult } from './DoloresClient';
-import { AudioRecorder, VADAudioRecorder, getSharedAudioContext, getSharedStream } from './AudioRecorder';
+import { AudioRecorder, VADAudioRecorder, getSharedAudioContext, getSharedStream, stopSharedStream } from './AudioRecorder';
 import { AudioPlayer } from './AudioPlayer';
 import { detectEmotion } from './avatar/EmotionDetector';
 import { handleCallback, loadAuth, login, logout, isTokenExpired, refreshAccessToken, type OIDCConfig } from './auth';
@@ -114,6 +114,23 @@ function createAppState() {
     } else {
       thinkingTimer = null;
     }
+  }
+
+  function saveSettings() {
+    localStorage.setItem('dolores-settings', JSON.stringify({
+      serverUrl: state.serverUrl,
+      apiKey: state.apiKey,
+      voiceId: state.voiceId,
+      provider: state.provider,
+      model: state.model,
+      viewMode: state.viewMode,
+      conversationId: state.conversationId,
+      oidcIssuer: state.oidcIssuer,
+      oidcClientId: state.oidcClientId,
+      ttsEnabled: state.ttsEnabled,
+      vadMode: state.vadMode,
+      messages: state.messages,
+    }));
   }
 
   function pushMessage(msg: ChatMessage) {
@@ -332,11 +349,11 @@ function createAppState() {
             } else {
               state.userToken = '';
               state.oidcUser = null;
-              state.messages = [...state.messages, {
+              pushMessage({
                 role: 'assistant',
                 content: 'Your session has expired. Please login again in Settings.',
                 timestamp: new Date(),
-              }];
+              });
               return;
             }
           }
@@ -437,23 +454,6 @@ function createAppState() {
     client.sendAudioEnd(recorder.mimeType || undefined);
   }
 
-  function saveSettings() {
-    localStorage.setItem('dolores-settings', JSON.stringify({
-      serverUrl: state.serverUrl,
-      apiKey: state.apiKey,
-      voiceId: state.voiceId,
-      provider: state.provider,
-      model: state.model,
-      viewMode: state.viewMode,
-      conversationId: state.conversationId,
-      oidcIssuer: state.oidcIssuer,
-      oidcClientId: state.oidcClientId,
-      ttsEnabled: state.ttsEnabled,
-      vadMode: state.vadMode,
-      messages: state.messages,
-    }));
-  }
-
   function toggleTts() {
     state.ttsEnabled = !state.ttsEnabled;
     if (state.ttsEnabled) {
@@ -516,6 +516,44 @@ function createAppState() {
     }
   }
 
+  async function verifyVADAssets(): Promise<boolean> {
+    const assetPath = window.location.origin + '/vad/';
+    const files = [
+      'silero_vad_v5.onnx',
+      'vad.worklet.bundle.min.js',
+      'ort-wasm-simd-threaded.mjs',
+      'ort-wasm-simd-threaded.wasm'
+    ];
+
+    console.log('[VAD] Starting asset verification...');
+    for (const file of files) {
+      try {
+        const resp = await fetch(assetPath + file, { method: 'HEAD' });
+        const contentType = resp.headers.get('Content-Type');
+        if (!resp.ok || contentType?.includes('text/html')) {
+          const error = `Asset failure: ${file} (Status: ${resp.status}, Type: ${contentType})`;
+          state.vadError = error;
+          console.error(`[VAD] ${error}`);
+          return false;
+        }
+        console.log(`[VAD] Verified: ${file} (${contentType})`);
+      } catch (e) {
+        state.vadError = `Fetch failed: ${file}`;
+        return false;
+      }
+    }
+    console.log('[VAD] All assets verified.');
+    return true;
+  }
+
+  function resetVAD() {
+    vadRecorder.destroy();
+    state.vadActive = false;
+    state.vadError = null;
+    state.vadStatus = 'idle';
+    initVAD();
+  }
+
   let isInitialized = false;
   function init() {
     if (isInitialized) return;
@@ -572,50 +610,12 @@ function createAppState() {
     oidcLogin,
     oidcLogout,
     oidcHandleCallback,
-    async function verifyVADAssets(): Promise<boolean> {
-      const assetPath = window.location.origin + '/vad/';
-      const files = [
-        'silero_vad_v5.onnx',
-        'vad.worklet.bundle.min.js',
-        'ort-wasm-simd-threaded.mjs',
-        'ort-wasm-simd-threaded.wasm'
-      ];
-
-      console.log('[VAD] Starting asset verification...');
-      for (const file of files) {
-        try {
-          const resp = await fetch(assetPath + file, { method: 'HEAD' });
-          const contentType = resp.headers.get('Content-Type');
-          if (!resp.ok || contentType?.includes('text/html')) {
-            const error = `Asset failure: ${file} (Status: ${resp.status}, Type: ${contentType})`;
-            state.vadError = error;
-            console.error(`[VAD] ${error}`);
-            return false;
-          }
-          console.log(`[VAD] Verified: ${file} (${contentType})`);
-        } catch (e) {
-          state.vadError = `Fetch failed: ${file}`;
-          return false;
-        }
-      }
-      console.log('[VAD] All assets verified.');
-      return true;
-    }
-
-    function resetVAD() {
-      vadRecorder.destroy();
-      state.vadActive = false;
-      state.vadError = null;
-      state.vadStatus = 'idle';
-      initVAD();
-    }
-    ...
-      toggleTts,
-      testAudio: () => player.testAudio(),
-      verifyVADAssets,
-      resetVAD,
-      stopAudio: () => player.stop(),
-
+    toggleTts,
+    testAudio: () => player.testAudio(),
+    verifyVADAssets,
+    resetVAD,
+    stopAudio: () => player.stop(),
+  };
 }
 
 function loadSettings(): Partial<AppState> {
