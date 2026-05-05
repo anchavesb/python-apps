@@ -154,9 +154,9 @@ export class VADAudioRecorder {
       model: 'v5',
       positiveSpeechThreshold: 0.85,
       negativeSpeechThreshold: 0.50,
-      minSpeechMs: 250,          // ~250ms minimum utterance
-      preSpeechPadMs: 300,
-      redemptionMs: 750,         // ~750ms silence before onSpeechEnd fires
+      minSpeechMs: 300,          // ~300ms minimum utterance
+      preSpeechPadMs: 300,       // 300ms pre-buffer (capture word start)
+      redemptionMs: 1000,        // 1s silence before onSpeechEnd fires
       baseAssetPath: assetPath,
       onnxWASMBasePath: assetPath,
       workletURL: assetPath + 'vad.worklet.bundle.min.js',
