@@ -13,6 +13,7 @@ RUN pip install --no-cache-dir /app/libs/dolores-common
 # Install the TTS service
 COPY apps/dolores-tts/pyproject.toml /app/
 COPY apps/dolores-tts/src /app/src
+COPY apps/dolores-tts/assets /app/assets
 RUN pip install --no-cache-dir .
 
 # Create data directories

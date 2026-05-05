@@ -1,5 +1,57 @@
 import { MicVAD, utils } from '@ricky0123/vad-web';
 
+let sharedAudioContext: AudioContext | null = null;
+let sharedStream: MediaStream | null = null;
+
+/** Get or create a shared AudioContext. Must be called from a user interaction on Safari. */
+export async function getSharedAudioContext(): Promise<AudioContext> {
+  if (!sharedAudioContext) {
+    // @ts-ignore - Support legacy webkitAudioContext if needed
+    const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+    sharedAudioContext = new AudioContextClass();
+  }
+  
+  if (sharedAudioContext.state === 'suspended') {
+    await sharedAudioContext.resume();
+  }
+
+  // Safari/iOS "unlock": play a short burst of silence
+  if (sharedAudioContext.state === 'running') {
+    const oscillator = sharedAudioContext.createOscillator();
+    const gain = sharedAudioContext.createGain();
+    gain.gain.value = 0; // silence
+    oscillator.connect(gain);
+    gain.connect(sharedAudioContext.destination);
+    oscillator.start(0);
+    oscillator.stop(0.001);
+  }
+  
+  return sharedAudioContext;
+}
+
+/** Pre-acquire mic stream to unlock it for Safari. */
+export async function getSharedStream(): Promise<MediaStream> {
+  if (!sharedStream || !sharedStream.active) {
+    sharedStream = await navigator.mediaDevices.getUserMedia({ 
+      audio: {
+        channelCount: 1,
+        echoCancellation: true,
+        autoGainControl: true,
+        noiseSuppression: true,
+      } 
+    });
+  }
+  return sharedStream;
+}
+
+/** Stop the shared stream and release the microphone. */
+export function stopSharedStream(): void {
+  if (sharedStream) {
+    sharedStream.getTracks().forEach(t => t.stop());
+    sharedStream = null;
+  }
+}
+
 export class AudioRecorder {
   private mediaRecorder: MediaRecorder | null = null;
   private chunks: Blob[] = [];
@@ -9,7 +61,7 @@ export class AudioRecorder {
   /** Acquire mic permission and keep stream alive to avoid re-prompting. */
   async init(): Promise<void> {
     if (this.stream) return;
-    this.stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    this.stream = await getSharedStream();
     this._mimeType = this.getSupportedMimeType();
   }
 
@@ -58,6 +110,7 @@ export class AudioRecorder {
       this.stream.getTracks().forEach((t) => t.stop());
       this.stream = null;
     }
+    stopSharedStream();
     this.mediaRecorder = null;
     this.chunks = [];
   }
@@ -92,12 +145,36 @@ export class VADAudioRecorder {
     onSpeechStart: () => void;
     onSpeechEnd: (audio: Float32Array) => void;
   }): Promise<void> {
+    const audioContext = await getSharedAudioContext();
+    const assetPath = window.location.origin + '/app/vad/';
+    
+    console.log(`[VAD] Initializing with asset path: ${assetPath}`);
+    
     this.vad = await MicVAD.new({
+      model: 'v5',
       positiveSpeechThreshold: 0.85,
       negativeSpeechThreshold: 0.50,
-      minSpeechFrames: 5,        // ~150ms minimum utterance
-      preSpeechPadFrames: 10,    // 300ms pre-buffer (capture word start)
-      redemptionFrames: 8,       // 240ms silence before onSpeechEnd fires
+      minSpeechMs: 300,          // ~300ms minimum utterance
+      preSpeechPadMs: 300,       // 300ms pre-buffer (capture word start)
+      redemptionMs: 1000,        // 1s silence before onSpeechEnd fires
+      baseAssetPath: assetPath,
+      onnxWASMBasePath: assetPath,
+      workletURL: assetPath + 'vad.worklet.bundle.min.js',
+      audioContext,
+      getStream: getSharedStream,
+      ortConfig: (ort: any) => {
+        console.log('[VAD] Configuring ORT (disabling threads for Safari)...');
+        ort.env.wasm.numThreads = 1;
+        ort.env.wasm.proxy = false;
+        ort.env.wasm.wasmPaths = {
+          'ort-wasm-simd-threaded.wasm': assetPath + 'ort-wasm-simd-threaded.wasm',
+          'ort-wasm-simd-threaded.mjs': assetPath + 'ort-wasm-simd-threaded.mjs',
+          'ort-wasm-simd.wasm': assetPath + 'ort-wasm-simd.wasm',
+          'ort-wasm-simd.mjs': assetPath + 'ort-wasm-simd.mjs',
+          'ort-wasm.wasm': assetPath + 'ort-wasm.wasm',
+          'ort-wasm.mjs': assetPath + 'ort-wasm.mjs',
+        };
+      },
       ...callbacks,
     } as any);
   }
@@ -110,9 +187,18 @@ export class VADAudioRecorder {
     this.vad?.pause();
   }
 
+  /** Force resume of AudioContext (needed for Safari on first interaction) */
+  async resume(): Promise<void> {
+    await getSharedAudioContext();
+    if (this.vad) {
+      await this.vad.start();
+    }
+  }
+
   destroy(): void {
     this.vad?.destroy();
     this.vad = null;
+    stopSharedStream();
   }
 
   get initialized(): boolean {

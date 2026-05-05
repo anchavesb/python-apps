@@ -4,6 +4,9 @@
   import Settings from './lib/components/Settings.svelte';
   import { app } from './lib/stores.svelte';
 
+  // Initialize background services (VAD, etc)
+  app.init();
+
   // Support ?view=avatar URL param for kiosk mode
   const params = new URLSearchParams(window.location.search);
   if (params.get('view') === 'avatar') {
@@ -33,6 +36,10 @@
       </button>
       {#if app.state.connected}
         <span class="status connected">Connected</span>
+        <span class="status-detail">{app.state.vadStatus}</span>
+        {#if app.state.vadError}
+          <span class="status error" title={app.state.vadError}>VAD Error</span>
+        {/if}
         <button onclick={() => app.disconnect()}>Disconnect</button>
       {:else}
         <span class="status disconnected">Disconnected</span>

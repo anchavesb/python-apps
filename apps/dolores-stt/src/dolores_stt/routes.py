@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import io
+import json
 import uuid as _uuid
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, WebSocket, WebSocketDisconnect
@@ -216,12 +217,13 @@ async def stream_transcription(websocket: WebSocket) -> None:
         while True:
             message = await websocket.receive()
 
+            if message["type"] == "websocket.disconnect":
+                break
+
             if "bytes" in message:
                 audio_buffer.write(message["bytes"])
 
             elif "text" in message:
-                import json
-
                 try:
                     data = json.loads(message["text"])
                 except json.JSONDecodeError:
@@ -237,6 +239,7 @@ async def stream_transcription(websocket: WebSocket) -> None:
                         await websocket.send_json(
                             {"type": "error", "text": "", "error": "No audio data received"}
                         )
+                        audio_buffer.close()
                         audio_buffer = io.BytesIO()
                         continue
 
@@ -254,6 +257,7 @@ async def stream_transcription(websocket: WebSocket) -> None:
                         )
 
                     # Reset buffer for next utterance
+                    audio_buffer.close()
                     audio_buffer = io.BytesIO()
 
     except WebSocketDisconnect:
@@ -264,3 +268,5 @@ async def stream_transcription(websocket: WebSocket) -> None:
             await websocket.send_json({"type": "error", "text": "", "error": str(e)})
         except Exception:
             pass
+    finally:
+        audio_buffer.close()
