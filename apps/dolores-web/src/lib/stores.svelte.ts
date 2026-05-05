@@ -517,7 +517,7 @@ function createAppState() {
   }
 
   async function verifyVADAssets(): Promise<boolean> {
-    const assetPath = window.location.origin + '/vad/';
+    const assetPath = window.location.origin + '/app/vad/';
     const files = [
       'silero_vad_v5.onnx',
       'vad.worklet.bundle.min.js',
