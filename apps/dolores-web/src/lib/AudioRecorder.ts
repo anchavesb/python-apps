@@ -146,7 +146,7 @@ export class VADAudioRecorder {
     onSpeechEnd: (audio: Float32Array) => void;
   }): Promise<void> {
     const audioContext = await getSharedAudioContext();
-    const assetPath = window.location.origin + '/app/vad/';
+    const assetPath = window.location.origin + '/vad/';
     
     console.log(`[VAD] Initializing with asset path: ${assetPath}`);
     
