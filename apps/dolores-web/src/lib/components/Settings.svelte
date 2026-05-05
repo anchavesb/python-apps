@@ -242,10 +242,16 @@
 
     <div class="test-audio-row">
       <button class="voice-load-btn" onclick={() => app.testAudio()}>
-        Test Audio Output
+        Test Audio
       </button>
-      <span class="hint">Click to "unlock" audio in Safari if auto-listening won't start.</span>
+      <button class="voice-load-btn" onclick={() => app.verifyVADAssets()}>
+        Check VAD Assets
+      </button>
+      <button class="voice-load-btn" onclick={() => app.resetVAD()}>
+        Reset VAD
+      </button>
     </div>
+    <p class="hint">Use these to "unlock" audio or diagnose loading errors in Safari.</p>
 
     <fieldset>
       <legend>Speaker Profiles</legend>

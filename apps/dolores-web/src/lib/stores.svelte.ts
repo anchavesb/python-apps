@@ -572,10 +572,50 @@ function createAppState() {
     oidcLogin,
     oidcLogout,
     oidcHandleCallback,
-    toggleTts,
-    testAudio: () => player.testAudio(),
-    stopAudio: () => player.stop(),
-  };
+    async function verifyVADAssets(): Promise<boolean> {
+      const assetPath = window.location.origin + '/vad/';
+      const files = [
+        'silero_vad_v5.onnx',
+        'vad.worklet.bundle.min.js',
+        'ort-wasm-simd-threaded.mjs',
+        'ort-wasm-simd-threaded.wasm'
+      ];
+
+      console.log('[VAD] Starting asset verification...');
+      for (const file of files) {
+        try {
+          const resp = await fetch(assetPath + file, { method: 'HEAD' });
+          const contentType = resp.headers.get('Content-Type');
+          if (!resp.ok || contentType?.includes('text/html')) {
+            const error = `Asset failure: ${file} (Status: ${resp.status}, Type: ${contentType})`;
+            state.vadError = error;
+            console.error(`[VAD] ${error}`);
+            return false;
+          }
+          console.log(`[VAD] Verified: ${file} (${contentType})`);
+        } catch (e) {
+          state.vadError = `Fetch failed: ${file}`;
+          return false;
+        }
+      }
+      console.log('[VAD] All assets verified.');
+      return true;
+    }
+
+    function resetVAD() {
+      vadRecorder.destroy();
+      state.vadActive = false;
+      state.vadError = null;
+      state.vadStatus = 'idle';
+      initVAD();
+    }
+    ...
+      toggleTts,
+      testAudio: () => player.testAudio(),
+      verifyVADAssets,
+      resetVAD,
+      stopAudio: () => player.stop(),
+
 }
 
 function loadSettings(): Partial<AppState> {
