@@ -44,6 +44,14 @@ export async function getSharedStream(): Promise<MediaStream> {
   return sharedStream;
 }
 
+/** Stop the shared stream and release the microphone. */
+export function stopSharedStream(): void {
+  if (sharedStream) {
+    sharedStream.getTracks().forEach(t => t.stop());
+    sharedStream = null;
+  }
+}
+
 export class AudioRecorder {
   private mediaRecorder: MediaRecorder | null = null;
   private chunks: Blob[] = [];
@@ -102,6 +110,7 @@ export class AudioRecorder {
       this.stream.getTracks().forEach((t) => t.stop());
       this.stream = null;
     }
+    stopSharedStream();
     this.mediaRecorder = null;
     this.chunks = [];
   }
@@ -145,9 +154,9 @@ export class VADAudioRecorder {
       model: 'v5',
       positiveSpeechThreshold: 0.85,
       negativeSpeechThreshold: 0.50,
-      minSpeechMs: 150,
+      minSpeechMs: 250,          // ~250ms minimum utterance
       preSpeechPadMs: 300,
-      redemptionMs: 240,
+      redemptionMs: 750,         // ~750ms silence before onSpeechEnd fires
       baseAssetPath: assetPath,
       onnxWASMBasePath: assetPath,
       workletURL: assetPath + 'vad.worklet.bundle.min.js',
@@ -189,6 +198,7 @@ export class VADAudioRecorder {
   destroy(): void {
     this.vad?.destroy();
     this.vad = null;
+    stopSharedStream();
   }
 
   get initialized(): boolean {

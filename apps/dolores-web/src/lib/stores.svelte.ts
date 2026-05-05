@@ -288,7 +288,10 @@ function createAppState() {
           const blob = VADAudioRecorder.encodeWav(audio);
           const buffer = await blob.arrayBuffer();
           if (buffer.byteLength < 1000) {
-            state.vadStatus = 'Listening (Auto)';
+            state.vadStatus = 'Noise ignored';
+            setTimeout(() => {
+              if (state.vadActive) state.vadStatus = 'Listening (Auto)';
+            }, 1500);
             return; // too short, ignore
           }
           setThinking(true);
@@ -375,6 +378,7 @@ function createAppState() {
 
   async function sendText(text: string) {
     if (!client.connected) return;
+    await getSharedAudioContext();
     pushMessage({ role: 'user', content: text, timestamp: new Date() });
     state.streamingText = '';
     setThinking(true);
@@ -384,6 +388,7 @@ function createAppState() {
 
   async function sendImageMessage(imageData: string, text: string) {
     if (!client.connected) return;
+    await getSharedAudioContext();
     pushMessage({
       role: 'user',
       content: text || 'Image',
@@ -511,7 +516,10 @@ function createAppState() {
     }
   }
 
+  let isInitialized = false;
   function init() {
+    if (isInitialized) return;
+    isInitialized = true;
     let isVisible = $state(typeof document !== 'undefined' ? !document.hidden : true);
 
     // Tab visibility listener
@@ -535,8 +543,8 @@ function createAppState() {
             state.vadStatus = 'Speaking (Paused)';
           } else {
             vadRecorder.start();
-            state.vadActive = true;
-            state.vadStatus = 'Listening (Auto)';
+            state.vadActive = vadRecorder.initialized;
+            if (state.vadActive) state.vadStatus = 'Listening (Auto)';
           }
         }
       } else {
