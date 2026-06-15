@@ -1,4 +1,4 @@
-const CACHE_NAME = 'dolores-v1';
+const CACHE_NAME = 'dolores-v2';
 const STATIC_ASSETS = [
   '/app/',
   '/app/index.html',
@@ -26,8 +26,13 @@ self.addEventListener('activate', (event) => {
 self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url);
 
-  // Don't cache API or WebSocket requests
-  if (url.pathname.startsWith('/v1') || event.request.method !== 'GET') {
+  // Don't cache API, WebSocket, or VAD/binary assets (prevents Safari ONNX/WASM crash from poisoned cache entries)
+  if (
+    url.pathname.startsWith('/v1') ||
+    event.request.method !== 'GET' ||
+    url.pathname.startsWith('/app/vad/') ||
+    /\.(onnx|wasm|mjs)$/.test(url.pathname)
+  ) {
     return;
   }
 

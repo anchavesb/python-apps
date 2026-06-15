@@ -1,4 +1,39 @@
-import { MicVAD, utils } from '@ricky0123/vad-web';
+import { MicVAD } from '@ricky0123/vad-web';
+
+function encodeWavPCM16(float32: Float32Array, sampleRate = 16000): ArrayBuffer {
+  const numSamples = float32.length;
+  const bytesPerSample = 2;
+  const blockAlign = 1 * bytesPerSample;
+  const byteRate = sampleRate * blockAlign;
+  const dataSize = numSamples * bytesPerSample;
+  const buffer = new ArrayBuffer(44 + dataSize);
+  const view = new DataView(buffer);
+
+  const writeStr = (offset: number, s: string) => {
+    for (let i = 0; i < s.length; i++) view.setUint8(offset + i, s.charCodeAt(i));
+  };
+
+  writeStr(0, 'RIFF');
+  view.setUint32(4, 36 + dataSize, true);
+  writeStr(8, 'WAVE');
+  writeStr(12, 'fmt ');
+  view.setUint32(16, 16, true);            // fmt chunk size
+  view.setUint16(20, 1, true);             // PCM format tag = 0x0001
+  view.setUint16(22, 1, true);             // channels = mono
+  view.setUint32(24, sampleRate, true);
+  view.setUint32(28, byteRate, true);
+  view.setUint16(32, blockAlign, true);
+  view.setUint16(34, 16, true);            // bits per sample
+  writeStr(36, 'data');
+  view.setUint32(40, dataSize, true);
+
+  let offset = 44;
+  for (let i = 0; i < numSamples; i++, offset += 2) {
+    const s = Math.max(-1, Math.min(1, float32[i]));
+    view.setInt16(offset, s < 0 ? s * 0x8000 : s * 0x7FFF, true);
+  }
+  return buffer;
+}
 
 let sharedAudioContext: AudioContext | null = null;
 let sharedStream: MediaStream | null = null;
@@ -22,8 +57,9 @@ export async function getSharedAudioContext(): Promise<AudioContext> {
     gain.gain.value = 0; // silence
     oscillator.connect(gain);
     gain.connect(sharedAudioContext.destination);
-    oscillator.start(0);
-    oscillator.stop(0.001);
+    const now = sharedAudioContext.currentTime;
+    oscillator.start(now);
+    oscillator.stop(now + 0.05);
   }
   
   return sharedAudioContext;
@@ -202,6 +238,6 @@ export class VADAudioRecorder {
 
   /** Encode Float32Array (16kHz mono PCM) → WAV Blob */
   static encodeWav(float32: Float32Array, sampleRate = 16000): Blob {
-    return new Blob([utils.encodeWAV(float32, sampleRate)], { type: 'audio/wav' });
+    return new Blob([encodeWavPCM16(float32, sampleRate)], { type: 'audio/wav' });
   }
 }

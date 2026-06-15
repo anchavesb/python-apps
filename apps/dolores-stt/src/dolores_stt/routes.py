@@ -212,6 +212,8 @@ async def stream_transcription(websocket: WebSocket) -> None:
         return
 
     audio_buffer = io.BytesIO()
+    buffer_bytes = 0
+    max_bytes = settings.max_upload_bytes
 
     try:
         while True:
@@ -221,7 +223,16 @@ async def stream_transcription(websocket: WebSocket) -> None:
                 break
 
             if "bytes" in message:
-                audio_buffer.write(message["bytes"])
+                chunk = message["bytes"]
+                if buffer_bytes + len(chunk) > max_bytes:
+                    max_mb = max_bytes // (1024 * 1024)
+                    await websocket.send_json(
+                        {"type": "error", "text": "", "error": f"Audio buffer exceeded {max_mb} MB cap"}
+                    )
+                    await websocket.close(code=1009)
+                    return
+                audio_buffer.write(chunk)
+                buffer_bytes += len(chunk)
 
             elif "text" in message:
                 try:
@@ -241,12 +252,25 @@ async def stream_transcription(websocket: WebSocket) -> None:
                         )
                         audio_buffer.close()
                         audio_buffer = io.BytesIO()
+                        buffer_bytes = 0
                         continue
+
+                    client_content_type = (data.get("content_type") or "audio/webm").split(";")[0].strip()
+                    if client_content_type not in SUPPORTED_FORMATS:
+                        await websocket.send_json(
+                            {"type": "error", "text": "", "error": f"Unsupported content_type: {client_content_type}"}
+                        )
+                        audio_buffer.close()
+                        audio_buffer = io.BytesIO()
+                        buffer_bytes = 0
+                        continue
+
+                    log.info("ws_transcribe_blob", size_mb=round(len(audio_data) / 1024 / 1024, 3), content_type=client_content_type)
 
                     language = data.get("language")
 
                     for chunk in engine.transcribe_stream(
-                        audio_data, content_type="audio/webm", language=language
+                        audio_data, content_type=client_content_type, language=language
                     ):
                         await websocket.send_json(
                             StreamMessage(
@@ -259,6 +283,7 @@ async def stream_transcription(websocket: WebSocket) -> None:
                     # Reset buffer for next utterance
                     audio_buffer.close()
                     audio_buffer = io.BytesIO()
+                    buffer_bytes = 0
 
     except WebSocketDisconnect:
         log.info("ws_disconnected")
