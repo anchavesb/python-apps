@@ -6,7 +6,7 @@ import shutil
 import tempfile
 import uuid
 from dataclasses import dataclass
-from datetime import date, datetime, timezone
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
 
 ISO_DT = "%Y-%m-%dT%H:%M:%SZ"
@@ -37,14 +37,22 @@ class Note:
 
 
 @dataclass
-class WorkItem:
+class RssFeed:
     id: str
-    name: str
-    start_date: str
-    end_date: Optional[str]
-    description: Optional[str]
-    why: Optional[str]
+    user_id: Optional[str]
+    url: str
+    title: str
     created_at: str
+
+
+@dataclass
+class RssItemState:
+    id: str
+    user_id: Optional[str]
+    feed_id: str
+    item_guid: str
+    read: bool
+    starred: bool
     updated_at: str
 
 
@@ -61,7 +69,7 @@ class JsonStore:
         self.data_file = data_file
         self.backups = int(backups)
         self.wal_file = wal_file
-        self.state = {"todos": [], "notes": [], "work_items": []}
+        self.state = {"todos": [], "notes": [], "rss_feeds": [], "rss_item_states": []}
         os.makedirs(os.path.dirname(self.data_file), exist_ok=True)
 
     # ---------- Validation ----------
@@ -103,28 +111,6 @@ class JsonStore:
         tags.setdefault("priority", "medium")
         data["tags"] = tags
         self._validate_tags(tags)
-
-    def _validate_work(self, data: Dict[str, Any], for_update: bool = False):
-        name = (data.get("name") or "").strip()
-        if not name:
-            raise ValidationError("name is required")
-        sd = data.get("start_date")
-        if not isinstance(sd, str) or not sd:
-            raise ValidationError("start_date is required (YYYY-MM-DD)")
-        try:
-            sdate = date.fromisoformat(sd[:10])
-        except Exception:
-            raise ValidationError("start_date must be YYYY-MM-DD")
-        ed = data.get("end_date")
-        if ed:
-            if not isinstance(ed, str):
-                raise ValidationError("end_date must be string YYYY-MM-DD")
-            try:
-                edate = date.fromisoformat(ed[:10])
-            except Exception:
-                raise ValidationError("end_date must be YYYY-MM-DD")
-            if edate < sdate:
-                raise ValidationError("end_date cannot be earlier than start_date")
 
     # ---------- Persistence ----------
     def _atomic_write(self, path: str, content: str):
@@ -176,9 +162,11 @@ class JsonStore:
                 # basic validation
                 if not isinstance(self.state, dict) or "todos" not in self.state or "notes" not in self.state:
                     raise ValueError("invalid structure")
-                # compatibility: ensure work_items exists
-                if "work_items" not in self.state:
-                    self.state["work_items"] = []
+                # compatibility: ensure rss keys exist
+                if "rss_feeds" not in self.state:
+                    self.state["rss_feeds"] = []
+                if "rss_item_states" not in self.state:
+                    self.state["rss_item_states"] = []
                 return
         except Exception:
             pass
@@ -190,8 +178,10 @@ class JsonStore:
                     with open(bak, "r", encoding="utf-8") as f:
                         self.state = json.load(f)
                     if isinstance(self.state, dict) and "todos" in self.state and "notes" in self.state:
-                        if "work_items" not in self.state:
-                            self.state["work_items"] = []
+                        if "rss_feeds" not in self.state:
+                            self.state["rss_feeds"] = []
+                        if "rss_item_states" not in self.state:
+                            self.state["rss_item_states"] = []
                         # After restoring from backup, try replay WAL
                         self._replay_wal()
                         self._flush()
@@ -199,7 +189,7 @@ class JsonStore:
             except Exception:
                 continue
         # If no backups, start clean and try replay WAL
-        self.state = {"todos": [], "notes": [], "work_items": []}
+        self.state = {"todos": [], "notes": [], "rss_feeds": [], "rss_item_states": []}
         self._replay_wal()
         self._flush()
 
@@ -235,14 +225,28 @@ class JsonStore:
                     self.state["notes"][i] = e["data"]
         elif t == "note_delete":
             self.state["notes"] = [it for it in self.state["notes"] if it["id"] != e["id"]]
-        elif t == "work_create":
-            self.state["work_items"].append(e["data"])
-        elif t == "work_update":
-            for i, it in enumerate(self.state["work_items"]):
-                if it["id"] == e["id"]:
-                    self.state["work_items"][i] = e["data"]
-        elif t == "work_delete":
-            self.state["work_items"] = [it for it in self.state["work_items"] if it["id"] != e["id"]]
+        elif t == "rss_feed_create":
+            if "rss_feeds" not in self.state:
+                self.state["rss_feeds"] = []
+            self.state["rss_feeds"].append(e["data"])
+        elif t == "rss_feed_delete":
+            if "rss_feeds" not in self.state:
+                self.state["rss_feeds"] = []
+            self.state["rss_feeds"] = [it for it in self.state["rss_feeds"] if it["id"] != e["id"]]
+            if "rss_item_states" in self.state:
+                self.state["rss_item_states"] = [s for s in self.state["rss_item_states"] if s.get("feed_id") != e["id"]]
+        elif t == "rss_item_state_update":
+            if "rss_item_states" not in self.state:
+                self.state["rss_item_states"] = []
+            # Find and update or append
+            idx = next((i for i, s in enumerate(self.state["rss_item_states"]) if s["id"] == e["data"]["id"]), None)
+            if idx is not None:
+                self.state["rss_item_states"][idx] = e["data"]
+            else:
+                self.state["rss_item_states"].append(e["data"])
+            # cleanup
+            if not e["data"].get("read") and not e["data"].get("starred"):
+                self.state["rss_item_states"] = [s for s in self.state["rss_item_states"] if s["id"] != e["data"]["id"]]
 
     def validate_store(self) -> Tuple[bool, str]:
         try:
@@ -354,52 +358,91 @@ class JsonStore:
             self._append_wal({"type": "note_delete", "id": nid})
             self._flush()
         return deleted
-    # Work Items
-    def list_work(self, user_id: str | None = None) -> List[Dict[str, Any]]:
-        return list(self.state["work_items"])  # shallow copy
+    # RSS Feeds
+    def list_rss_feeds(self, user_id: str | None = None) -> List[Dict[str, Any]]:
+        if "rss_feeds" not in self.state:
+            self.state["rss_feeds"] = []
+        return [f for f in self.state["rss_feeds"] if not user_id or f.get("user_id") == user_id]
 
-    def get_work(self, wid: str, user_id: str | None = None) -> Optional[Dict[str, Any]]:
-        return next((w for w in self.state["work_items"] if w["id"] == wid), None)
-
-    def create_work(self, data: Dict[str, Any], user_id: str | None = None) -> Dict[str, Any]:
-        self._validate_work(data)
+    def create_rss_feed(self, data: Dict[str, Any], user_id: str | None = None) -> Dict[str, Any]:
+        if "rss_feeds" not in self.state:
+            self.state["rss_feeds"] = []
         now = now_iso()
-        item = {
+        feed = {
             "id": self._new_id(),
-            "name": data["name"],
-            "start_date": data["start_date"],
-            "end_date": data.get("end_date"),
-            "description": data.get("description"),
-            "why": data.get("why"),
+            "user_id": user_id,
+            "url": data["url"],
+            "title": data.get("title") or "Unnamed Feed",
             "created_at": now,
-            "updated_at": now,
         }
-        self.state["work_items"].append(item)
-        self._append_wal({"type": "work_create", "data": item})
+        self.state["rss_feeds"].append(feed)
+        self._append_wal({"type": "rss_feed_create", "data": feed})
         self._flush()
-        return item
+        return feed
 
-    def update_work(self, wid: str, data: Dict[str, Any], user_id: str | None = None) -> Optional[Dict[str, Any]]:
-        idx = next((i for i, w in enumerate(self.state["work_items"]) if w["id"] == wid), None)
-        if idx is None:
-            return None
-        current = self.state["work_items"][idx]
-        merged = {
-            **current,
-            **{k: v for k, v in data.items() if v is not None},
-            "updated_at": now_iso(),
-        }
-        self._validate_work(merged, for_update=True)
-        self.state["work_items"][idx] = merged
-        self._append_wal({"type": "work_update", "id": wid, "data": merged})
-        self._flush()
-        return merged
-
-    def delete_work(self, wid: str, user_id: str | None = None) -> bool:
-        before = len(self.state["work_items"])
-        self.state["work_items"] = [w for w in self.state["work_items"] if w["id"] != wid]
-        deleted = len(self.state["work_items"]) < before
+    def delete_rss_feed(self, feed_id: str, user_id: str | None = None) -> bool:
+        if "rss_feeds" not in self.state:
+            self.state["rss_feeds"] = []
+        before = len(self.state["rss_feeds"])
+        self.state["rss_feeds"] = [
+            f for f in self.state["rss_feeds"]
+            if f["id"] != feed_id or (user_id and f.get("user_id") != user_id)
+        ]
+        deleted = len(self.state["rss_feeds"]) < before
         if deleted:
-            self._append_wal({"type": "work_delete", "id": wid})
+            if "rss_item_states" in self.state:
+                self.state["rss_item_states"] = [
+                    s for s in self.state["rss_item_states"] if s.get("feed_id") != feed_id
+                ]
+            self._append_wal({"type": "rss_feed_delete", "id": feed_id})
             self._flush()
         return deleted
+
+    # RSS Item States
+    def get_rss_item_states(self, user_id: str | None = None, feed_id: str | None = None) -> List[Dict[str, Any]]:
+        if "rss_item_states" not in self.state:
+            self.state["rss_item_states"] = []
+        res = self.state["rss_item_states"]
+        if user_id:
+            res = [s for s in res if s.get("user_id") == user_id]
+        if feed_id:
+            res = [s for s in res if s.get("feed_id") == feed_id]
+        return res
+
+    def update_rss_item_state(self, user_id: str | None, feed_id: str, item_guid: str, read: bool | None = None, starred: bool | None = None) -> Dict[str, Any]:
+        if "rss_item_states" not in self.state:
+            self.state["rss_item_states"] = []
+
+        state = next((s for s in self.state["rss_item_states"] if s.get("user_id") == user_id and s.get("feed_id") == feed_id and s.get("item_guid") == item_guid), None)
+
+        now = now_iso()
+        if not state:
+            state = {
+                "id": self._new_id(),
+                "user_id": user_id,
+                "feed_id": feed_id,
+                "item_guid": item_guid,
+                "read": False,
+                "starred": False,
+                "updated_at": now,
+            }
+            self.state["rss_item_states"].append(state)
+
+        if read is not None:
+            state["read"] = read
+        if starred is not None:
+            state["starred"] = starred
+        state["updated_at"] = now
+
+        if not state["read"] and not state["starred"]:
+            self.state["rss_item_states"] = [s for s in self.state["rss_item_states"] if s["id"] != state["id"]]
+
+        self._append_wal({"type": "rss_item_state_update", "data": state})
+        self._flush()
+        return state
+
+    def mark_all_rss_items_read(self, user_id: str | None, feed_id: str, item_guids: List[str]):
+        if "rss_item_states" not in self.state:
+            self.state["rss_item_states"] = []
+        for guid in item_guids:
+            self.update_rss_item_state(user_id, feed_id, guid, read=True)

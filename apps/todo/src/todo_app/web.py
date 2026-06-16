@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+import concurrent.futures
 import re
 from datetime import date
 from html import escape as html_escape
 
-from flask import Blueprint, current_app, flash, redirect, render_template, request, session, url_for
+import feedparser
+import requests
+from flask import Blueprint, current_app, flash, jsonify, redirect, render_template, request, session, url_for
 
 from .auth import login_required
 from .storage import PRIORITIES, ValidationError
@@ -95,6 +98,53 @@ def render_markdown_safe(text: str | None) -> str:
     return html
 
 
+def fetch_feed_data(feed_id, url, title, user_id, item_states):
+    try:
+        r = requests.get(url, timeout=5, headers={"User-Agent": "DoloresRSS/1.0"})
+        if r.status_code == 200:
+            parsed = feedparser.parse(r.content)
+            entries = []
+            for entry in parsed.entries:
+                guid = entry.get("id") or entry.get("link") or entry.get("title")
+                if not guid:
+                    continue
+                state = item_states.get(guid, {})
+
+                content = ""
+                if "content" in entry:
+                    content = entry.content[0].value
+                elif "summary" in entry:
+                    content = entry.summary
+                elif "description" in entry:
+                    content = entry.description
+
+                pub_date = entry.get("published") or entry.get("updated") or ""
+                pub_parsed = entry.get("published_parsed") or entry.get("updated_parsed")
+
+                # Sanitize HTML safely
+                if HAVE_MD:
+                    content_clean = bleach.clean(content, tags=ALLOWED_TAGS, attributes=ALLOWED_ATTRS)
+                else:
+                    content_clean = content
+
+                entries.append({
+                    "guid": guid,
+                    "title": entry.get("title") or "Untitled Article",
+                    "link": entry.get("link") or "",
+                    "pub_date": pub_date,
+                    "pub_parsed": pub_parsed,
+                    "content": content_clean,
+                    "read": state.get("read", False),
+                    "starred": state.get("starred", False),
+                    "feed_title": title,
+                    "feed_id": feed_id,
+                })
+            return feed_id, entries, None
+    except Exception as e:
+        return feed_id, [], str(e)
+    return feed_id, [], "Could not fetch feed"
+
+
 @web_bp.route("/")
 @login_required
 def index():
@@ -104,18 +154,56 @@ def index():
     status = request.args.get("status", "open")  # open|done|all (default=open)
     sort = request.args.get("sort", "default")  # default|due_date|priority|status|updated_at|created_at|title
     order = request.args.get("order", "asc")  # asc|desc
-    tab = request.args.get("tab", "todos")  # todos|notes|work
-    wq = request.args.get("wq", "").lower()
-    ws_from = request.args.get("ws_from")
-    ws_to = request.args.get("ws_to")
-    wsort = request.args.get("wsort", "start")
-    worder = request.args.get("worder", "asc")
+    tab = request.args.get("tab", "todos")  # todos|notes|rss
+    rss_filter = request.args.get("rss_filter", "all")  # all|starred|<feed_id>
 
     user_id = get_user_id()
     todos = store().list_todos(user_id=user_id)
     notes = store().list_notes(user_id=user_id)
-    work_items = store().list_work(user_id=user_id)
 
+    # RSS data loading
+    feeds = store().list_rss_feeds(user_id=user_id)
+    item_states_list = store().get_rss_item_states(user_id=user_id)
+    item_states = {s["item_guid"]: s for s in item_states_list}
+
+    # Parallel RSS fetching if on the rss tab
+    rss_items = []
+    feed_entries_map = {}
+    feed_errors = {}
+    if tab == "rss" and feeds:
+        with concurrent.futures.ThreadPoolExecutor(max_workers=min(len(feeds), 10)) as executor:
+            futures = [
+                executor.submit(fetch_feed_data, f["id"], f["url"], f["title"], user_id, item_states)
+                for f in feeds
+            ]
+            for fut in concurrent.futures.as_completed(futures):
+                fid, entries, err = fut.result()
+                if err:
+                    feed_errors[fid] = err
+                feed_entries_map[fid] = entries
+                rss_items.extend(entries)
+
+        # Sort RSS items descending by parsed date
+        rss_items.sort(
+            key=lambda x: x.get("pub_parsed") or (0, 0, 0, 0, 0, 0, 0, 0, 0),
+            reverse=True
+        )
+
+        # Filter RSS items
+        if rss_filter == "starred":
+            rss_items = [it for it in rss_items if it["starred"]]
+        elif rss_filter != "all":
+            rss_items = [it for it in rss_items if it["feed_id"] == rss_filter]
+
+        # Calculate dynamic unread counts per feed
+        for f in feeds:
+            entries = feed_entries_map.get(f["id"], [])
+            f["unread_count"] = sum(1 for e in entries if not e["read"])
+    else:
+        for f in feeds:
+            f["unread_count"] = 0
+
+    # Todos and notes filtering
     def match_item(it):
         text = (it.get("title", "") + " " + (it.get("description") or it.get("note") or "")).lower()
         if q and q not in text:
@@ -217,63 +305,15 @@ def index():
         return key
 
     reverse = (order == "desc")
+    notes_reverse = True if sort == "default" else reverse
+
     todos.sort(key=todo_sort_key, reverse=reverse)
-    notes.sort(key=note_sort_key, reverse=(order == "desc"))
+    notes.sort(key=note_sort_key, reverse=notes_reverse)
 
     categories = sorted(
         ({t["tags"].get("category") for t in todos if t.get("tags") and t["tags"].get("category")} |
          {n["tags"].get("category") for n in notes if n.get("tags") and n["tags"].get("category")})
     )
-
-    # Work filtering
-    def match_work(w):
-        text = (w.get("name", "") + " " + (w.get("description") or "") + " " + (w.get("why") or "")).lower()
-        if wq and wq not in text:
-            return False
-        try:
-            sd = date.fromisoformat(str(w.get("start_date") or "")[:10])
-        except Exception:
-            sd = None
-        try:
-            ed = date.fromisoformat(str(w.get("end_date") or "")[:10]) if w.get("end_date") else None
-        except Exception:
-            ed = None
-        if ws_from:
-            try:
-                f = date.fromisoformat(ws_from[:10])
-                if sd and sd < f:
-                    return False
-            except Exception:
-                pass
-        if ws_to:
-            try:
-                tdate = date.fromisoformat(ws_to[:10])
-                if ed and ed > tdate:
-                    return False
-                if ed is None and sd and sd > tdate:
-                    return False
-            except Exception:
-                pass
-        return True
-
-    work_items = [w for w in work_items if match_work(w)]
-
-    def work_sort_key(w):
-        name_key = (w.get("name") or "").lower()
-        s = (w.get("start_date") or "")
-        e = (w.get("end_date") or "")
-        u = (w.get("updated_at") or "")
-        if wsort == "end":
-            key = (e, s, name_key)
-        elif wsort == "updated":
-            key = (u, s, name_key)
-        elif wsort == "name":
-            key = (name_key, s)
-        else:
-            key = (s, e, name_key)
-        return key
-
-    work_items.sort(key=work_sort_key, reverse=(worder == "desc"))
 
     return render_template(
         "index.html",
@@ -288,12 +328,10 @@ def index():
         order=order,
         categories=[c for c in categories if c],
         tab=tab,
-        work_items=work_items,
-        wq=wq,
-        ws_from=ws_from,
-        ws_to=ws_to,
-        wsort=wsort,
-        worder=worder,
+        feeds=feeds,
+        rss_items=rss_items,
+        rss_filter=rss_filter,
+        feed_errors=feed_errors,
     )
 
 
@@ -408,54 +446,88 @@ def delete_note(nid):
     flash("Note deleted", "info")
     return redirect(url_for("web.index"))
 
-@web_bp.route("/work/new", methods=["GET", "POST"])
+@web_bp.route("/rss/feed/add", methods=["POST"])
 @login_required
-def new_work():
-    if request.method == "POST":
-        data = {
-            "name": request.form.get("name", "").strip(),
-            "start_date": request.form.get("start_date") or "",
-            "end_date": request.form.get("end_date") or None,
-            "description": request.form.get("description"),
-            "why": request.form.get("why"),
-        }
-        try:
-            store().create_work(data, user_id=get_user_id())
-            flash("Work item created", "success")
-            return redirect(url_for("web.index", tab="work"))
-        except ValidationError as e:
-            flash(str(e), "danger")
-    return render_template("work_form.html", item=None)
+def add_rss_feed():
+    url = request.form.get("url", "").strip()
+    if not url:
+        flash("Feed URL is required", "danger")
+        return redirect(url_for("web.index", tab="rss"))
+
+    # Fetch feed title
+    try:
+        r = requests.get(url, timeout=5, headers={"User-Agent": "DoloresRSS/1.0"})
+        parsed = feedparser.parse(r.content)
+        title = parsed.feed.get("title") or "Unnamed Feed"
+    except Exception:
+        title = "Unnamed Feed"
+
+    try:
+        store().create_rss_feed({"url": url, "title": title}, user_id=get_user_id())
+        flash(f"Subscribed to {title}", "success")
+    except Exception as e:
+        flash(f"Error subscribing: {str(e)}", "danger")
+
+    return redirect(url_for("web.index", tab="rss"))
 
 
-@web_bp.route("/work/<wid>/edit", methods=["GET", "POST"])
+@web_bp.route("/rss/feed/<feed_id>/delete", methods=["POST"])
 @login_required
-def edit_work(wid):
+def delete_rss_feed(feed_id):
+    try:
+        store().delete_rss_feed(feed_id, user_id=get_user_id())
+        flash("Unsubscribed from feed", "info")
+    except Exception as e:
+        flash(f"Error unsubscribing: {str(e)}", "danger")
+    return redirect(url_for("web.index", tab="rss"))
+
+
+@web_bp.route("/rss/item/state", methods=["POST"])
+@login_required
+def update_item_state():
+    data = request.get_json() or {}
+    feed_id = data.get("feed_id")
+    item_guid = data.get("item_guid")
+    read = data.get("read")
+    starred = data.get("starred")
+
+    if not feed_id or not item_guid:
+        return jsonify({"error": "Missing feed_id or item_guid"}), 400
+
+    try:
+        state = store().update_rss_item_state(
+            user_id=get_user_id(),
+            feed_id=feed_id,
+            item_guid=item_guid,
+            read=read,
+            starred=starred
+        )
+        return jsonify({"status": "ok", "state": state})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@web_bp.route("/rss/feed/<feed_id>/mark-all-read", methods=["POST"])
+@login_required
+def mark_all_read(feed_id):
     user_id = get_user_id()
-    item = store().get_work(wid, user_id=user_id)
-    if not item:
-        flash("Work item not found", "warning")
-        return redirect(url_for("web.index", tab="work"))
-    if request.method == "POST":
-        data = {
-            "name": request.form.get("name", item["name"]).strip(),
-            "start_date": request.form.get("start_date") or item["start_date"],
-            "end_date": request.form.get("end_date") or None,
-            "description": request.form.get("description"),
-            "why": request.form.get("why"),
-        }
+    if feed_id == "all":
+        feeds = store().list_rss_feeds(user_id=user_id)
+    else:
+        feeds = [f for f in store().list_rss_feeds(user_id=user_id) if f["id"] == feed_id]
+
+    for f in feeds:
         try:
-            store().update_work(wid, data, user_id=user_id)
-            flash("Work item updated", "success")
-            return redirect(url_for("web.index", tab="work"))
-        except ValidationError as e:
-            flash(str(e), "danger")
-    return render_template("work_form.html", item=item)
+            r = requests.get(f["url"], timeout=5, headers={"User-Agent": "DoloresRSS/1.0"})
+            parsed = feedparser.parse(r.content)
+            guids = []
+            for entry in parsed.entries:
+                guid = entry.get("id") or entry.get("link") or entry.get("title")
+                if guid:
+                    guids.append(guid)
+            store().mark_all_rss_items_read(user_id, f["id"], guids)
+        except Exception:
+            pass
 
-
-@web_bp.post("/work/<wid>/delete")
-@login_required
-def delete_work(wid):
-    store().delete_work(wid, user_id=get_user_id())
-    flash("Work item deleted", "info")
-    return redirect(url_for("web.index", tab="work"))
+    flash("Marked items as read", "success")
+    return redirect(url_for("web.index", tab="rss"))

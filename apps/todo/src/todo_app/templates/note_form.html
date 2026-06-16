@@ -33,4 +33,25 @@
     <a class="btn btn-secondary" href="{{ url_for('web.index') }}">Cancel</a>
   </div>
 </form>
+
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+  const textarea = document.querySelector('textarea[name="note"]');
+  if (textarea) {
+    textarea.addEventListener('keydown', (e) => {
+      if (e.key === 'Tab') {
+        e.preventDefault();
+        const start = textarea.selectionStart;
+        const end = textarea.selectionEnd;
+
+        // Insert 4 spaces
+        textarea.value = textarea.value.substring(0, start) + "    " + textarea.value.substring(end);
+
+        // Put caret at right position
+        textarea.selectionStart = textarea.selectionEnd = start + 4;
+      }
+    });
+  }
+});
+</script>
 {% endcall %}

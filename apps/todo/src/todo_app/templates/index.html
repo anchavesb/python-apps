@@ -72,9 +72,9 @@
            role="tab" aria-controls="notes" aria-selected="{{ tab == 'notes' }}">Notes</a>
       </li>
       <li class="nav-item" role="presentation">
-        <a class="nav-link {% if tab == 'work' %}active{% endif %}"
-           href="{{ url_for('web.index', q=q, priority=priority, category=category, status=status, sort=sort, order=order, tab='work') }}"
-           role="tab" aria-controls="work" aria-selected="{{ tab == 'work' }}">Work Context</a>
+        <a class="nav-link {% if tab == 'rss' %}active{% endif %}"
+           href="{{ url_for('web.index', q=q, priority=priority, category=category, status=status, sort=sort, order=order, tab='rss', rss_filter=rss_filter) }}"
+           role="tab" aria-controls="rss" aria-selected="{{ tab == 'rss' }}">RSS Reader</a>
       </li>
     </ul>
     <div class="tab-content border-start border-end border-bottom p-3">
@@ -151,68 +151,232 @@
         {% endif %}
       </div>
 
-      <div class="tab-pane fade {% if tab == 'work' %}show active{% endif %}" id="work" role="tabpanel">
-        <div class="d-flex justify-content-between align-items-center mb-3">
-          <h3 class="m-0">Work Context</h3>
-          <a class="btn btn-secondary btn-sm" href="{{ url_for('web.new_work') }}">New Work Item</a>
-        </div>
-        <form class="row gy-2 gx-3 align-items-end mb-3">
-          <input type="hidden" name="tab" value="work" />
-          <div class="col-md-3">
-            <label class="form-label">Start on/after</label>
-            <input type="date" class="form-control" name="ws_from" value="{{ ws_from or '' }}" />
-          </div>
-          <div class="col-md-3">
-            <label class="form-label">End on/before</label>
-            <input type="date" class="form-control" name="ws_to" value="{{ ws_to or '' }}" />
-          </div>
-          <div class="col-md-3">
-            <label class="form-label">Search</label>
-            <input type="text" class="form-control" name="wq" value="{{ wq or '' }}" placeholder="name, description, why" />
-          </div>
-          <div class="col-md-3">
-            <label class="form-label">Sort</label>
-            <div class="input-group">
-              <select class="form-select" name="wsort">
-                <option value="start" {% if wsort == 'start' %}selected{% endif %}>Start date</option>
-                <option value="end" {% if wsort == 'end' %}selected{% endif %}>End date</option>
-                <option value="updated" {% if wsort == 'updated' %}selected{% endif %}>Updated</option>
-                <option value="name" {% if wsort == 'name' %}selected{% endif %}>Name</option>
-              </select>
-              <select class="form-select" name="worder">
-                <option value="asc" {% if worder == 'asc' %}selected{% endif %}>Asc</option>
-                <option value="desc" {% if worder == 'desc' %}selected{% endif %}>Desc</option>
-              </select>
+      <div class="tab-pane fade {% if tab == 'rss' %}show active{% endif %}" id="rss" role="tabpanel">
+        <div class="row g-3">
+          <!-- Left Sidebar -->
+          <div class="col-md-3 border-end">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+              <h5 class="m-0">Feeds</h5>
+              <button class="btn btn-outline-primary btn-sm" type="button" data-bs-toggle="collapse" data-bs-target="#addFeedCollapse">Subscribe</button>
             </div>
-          </div>
-          <div class="col-12">
-            <button class="btn btn-outline-primary" type="submit">Apply</button>
-            <a class="btn btn-outline-secondary" href="{{ url_for('web.index', tab='work') }}">Reset</a>
-          </div>
-        </form>
-        {% if work_items %}
-          <div class="list-group">
-            {% for w in work_items %}
-              <div class="list-group-item d-flex justify-content-between align-items-start">
-                <div class="ms-2 me-auto">
-                  <div class="fw-bold">{{ w.name }}</div>
-                  <div class="small text-body-secondary">{{ w.start_date }}{% if w.end_date %} → {{ w.end_date }}{% endif %}</div>
-                  {% if w.description %}<div class="small">{{ w.description }}</div>{% endif %}
-                  {% if w.why %}<div class="small"><em>Why:</em> {{ w.why }}</div>{% endif %}
+
+            <div class="collapse mb-3" id="addFeedCollapse">
+              <form method="post" action="{{ url_for('web.add_rss_feed') }}" class="card card-body p-2 bg-body-tertiary">
+                <div class="input-group input-group-sm">
+                  <input type="url" name="url" class="form-control" placeholder="https://feed.url/rss" required>
+                  <button class="btn btn-primary" type="submit">Add</button>
                 </div>
-                <div class="btn-group btn-group-sm">
-                  <a class="btn btn-outline-primary" href="{{ url_for('web.edit_work', wid=w.id) }}">Edit</a>
-                  <form method="post" action="{{ url_for('web.delete_work', wid=w.id) }}" onsubmit="return confirm('Delete this work item?')">
-                    <button class="btn btn-outline-danger">Delete</button>
+              </form>
+            </div>
+
+            <div class="list-group list-group-flush mb-3">
+              <a href="{{ url_for('web.index', tab='rss', rss_filter='all') }}"
+                 class="list-group-item list-group-item-action d-flex justify-content-between align-items-center px-2 py-2 border-0 rounded {% if rss_filter == 'all' %}active{% endif %}">
+                <span>All Items</span>
+              </a>
+              <a href="{{ url_for('web.index', tab='rss', rss_filter='starred') }}"
+                 class="list-group-item list-group-item-action d-flex justify-content-between align-items-center px-2 py-2 border-0 rounded {% if rss_filter == 'starred' %}active{% endif %}">
+                <span>Starred Items</span>
+              </a>
+            </div>
+
+            <div class="list-group list-group-flush rss-feed-list" style="max-height: 400px; overflow-y: auto;">
+              {% for f in feeds %}
+                <div class="list-group-item list-group-item-action d-flex justify-content-between align-items-center py-2 px-2 border-0 rounded mb-1 {% if rss_filter == f.id %}bg-primary-subtle text-primary-emphasis fw-bold{% endif %}">
+                  <a href="{{ url_for('web.index', tab='rss', rss_filter=f.id) }}"
+                     class="text-decoration-none text-truncate flex-grow-1 {% if rss_filter == f.id %}text-primary-emphasis{% else %}text-body{% endif %}"
+                     title="{{ f.title }}">
+                    {{ f.title }}
+                  </a>
+                  {% if f.unread_count > 0 %}
+                    <span class="badge rounded-pill bg-primary ms-1">{{ f.unread_count }}</span>
+                  {% endif %}
+                  <form method="post" action="{{ url_for('web.delete_rss_feed', feed_id=f.id) }}" class="ms-1" onsubmit="return confirm('Unsubscribe from {{ f.title }}?')">
+                    <button class="btn btn-link text-danger p-0" type="submit" style="line-height:1;">
+                      <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" class="bi bi-trash" viewBox="0 0 16 16">
+                        <path d="M5.5 5.5A.5.5 0 0 1 6 6v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5m2.5 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5m3 .5a.5.5 0 0 0-1 0v6a.5.5 0 0 0 1 0z"/>
+                        <path d="M14.5 3a1 1 0 0 1-1 1H13v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V4h-.5a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1H6a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1h3.5a1 1 0 0 1 1 1zM4.118 4 4 4.059V13a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V4.059L11.882 4zM2.5 3h11V2h-11z"/>
+                      </svg>
+                    </button>
                   </form>
                 </div>
-              </div>
-            {% endfor %}
+              {% endfor %}
+            </div>
           </div>
-        {% else %}
-          <div class="text-body-secondary">No work items yet.</div>
-        {% endif %}
+
+          <!-- Main Panel -->
+          <div class="col-md-9">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+              <h4 class="m-0">
+                {% if rss_filter == 'all' %}All Items
+                {% elif rss_filter == 'starred' %}Starred Items
+                {% else %}
+                  {% set active_feed = feeds | selectattr('id', 'equalto', rss_filter) | first %}
+                  {{ active_feed.title if active_feed else 'Feed' }}
+                {% endif %}
+              </h4>
+              <div class="btn-group btn-group-sm">
+                {% if feeds %}
+                  <form method="post" action="{{ url_for('web.mark_all_read', feed_id=rss_filter) }}">
+                    <button class="btn btn-outline-secondary" type="submit">Mark all as read</button>
+                  </form>
+                {% endif %}
+                <a href="{{ url_for('web.index', tab='rss', rss_filter=rss_filter) }}" class="btn btn-outline-secondary">Refresh</a>
+              </div>
+            </div>
+
+            {% for err_fid, err_msg in feed_errors.items() %}
+              {% set err_feed = feeds | selectattr('id', 'equalto', err_fid) | first %}
+              <div class="alert alert-warning py-2 mb-2 small">Error loading {{ err_feed.title if err_feed else 'Feed' }}: {{ err_msg }}</div>
+            {% endfor %}
+
+            {% if rss_items %}
+              <div class="accordion" id="rssAccordion">
+                {% for item in rss_items %}
+                  <div class="accordion-item rss-item-card" data-guid="{{ item.guid }}" data-feed-id="{{ item.feed_id }}">
+                    <h2 class="accordion-header d-flex align-items-center px-3 border-bottom {% if item.read %}text-muted{% else %}fw-bold{% endif %}">
+                      <button class="btn btn-link text-decoration-none p-0 me-2 star-toggle-btn {% if item.starred %}text-warning{% else %}text-secondary{% endif %}" type="button">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-star-fill star-icon" viewBox="0 0 16 16">
+                          <path d="M3.612 15.443c-.386.198-.824-.149-.746-.592l.83-4.73L.173 6.765c-.329-.314-.158-.888.283-.95l4.898-.696L7.538.792c.197-.39.73-.39.927 0l2.184 4.327 4.898.696c.441.062.612.636.282.95l-3.522 3.356.83 4.73c.078.443-.36.79-.746.592L8 13.187l-4.389 2.256z"/>
+                        </svg>
+                      </button>
+                      <button class="accordion-button collapsed py-2 px-1 flex-grow-1 text-start d-flex justify-content-between align-items-center bg-transparent border-0 shadow-none"
+                              type="button" data-bs-toggle="collapse" data-bs-target="#collapse-{{ loop.index }}" aria-expanded="false">
+                        <span class="text-truncate me-2">{{ item.title }}</span>
+                        <div class="d-flex align-items-center text-nowrap text-muted small ms-auto me-3">
+                          <span class="badge bg-secondary-subtle text-secondary-emphasis me-2">{{ item.feed_title }}</span>
+                          <span>{{ item.pub_date }}</span>
+                        </div>
+                      </button>
+                    </h2>
+                    <div id="collapse-{{ loop.index }}" class="accordion-collapse collapse" data-bs-parent="#rssAccordion">
+                      <div class="accordion-body">
+                        <div class="mb-3 d-flex gap-2">
+                          <a href="{{ item.link }}" target="_blank" rel="noopener noreferrer" class="btn btn-outline-primary btn-sm">Open Original Article</a>
+                          <button class="btn btn-outline-secondary btn-sm read-toggle-btn" type="button">
+                            {% if item.read %}Mark as unread{% else %}Mark as read{% endif %}
+                          </button>
+                        </div>
+                        <div class="rss-article-content text-body">
+                          {{ item.content | safe }}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                {% endfor %}
+              </div>
+            {% else %}
+              <div class="text-body-secondary p-4 text-center border rounded">
+                {% if not feeds %}
+                  No subscriptions yet. Subscribe to an RSS feed on the left side to get started.
+                {% else %}
+                  No articles found.
+                {% endif %}
+              </div>
+            {% endif %}
+          </div>
+        </div>
       </div>
+
+    </div>
+  </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+  const rssAccordion = document.getElementById('rssAccordion');
+  if (rssAccordion) {
+    // When an item is expanded, mark it as read
+    rssAccordion.addEventListener('show.bs.collapse', (e) => {
+      const card = e.target.closest('.rss-item-card');
+      if (card) {
+        const guid = card.getAttribute('data-guid');
+        const feedId = card.getAttribute('data-feed-id');
+
+        fetch('/rss/item/state', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ feed_id: feedId, item_guid: guid, read: true })
+        })
+        .then(r => r.json())
+        .then(data => {
+          if (data.status === 'ok') {
+            const header = card.querySelector('.accordion-header');
+            header.classList.remove('fw-bold');
+            header.classList.add('text-muted');
+            
+            const readBtn = card.querySelector('.read-toggle-btn');
+            if (readBtn) readBtn.textContent = 'Mark as unread';
+          }
+        });
+      }
+    });
+
+    rssAccordion.addEventListener('click', (e) => {
+      // Toggle unread
+      const unreadBtn = e.target.closest('.read-toggle-btn');
+      if (unreadBtn) {
+        const card = unreadBtn.closest('.rss-item-card');
+        const guid = card.getAttribute('data-guid');
+        const feedId = card.getAttribute('data-feed-id');
+        const header = card.querySelector('.accordion-header');
+        const isCurrentlyRead = header.classList.contains('text-muted');
+        const nextReadState = !isCurrentlyRead;
+
+        fetch('/rss/item/state', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ feed_id: feedId, item_guid: guid, read: nextReadState })
+        })
+        .then(r => r.json())
+        .then(data => {
+          if (data.status === 'ok') {
+            if (nextReadState) {
+              header.classList.remove('fw-bold');
+              header.classList.add('text-muted');
+              unreadBtn.textContent = 'Mark as unread';
+            } else {
+              header.classList.add('fw-bold');
+              header.classList.remove('text-muted');
+              unreadBtn.textContent = 'Mark as read';
+            }
+          }
+        });
+      }
+
+      // Star toggle
+      const starBtn = e.target.closest('.star-toggle-btn');
+      if (starBtn) {
+        e.preventDefault();
+        e.stopPropagation();
+        const card = starBtn.closest('.rss-item-card');
+        const guid = card.getAttribute('data-guid');
+        const feedId = card.getAttribute('data-feed-id');
+        const currentlyStarred = starBtn.classList.contains('text-warning');
+        const nextStarredState = !currentlyStarred;
+
+        fetch('/rss/item/state', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ feed_id: feedId, item_guid: guid, starred: nextStarredState })
+        })
+        .then(r => r.json())
+        .then(data => {
+          if (data.status === 'ok') {
+            if (nextStarredState) {
+              starBtn.classList.remove('text-secondary');
+              starBtn.classList.add('text-warning');
+            } else {
+              starBtn.classList.remove('text-warning');
+              starBtn.classList.add('text-secondary');
+            }
+          }
+        });
+      }
+    });
+  }
+});
+</script>
 
     </div>
   </div>

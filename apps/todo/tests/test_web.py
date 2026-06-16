@@ -104,5 +104,5 @@ def test_markdown_rendering_safe(client):
     # Should linkify the URL in either path
     assert "example.com" in html
     # Script tags must not be present; escaped version should be present
-    assert "<script>" not in html
-    assert "&lt;script&gt;" in html
+    assert "<script>alert" not in html
+    assert "&lt;script&gt;alert(1)&lt;/script&gt;" in html
