@@ -409,7 +409,7 @@ def new_note():
         try:
             store().create_note(data, user_id=get_user_id())
             flash("Note created", "success")
-            return redirect(url_for("web.index"))
+            return redirect(url_for("web.index", tab="notes"))
         except ValidationError as e:
             flash(str(e), "danger")
     return render_template("note_form.html", priorities=sorted(PRIORITIES), item=None)
@@ -422,7 +422,7 @@ def edit_note(nid):
     item = store().get_note(nid, user_id=user_id)
     if not item:
         flash("Note not found", "warning")
-        return redirect(url_for("web.index"))
+        return redirect(url_for("web.index", tab="notes"))
     if request.method == "POST":
         data = {
             "title": request.form.get("title", item["title"]).strip(),
@@ -432,7 +432,7 @@ def edit_note(nid):
         try:
             store().update_note(nid, data, user_id=user_id)
             flash("Note updated", "success")
-            return redirect(url_for("web.index"))
+            return redirect(url_for("web.index", tab="notes"))
         except ValidationError as e:
             flash(str(e), "danger")
     tags_text = "\n".join(f"{k}={v}" for k, v in (item.get("tags") or {}).items() if k not in ("category", "priority"))
@@ -444,7 +444,7 @@ def edit_note(nid):
 def delete_note(nid):
     store().delete_note(nid, user_id=get_user_id())
     flash("Note deleted", "info")
-    return redirect(url_for("web.index"))
+    return redirect(url_for("web.index", tab="notes"))
 
 @web_bp.route("/rss/feed/add", methods=["POST"])
 @login_required
