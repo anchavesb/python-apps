@@ -1,9 +1,12 @@
 from __future__ import annotations
 
 import concurrent.futures
+import ipaddress
 import re
+import socket
 from datetime import date
 from html import escape as html_escape
+from urllib.parse import urlparse
 
 import feedparser
 import requests
@@ -11,6 +14,37 @@ from flask import Blueprint, current_app, flash, jsonify, redirect, render_templ
 
 from .auth import login_required
 from .storage import PRIORITIES, ValidationError
+
+
+def is_safe_url(url: str) -> bool:
+    """Validate that the URL has http/https scheme and does not resolve to private/reserved IPs (SSRF mitigation)."""
+    try:
+        parsed = urlparse(url)
+        if parsed.scheme not in ("http", "https"):
+            return False
+
+        hostname = parsed.hostname
+        if not hostname:
+            return False
+
+        # Resolve all IP addresses for the hostname
+        addr_info = socket.getaddrinfo(hostname, None)
+        for family, _, _, _, sockaddr in addr_info:
+            ip_str = sockaddr[0]
+            if "%" in ip_str:
+                ip_str = ip_str.split("%", 1)[0]
+            ip = ipaddress.ip_address(ip_str)
+            if (
+                ip.is_private
+                or ip.is_loopback
+                or ip.is_link_local
+                or ip.is_reserved
+                or ip.is_multicast
+            ):
+                return False
+        return True
+    except Exception:
+        return False
 
 
 def get_user_id():
@@ -99,6 +133,8 @@ def render_markdown_safe(text: str | None) -> str:
 
 
 def fetch_feed_data(feed_id, url, title, user_id, item_states):
+    if not is_safe_url(url):
+        return feed_id, [], "Unsafe URL"
     try:
         r = requests.get(url, timeout=5, headers={"User-Agent": "DoloresRSS/1.0"})
         if r.status_code == 200:
@@ -125,7 +161,7 @@ def fetch_feed_data(feed_id, url, title, user_id, item_states):
                 if HAVE_MD:
                     content_clean = bleach.clean(content, tags=ALLOWED_TAGS, attributes=ALLOWED_ATTRS)
                 else:
-                    content_clean = content
+                    content_clean = html_escape(content)
 
                 entries.append({
                     "guid": guid,
@@ -452,6 +488,10 @@ def add_rss_feed():
     url = request.form.get("url", "").strip()
     if not url:
         flash("Feed URL is required", "danger")
+        return redirect(url_for("web.index", tab="rss"))
+
+    if not is_safe_url(url):
+        flash("Invalid or unsafe Feed URL", "danger")
         return redirect(url_for("web.index", tab="rss"))
 
     # Fetch feed title

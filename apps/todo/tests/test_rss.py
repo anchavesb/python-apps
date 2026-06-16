@@ -96,3 +96,34 @@ def test_rss_web_routes(client):
     resp = client.post(f"/rss/feed/{fid}/delete")
     assert resp.status_code in (302, 303)
     assert len(store.list_rss_feeds()) == 0
+
+
+def test_rss_ssrf_mitigation(client):
+    from todo_app.web import is_safe_url
+
+    # 1. Test is_safe_url helper with safe URLs
+    assert is_safe_url("https://news.ycombinator.com/rss") is True
+    assert is_safe_url("http://example.com/feed.xml") is True
+
+    # 2. Test is_safe_url helper with unsafe URLs
+    assert is_safe_url("http://127.0.0.1") is False
+    assert is_safe_url("http://localhost/rss") is False
+    assert is_safe_url("http://192.168.1.1") is False
+    assert is_safe_url("http://10.0.0.1/rss") is False
+    assert is_safe_url("http://169.254.169.254/latest/meta-data") is False
+    assert is_safe_url("ftp://example.com") is False
+    assert is_safe_url("gopher://example.com") is False
+    assert is_safe_url("invalid-url") is False
+
+    # 3. Test route level rejection of unsafe URLs
+    resp = client.post(
+        "/rss/feed/add",
+        data={"url": "http://127.0.0.1"},
+        follow_redirects=False
+    )
+    assert resp.status_code in (302, 303)
+
+    # Verify that the feed was not added
+    store = client.application.extensions["store"]
+    assert len(store.list_rss_feeds()) == 0
+
