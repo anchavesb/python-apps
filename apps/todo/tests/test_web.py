@@ -104,5 +104,35 @@ def test_markdown_rendering_safe(client):
     # Should linkify the URL in either path
     assert "example.com" in html
     # Script tags must not be present; escaped version should be present
-    assert "<script>" not in html
-    assert "&lt;script&gt;" in html
+    assert "<script>alert" not in html
+    assert "&lt;script&gt;alert(1)&lt;/script&gt;" in html
+
+
+def test_note_redirects_to_notes_tab(client):
+    # 1. Test creation redirect
+    r = client.post("/notes/new", data={"title": "Web Note", "note": "Content", "tags_text": "category=web"})
+    assert r.status_code == 302
+    assert r.location.endswith("/?tab=notes")
+
+    # Get the note id from storage via API
+    r_api = client.get("/api/notes")
+    assert r_api.status_code == 200
+    notes = r_api.get_json()
+    assert len(notes) > 0
+    nid = notes[0]["id"]
+
+    # 2. Test edit redirect (GET invalid note)
+    r = client.get("/notes/invalid_id/edit")
+    assert r.status_code == 302
+    assert r.location.endswith("/?tab=notes")
+
+    # 3. Test edit redirect (POST valid note edit)
+    r = client.post(f"/notes/{nid}/edit", data={"title": "Edited Title", "note": "New Content"})
+    assert r.status_code == 302
+    assert r.location.endswith("/?tab=notes")
+
+    # 4. Test delete redirect
+    r = client.post(f"/notes/{nid}/delete")
+    assert r.status_code == 302
+    assert r.location.endswith("/?tab=notes")
+

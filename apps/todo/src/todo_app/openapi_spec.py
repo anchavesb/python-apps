@@ -135,59 +135,7 @@ OPENAPI_SPEC = {
                 "responses": {"204": {"description": "Deleted"}, "404": {"description": "Not found"}},
             },
         },
-        "/api/work": {
-            "get": {
-                "operationId": "list_work_items",
-                "summary": "List all work items",
-                "responses": {
-                    "200": {
-                        "description": "Array of work item objects",
-                        "content": {"application/json": {"schema": {"type": "array", "items": {"$ref": "#/components/schemas/WorkItem"}}}},
-                    }
-                },
-            },
-            "post": {
-                "operationId": "create_work_item",
-                "summary": "Create a new work item",
-                "requestBody": {
-                    "required": True,
-                    "content": {"application/json": {"schema": {"$ref": "#/components/schemas/WorkItemCreate"}}},
-                },
-                "responses": {
-                    "201": {"description": "Created work item", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/WorkItem"}}}},
-                },
-            },
-        },
-        "/api/work/{wid}": {
-            "get": {
-                "operationId": "get_work_item",
-                "summary": "Get a single work item by ID",
-                "parameters": [{"name": "wid", "in": "path", "required": True, "schema": {"type": "string"}}],
-                "responses": {
-                    "200": {"description": "Work item object", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/WorkItem"}}}},
-                    "404": {"description": "Not found"},
-                },
-            },
-            "put": {
-                "operationId": "update_work_item",
-                "summary": "Update a work item",
-                "parameters": [{"name": "wid", "in": "path", "required": True, "schema": {"type": "string"}}],
-                "requestBody": {
-                    "required": True,
-                    "content": {"application/json": {"schema": {"$ref": "#/components/schemas/WorkItemUpdate"}}},
-                },
-                "responses": {
-                    "200": {"description": "Updated work item", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/WorkItem"}}}},
-                    "404": {"description": "Not found"},
-                },
-            },
-            "delete": {
-                "operationId": "delete_work_item",
-                "summary": "Delete a work item",
-                "parameters": [{"name": "wid", "in": "path", "required": True, "schema": {"type": "string"}}],
-                "responses": {"204": {"description": "Deleted"}, "404": {"description": "Not found"}},
-            },
-        },
+
     },
     "components": {
         "schemas": {
@@ -263,40 +211,7 @@ OPENAPI_SPEC = {
                     "tags": {"$ref": "#/components/schemas/Tags"},
                 },
             },
-            "WorkItem": {
-                "type": "object",
-                "properties": {
-                    "id": {"type": "string"},
-                    "name": {"type": "string"},
-                    "start_date": {"type": "string", "description": "YYYY-MM-DD"},
-                    "end_date": {"type": "string", "nullable": True, "description": "YYYY-MM-DD"},
-                    "description": {"type": "string", "nullable": True},
-                    "why": {"type": "string", "nullable": True},
-                    "created_at": {"type": "string"},
-                    "updated_at": {"type": "string"},
-                },
-            },
-            "WorkItemCreate": {
-                "type": "object",
-                "required": ["name", "start_date"],
-                "properties": {
-                    "name": {"type": "string"},
-                    "start_date": {"type": "string", "description": "YYYY-MM-DD"},
-                    "end_date": {"type": "string", "description": "YYYY-MM-DD"},
-                    "description": {"type": "string"},
-                    "why": {"type": "string"},
-                },
-            },
-            "WorkItemUpdate": {
-                "type": "object",
-                "properties": {
-                    "name": {"type": "string"},
-                    "start_date": {"type": "string"},
-                    "end_date": {"type": "string"},
-                    "description": {"type": "string"},
-                    "why": {"type": "string"},
-                },
-            },
+
         }
     },
 }

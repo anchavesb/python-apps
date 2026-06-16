@@ -1,13 +1,12 @@
 """PostgreSQL storage backend with multiuser support."""
 from __future__ import annotations
 
-from datetime import date
 from typing import Any, Dict, List, Optional, Tuple
 
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session, sessionmaker
 
-from .models import Base, Note, Todo, User, WorkItem
+from .models import Base, Note, RssFeed, RssItemState, Todo, User
 from .storage import PRIORITIES, ValidationError
 
 
@@ -56,28 +55,6 @@ class PostgresStore:
                 raise ValidationError("title is required")
         tags = data.get("tags", {})
         self._validate_tags(tags)
-
-    def _validate_work(self, data: Dict[str, Any], for_update: bool = False):
-        name = (data.get("name") or "").strip()
-        if not name:
-            raise ValidationError("name is required")
-        sd = data.get("start_date")
-        if not isinstance(sd, str) or not sd:
-            raise ValidationError("start_date is required (YYYY-MM-DD)")
-        try:
-            sdate = date.fromisoformat(sd[:10])
-        except Exception:
-            raise ValidationError("start_date must be YYYY-MM-DD")
-        ed = data.get("end_date")
-        if ed:
-            if not isinstance(ed, str):
-                raise ValidationError("end_date must be string YYYY-MM-DD")
-            try:
-                edate = date.fromisoformat(ed[:10])
-            except Exception:
-                raise ValidationError("end_date must be YYYY-MM-DD")
-            if edate < sdate:
-                raise ValidationError("end_date cannot be earlier than start_date")
 
     # ---------- User Management ----------
     def find_user_by_email(self, email: str | None) -> User | None:
@@ -262,76 +239,93 @@ class PostgresStore:
             session.commit()
             return True
 
-    # ---------- Work Items ----------
-    def list_work(self, user_id: str | None = None) -> List[Dict[str, Any]]:
+    # ---------- RSS Feeds ----------
+    def list_rss_feeds(self, user_id: str | None = None) -> List[Dict[str, Any]]:
         with self.get_session() as session:
-            query = select(WorkItem)
+            query = select(RssFeed)
             if user_id:
-                query = query.where(WorkItem.user_id == user_id)
-            items = session.execute(query).scalars().all()
-            return [w.to_dict() for w in items]
+                query = query.where(RssFeed.user_id == user_id)
+            feeds = session.execute(query).scalars().all()
+            return [f.to_dict() for f in feeds]
 
-    def get_work(self, wid: str, user_id: str | None = None) -> Optional[Dict[str, Any]]:
-        with self.get_session() as session:
-            query = select(WorkItem).where(WorkItem.id == wid)
-            if user_id:
-                query = query.where(WorkItem.user_id == user_id)
-            item = session.execute(query).scalar_one_or_none()
-            return item.to_dict() if item else None
-
-    def create_work(self, data: Dict[str, Any], user_id: str) -> Dict[str, Any]:
-        self._validate_work(data)
+    def create_rss_feed(self, data: Dict[str, Any], user_id: str) -> Dict[str, Any]:
         with self.get_session() as session:
             self.get_or_create_user(user_id)
-            item = WorkItem(
+            feed = RssFeed(
                 user_id=user_id,
-                name=data["name"],
-                start_date=data["start_date"],
-                end_date=data.get("end_date"),
-                description=data.get("description"),
-                why=data.get("why"),
+                url=data["url"],
+                title=data.get("title", "Unnamed Feed"),
             )
-            session.add(item)
+            session.add(feed)
             session.commit()
-            session.refresh(item)
-            return item.to_dict()
+            session.refresh(feed)
+            return feed.to_dict()
 
-    def update_work(self, wid: str, data: Dict[str, Any], user_id: str | None = None) -> Optional[Dict[str, Any]]:
+    def delete_rss_feed(self, feed_id: str, user_id: str | None = None) -> bool:
         with self.get_session() as session:
-            query = select(WorkItem).where(WorkItem.id == wid)
+            query = select(RssFeed).where(RssFeed.id == feed_id)
             if user_id:
-                query = query.where(WorkItem.user_id == user_id)
-            item = session.execute(query).scalar_one_or_none()
-            if not item:
-                return None
-
-            merged = item.to_dict()
-            merged.update({k: v for k, v in data.items() if v is not None})
-            self._validate_work(merged, for_update=True)
-
-            if "name" in data:
-                item.name = data["name"]
-            if "start_date" in data:
-                item.start_date = data["start_date"]
-            if "end_date" in data:
-                item.end_date = data["end_date"]
-            if "description" in data:
-                item.description = data["description"]
-            if "why" in data:
-                item.why = data["why"]
-
-            session.commit()
-            session.refresh(item)
-            return item.to_dict()
-
-    def delete_work(self, wid: str, user_id: str | None = None) -> bool:
-        with self.get_session() as session:
-            query = select(WorkItem).where(WorkItem.id == wid)
-            if user_id:
-                query = query.where(WorkItem.user_id == user_id)
-            item = session.execute(query).scalar_one_or_none()
-            if not item:
+                query = query.where(RssFeed.user_id == user_id)
+            feed = session.execute(query).scalar_one_or_none()
+            if not feed:
                 return False
-            session.delete(item)
+            session.delete(feed)
             session.commit()
             return True
+
+    # ---------- RSS Item States ----------
+    def get_rss_item_states(self, user_id: str | None = None, feed_id: str | None = None) -> List[Dict[str, Any]]:
+        with self.get_session() as session:
+            query = select(RssItemState)
+            if user_id:
+                query = query.where(RssItemState.user_id == user_id)
+            if feed_id:
+                query = query.where(RssItemState.feed_id == feed_id)
+            states = session.execute(query).scalars().all()
+            return [s.to_dict() for s in states]
+
+    def update_rss_item_state(self, user_id: str, feed_id: str, item_guid: str, read: bool | None = None, starred: bool | None = None) -> Dict[str, Any]:
+        with self.get_session() as session:
+            self.get_or_create_user(user_id)
+            query = select(RssItemState).where(
+                RssItemState.user_id == user_id,
+                RssItemState.feed_id == feed_id,
+                RssItemState.item_guid == item_guid
+            )
+            state = session.execute(query).scalar_one_or_none()
+
+            if not state:
+                state = RssItemState(
+                    user_id=user_id,
+                    feed_id=feed_id,
+                    item_guid=item_guid,
+                    read=False,
+                    starred=False,
+                )
+                session.add(state)
+
+            if read is not None:
+                state.read = read
+            if starred is not None:
+                state.starred = starred
+
+            session.commit()
+            session.refresh(state)
+
+            # If both read and starred are False, clean it up to save space
+            if not state.read and not state.starred:
+                session.delete(state)
+                session.commit()
+                return {
+                    "id": state.id,
+                    "feed_id": feed_id,
+                    "item_guid": item_guid,
+                    "read": False,
+                    "starred": False,
+                }
+
+            return state.to_dict()
+
+    def mark_all_rss_items_read(self, user_id: str, feed_id: str, item_guids: List[str]):
+        for guid in item_guids:
+            self.update_rss_item_state(user_id, feed_id, guid, read=True)

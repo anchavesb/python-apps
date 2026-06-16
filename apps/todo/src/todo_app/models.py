@@ -33,7 +33,8 @@ class User(Base):
     # Relationships
     todos: Mapped[list["Todo"]] = relationship(back_populates="user", cascade="all, delete-orphan")
     notes: Mapped[list["Note"]] = relationship(back_populates="user", cascade="all, delete-orphan")
-    work_items: Mapped[list["WorkItem"]] = relationship(back_populates="user", cascade="all, delete-orphan")
+    rss_feeds: Mapped[list["RssFeed"]] = relationship(back_populates="user", cascade="all, delete-orphan")
+    rss_item_states: Mapped[list["RssItemState"]] = relationship(back_populates="user", cascade="all, delete-orphan")
 
 
 class Todo(Base):
@@ -88,29 +89,46 @@ class Note(Base):
         }
 
 
-class WorkItem(Base):
-    __tablename__ = "work_items"
+class RssFeed(Base):
+    __tablename__ = "rss_feeds"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_uuid)
     user_id: Mapped[str] = mapped_column(String(255), ForeignKey("users.id"), nullable=False, index=True)
-    name: Mapped[str] = mapped_column(String(500), nullable=False)
-    start_date: Mapped[str] = mapped_column(String(32), nullable=False)
-    end_date: Mapped[Optional[str]] = mapped_column(String(32), nullable=True)
-    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    why: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    url: Mapped[str] = mapped_column(String(2048), nullable=False)
+    title: Mapped[str] = mapped_column(String(500), nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
 
-    user: Mapped["User"] = relationship(back_populates="work_items")
+    user: Mapped["User"] = relationship(back_populates="rss_feeds")
 
     def to_dict(self) -> dict:
         return {
             "id": self.id,
-            "name": self.name,
-            "start_date": self.start_date,
-            "end_date": self.end_date,
-            "description": self.description,
-            "why": self.why,
+            "url": self.url,
+            "title": self.title,
             "created_at": self.created_at.strftime("%Y-%m-%dT%H:%M:%SZ") if self.created_at else None,
+        }
+
+
+class RssItemState(Base):
+    __tablename__ = "rss_item_states"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_uuid)
+    user_id: Mapped[str] = mapped_column(String(255), ForeignKey("users.id"), nullable=False, index=True)
+    feed_id: Mapped[str] = mapped_column(String(36), ForeignKey("rss_feeds.id", ondelete="CASCADE"), nullable=False, index=True)
+    item_guid: Mapped[str] = mapped_column(String(1024), nullable=False, index=True)
+    read: Mapped[bool] = mapped_column(Boolean, default=False)
+    starred: Mapped[bool] = mapped_column(Boolean, default=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
+
+    user: Mapped["User"] = relationship(back_populates="rss_item_states")
+    feed: Mapped["RssFeed"] = relationship()
+
+    def to_dict(self) -> dict:
+        return {
+            "id": self.id,
+            "feed_id": self.feed_id,
+            "item_guid": self.item_guid,
+            "read": self.read,
+            "starred": self.starred,
             "updated_at": self.updated_at.strftime("%Y-%m-%dT%H:%M:%SZ") if self.updated_at else None,
         }
