@@ -16,7 +16,7 @@ from dolores_common.prompts import get_system_prompt
 from .config import settings
 from .conversation import ConversationStore
 from .provider_config import PROVIDERS, resolve_model
-from .schemas import ChatRequest, ChatResponse, ProviderInfo
+from .schemas import ChatRequest, ChatResponse, ProviderInfo, ScrapeRequest
 
 log = get_logger(__name__)
 
@@ -293,4 +293,36 @@ async def scrape(url: str, _auth: ServicePSK = None):
         return {"data": response.text}
     except Exception as e:
         log.error("scrape_error", url=url, error=str(e))
+        raise HTTPException(status_code=502, detail=f"Scraping failed: {e}")
+
+
+@router.post("/scrape")
+async def scrape_post(req: ScrapeRequest, _auth: ServicePSK = None):
+    """Generic Cloudflare bypass endpoint using cloudscraper for POST/GET."""
+    try:
+        import cloudscraper
+        scraper = cloudscraper.create_scraper()
+        method_upper = req.method.upper()
+
+        if method_upper == "GET":
+            response = scraper.get(req.url)
+        elif method_upper == "POST":
+            response = scraper.post(req.url, json=req.body)
+        else:
+            raise HTTPException(status_code=400, detail=f"Unsupported method: {req.method}")
+
+        if response.status_code not in [200, 201, 202]:
+            raise HTTPException(
+                status_code=response.status_code,
+                detail=f"Scraper returned status code {response.status_code}",
+            )
+
+        try:
+            return response.json()
+        except ValueError:
+            return {"data": response.text}
+    except HTTPException:
+        raise
+    except Exception as e:
+        log.error("scrape_error", url=req.url, error=str(e))
         raise HTTPException(status_code=502, detail=f"Scraping failed: {e}")
