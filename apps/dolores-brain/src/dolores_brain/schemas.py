@@ -31,3 +31,9 @@ class ProviderInfo(BaseModel):
     name: str
     models: list[str]
     default_model: str
+
+
+class ScrapeRequest(BaseModel):
+    url: str
+    method: str = "GET"
+    body: dict | list | None = None
