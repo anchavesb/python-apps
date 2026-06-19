@@ -276,3 +276,21 @@ async def list_providers(_auth: ServicePSK = None) -> list[ProviderInfo]:
         )
         for info in PROVIDERS.values()
     ]
+
+
+@router.get("/scrape")
+async def scrape(url: str, _auth: ServicePSK = None):
+    """Bypasses Cloudflare using cloudscraper and returns the HTML content."""
+    try:
+        import cloudscraper
+        scraper = cloudscraper.create_scraper()
+        response = scraper.get(url)
+        if response.status_code != 200:
+            raise HTTPException(
+                status_code=response.status_code,
+                detail=f"Scraper returned status code {response.status_code}",
+            )
+        return {"data": response.text}
+    except Exception as e:
+        log.error("scrape_error", url=url, error=str(e))
+        raise HTTPException(status_code=502, detail=f"Scraping failed: {e}")
