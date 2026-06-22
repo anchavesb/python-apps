@@ -283,7 +283,9 @@ async def scrape(url: str, _auth: ServicePSK = None):
     """Bypasses Cloudflare using cloudscraper and returns the HTML content."""
     try:
         import cloudscraper
-        scraper = cloudscraper.create_scraper()
+        scraper = cloudscraper.create_scraper(
+            browser={"browser": "firefox", "platform": "linux", "desktop": True}
+        )
         response = scraper.get(url)
         if response.status_code != 200:
             raise HTTPException(
@@ -301,7 +303,9 @@ async def scrape_post(req: ScrapeRequest, _auth: ServicePSK = None):
     """Generic Cloudflare bypass endpoint using cloudscraper for POST/GET."""
     try:
         import cloudscraper
-        scraper = cloudscraper.create_scraper()
+        scraper = cloudscraper.create_scraper(
+            browser={"browser": "firefox", "platform": "linux", "desktop": True}
+        )
         method_upper = req.method.upper()
 
         if method_upper == "GET":
