@@ -129,10 +129,71 @@ def test_note_redirects_to_notes_tab(client):
     # 3. Test edit redirect (POST valid note edit)
     r = client.post(f"/notes/{nid}/edit", data={"title": "Edited Title", "note": "New Content"})
     assert r.status_code == 302
-    assert r.location.endswith("/?tab=notes")
+    assert "/?tab=notes" in r.location
+    assert f"updated_note_id={nid}" in r.location
 
     # 4. Test delete redirect
     r = client.post(f"/notes/{nid}/delete")
     assert r.status_code == 302
-    assert r.location.endswith("/?tab=notes")
+    assert "/?tab=notes" in r.location
+    assert f"deleted_note_id={nid}" in r.location
+
+
+def test_note_optimistic_locking(client):
+    # 1. Create a note via API
+    r = client.post("/api/notes", json={"title": "Locking Note", "note": "v1"})
+    assert r.status_code == 201
+    note = r.get_json()
+    nid = note["id"]
+    original_updated_at = note["updated_at"]
+
+    # 2. Get edit page to ensure it contains last_updated_at field
+    r_edit_page = client.get(f"/notes/{nid}/edit")
+    assert r_edit_page.status_code == 200
+    html = r_edit_page.get_data(as_text=True)
+    assert 'name="last_updated_at"' in html
+    assert original_updated_at in html
+
+    # 3. Simulate another tab updating the note
+    import time
+    time.sleep(1.1)
+    r_api_update = client.put(f"/api/notes/{nid}", json={"title": "Locking Note", "note": "v2"})
+    assert r_api_update.status_code == 200
+    new_updated_at = r_api_update.get_json()["updated_at"]
+    assert original_updated_at != new_updated_at
+
+    # 4. Try to save from the current tab with the stale original_updated_at
+    r_save_stale = client.post(
+        f"/notes/{nid}/edit",
+        data={
+            "title": "Stale Edit",
+            "note": "v3",
+            "last_updated_at": original_updated_at
+        }
+    )
+    assert r_save_stale.status_code == 200  # returns the re-rendered form
+    stale_html = r_save_stale.get_data(as_text=True)
+    assert "Conflict detected!" in stale_html
+    assert 'name="force_save"' in stale_html
+
+    # Verify note in DB was NOT updated to "Stale Edit" / "v3"
+    r_check = client.get(f"/api/notes/{nid}")
+    assert r_check.get_json()["note"] == "v2"
+
+    # 5. Save again with force_save=true
+    r_save_force = client.post(
+        f"/notes/{nid}/edit",
+        data={
+            "title": "Forced Edit",
+            "note": "v4",
+            "last_updated_at": original_updated_at,
+            "force_save": "true"
+        }
+    )
+    assert r_save_force.status_code == 302
+    assert f"updated_note_id={nid}" in r_save_force.location
+
+    # Verify note in DB IS updated to "v4"
+    r_check = client.get(f"/api/notes/{nid}")
+    assert r_check.get_json()["note"] == "v4"
 

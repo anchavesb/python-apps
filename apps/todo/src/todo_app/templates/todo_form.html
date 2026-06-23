@@ -2,6 +2,16 @@
 {% call base_head(item and 'Edit To-Do' or 'New To-Do') %}
 <h3 class="mb-3">{{ item and 'Edit To-Do' or 'New To-Do' }}</h3>
 <form method="post" class="vstack gap-3">
+  <input type="hidden" name="last_updated_at" value="{{ item.updated_at if item else '' }}" />
+  {% if concurrency_warning %}
+  <input type="hidden" name="force_save" value="true" />
+  <div class="alert alert-danger d-flex align-items-center mb-3" role="alert">
+    <div>
+      <strong>Conflict detected!</strong> This to-do has been updated in another tab or session since you opened it. 
+      Saving now will overwrite those changes. Click <strong>Save Anyway</strong> to force the update, or cancel/refresh to load the latest changes.
+    </div>
+  </div>
+  {% endif %}
   <div>
     <label class="form-label">Title</label>
     <input class="form-control" name="title" value="{{ item.title if item else '' }}" required />
@@ -37,7 +47,11 @@
     <textarea class="form-control" name="tags_text" placeholder="context=work\nproject=alpha">{{ tags_text or '' }}</textarea>
   </div>
   <div>
+    {% if concurrency_warning %}
+    <button class="btn btn-danger">Save Anyway</button>
+    {% else %}
     <button class="btn btn-primary">Save</button>
+    {% endif %}
     <a class="btn btn-secondary" href="{{ url_for('web.index') }}">Cancel</a>
   </div>
 </form>

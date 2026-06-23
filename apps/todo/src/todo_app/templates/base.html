@@ -88,6 +88,73 @@
     });
   });
 </script>
+<script>
+  if (window.BroadcastChannel) {
+    const bc = new BroadcastChannel('todo_app_sync');
+
+    // 1. Broadcast update/delete events if we are on the index page and a redirect param is present
+    const urlParams = new URLSearchParams(window.location.search);
+    const updatedNoteId = urlParams.get('updated_note_id');
+    const updatedTodoId = urlParams.get('updated_todo_id');
+    const deletedNoteId = urlParams.get('deleted_note_id');
+    const deletedTodoId = urlParams.get('deleted_todo_id');
+    
+    if (updatedNoteId) {
+      bc.postMessage({ type: 'updated', item_type: 'note', id: updatedNoteId });
+    }
+    if (updatedTodoId) {
+      bc.postMessage({ type: 'updated', item_type: 'todo', id: updatedTodoId });
+    }
+    if (deletedNoteId) {
+      bc.postMessage({ type: 'deleted', item_type: 'note', id: deletedNoteId });
+    }
+    if (deletedTodoId) {
+      bc.postMessage({ type: 'deleted', item_type: 'todo', id: deletedTodoId });
+    }
+
+    // 2. Listen for update/delete messages on edit pages
+    const path = window.location.pathname;
+    const noteMatch = path.match(/\/notes\/([^\/]+)\/edit/);
+    const todoMatch = path.match(/\/todos\/([^\/]+)\/edit/);
+
+    if (noteMatch || todoMatch) {
+      const currentId = noteMatch ? noteMatch[1] : todoMatch[1];
+      const currentType = noteMatch ? 'note' : 'todo';
+
+      bc.onmessage = (event) => {
+        if (event.data && event.data.item_type === currentType && event.data.id === currentId) {
+          const container = document.querySelector('.container');
+          if (container && !document.getElementById('realtime-conflict-warning')) {
+            const warningDiv = document.createElement('div');
+            warningDiv.id = 'realtime-conflict-warning';
+            warningDiv.className = 'alert alert-warning alert-dismissible fade show mb-3';
+            warningDiv.role = 'alert';
+
+            if (event.data.type === 'updated') {
+              warningDiv.innerHTML = `
+                <strong>Notice:</strong> This ${currentType} has been updated in another tab or window. 
+                To avoid overwriting those changes, please click 
+                <button class="btn btn-sm btn-link p-0 align-baseline fw-bold" onclick="window.location.reload();">Refresh Page</button> 
+                to reload the latest version (unsaved edits will be lost), or copy your changes before refreshing.
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+              `;
+            } else if (event.data.type === 'deleted') {
+              warningDiv.innerHTML = `
+                <strong>Notice:</strong> This ${currentType} has been deleted in another tab or window. 
+                Saving now may recreate it. You can click 
+                <a href="/" class="btn btn-sm btn-link p-0 align-baseline fw-bold">Go to Home</a> 
+                to return to your list, or copy your changes before navigating away.
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+              `;
+            }
+
+            container.insertBefore(warningDiv, container.firstChild);
+          }
+        }
+      };
+    }
+  }
+</script>
 </body>
 </html>
 {% endmacro %}

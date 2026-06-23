@@ -400,6 +400,30 @@ def edit_todo(tid):
         flash("To-do not found", "warning")
         return redirect(url_for("web.index"))
     if request.method == "POST":
+        last_updated_at = request.form.get("last_updated_at")
+        db_updated_at = item.get("updated_at") if item else None
+        force_save = request.form.get("force_save") == "true"
+
+        if db_updated_at and last_updated_at and db_updated_at != last_updated_at and not force_save:
+            flash("Warning: This to-do has been updated in another tab or window since you loaded it. Saving now will overwrite those changes.", "warning")
+            item_submitted = {
+                "id": tid,
+                "title": request.form.get("title", "").strip(),
+                "description": request.form.get("description"),
+                "due_date": request.form.get("due_date") or None,
+                "done": bool(request.form.get("done")),
+                "tags": parse_tags(request.form),
+                "updated_at": db_updated_at,
+            }
+            tags_text = request.form.get("tags_text", "")
+            return render_template(
+                "todo_form.html",
+                priorities=sorted(PRIORITIES),
+                item=item_submitted,
+                tags_text=tags_text,
+                concurrency_warning=True
+            )
+
         data = {
             "title": request.form.get("title", item["title"]).strip(),
             "description": request.form.get("description"),
@@ -410,7 +434,7 @@ def edit_todo(tid):
         try:
             store().update_todo(tid, data, user_id=user_id)
             flash("To-do updated", "success")
-            return redirect(url_for("web.index"))
+            return redirect(url_for("web.index", updated_todo_id=tid))
         except ValidationError as e:
             flash(str(e), "danger")
     tags_text = "\n".join(f"{k}={v}" for k, v in (item.get("tags") or {}).items() if k not in ("category", "priority"))
@@ -422,7 +446,7 @@ def edit_todo(tid):
 def delete_todo(tid):
     store().delete_todo(tid, user_id=get_user_id())
     flash("To-do deleted", "info")
-    return redirect(url_for("web.index"))
+    return redirect(url_for("web.index", deleted_todo_id=tid))
 
 
 @web_bp.post("/todos/<tid>/done")
@@ -430,7 +454,7 @@ def delete_todo(tid):
 def done_todo(tid):
     store().update_todo(tid, {"done": True}, user_id=get_user_id())
     flash("Marked as done", "success")
-    return redirect(url_for("web.index"))
+    return redirect(url_for("web.index", updated_todo_id=tid))
 
 
 @web_bp.route("/notes/new", methods=["GET", "POST"])
@@ -460,6 +484,28 @@ def edit_note(nid):
         flash("Note not found", "warning")
         return redirect(url_for("web.index", tab="notes"))
     if request.method == "POST":
+        last_updated_at = request.form.get("last_updated_at")
+        db_updated_at = item.get("updated_at") if item else None
+        force_save = request.form.get("force_save") == "true"
+
+        if db_updated_at and last_updated_at and db_updated_at != last_updated_at and not force_save:
+            flash("Warning: This note has been updated in another tab or window since you loaded it. Saving now will overwrite those changes.", "warning")
+            item_submitted = {
+                "id": nid,
+                "title": request.form.get("title", "").strip(),
+                "note": request.form.get("note"),
+                "tags": parse_tags(request.form),
+                "updated_at": db_updated_at,
+            }
+            tags_text = request.form.get("tags_text", "")
+            return render_template(
+                "note_form.html",
+                priorities=sorted(PRIORITIES),
+                item=item_submitted,
+                tags_text=tags_text,
+                concurrency_warning=True
+            )
+
         data = {
             "title": request.form.get("title", item["title"]).strip(),
             "note": request.form.get("note"),
@@ -468,7 +514,7 @@ def edit_note(nid):
         try:
             store().update_note(nid, data, user_id=user_id)
             flash("Note updated", "success")
-            return redirect(url_for("web.index", tab="notes"))
+            return redirect(url_for("web.index", tab="notes", updated_note_id=nid))
         except ValidationError as e:
             flash(str(e), "danger")
     tags_text = "\n".join(f"{k}={v}" for k, v in (item.get("tags") or {}).items() if k not in ("category", "priority"))
@@ -480,7 +526,7 @@ def edit_note(nid):
 def delete_note(nid):
     store().delete_note(nid, user_id=get_user_id())
     flash("Note deleted", "info")
-    return redirect(url_for("web.index", tab="notes"))
+    return redirect(url_for("web.index", tab="notes", deleted_note_id=nid))
 
 @web_bp.route("/rss/feed/add", methods=["POST"])
 @login_required
