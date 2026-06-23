@@ -127,7 +127,11 @@ def test_note_redirects_to_notes_tab(client):
     assert r.location.endswith("/?tab=notes")
 
     # 3. Test edit redirect (POST valid note edit)
-    r = client.post(f"/notes/{nid}/edit", data={"title": "Edited Title", "note": "New Content"})
+    r_detail = client.get(f"/api/notes/{nid}")
+    assert r_detail.status_code == 200
+    updated_at = r_detail.get_json()["updated_at"]
+
+    r = client.post(f"/notes/{nid}/edit", data={"title": "Edited Title", "note": "New Content", "last_updated_at": updated_at})
     assert r.status_code == 302
     assert "/?tab=notes" in r.location
     assert f"updated_note_id={nid}" in r.location

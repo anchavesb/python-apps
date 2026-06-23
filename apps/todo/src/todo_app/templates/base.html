@@ -99,17 +99,32 @@
     const deletedNoteId = urlParams.get('deleted_note_id');
     const deletedTodoId = urlParams.get('deleted_todo_id');
     
+    let needsUrlCleanup = false;
     if (updatedNoteId) {
       bc.postMessage({ type: 'updated', item_type: 'note', id: updatedNoteId });
+      urlParams.delete('updated_note_id');
+      needsUrlCleanup = true;
     }
     if (updatedTodoId) {
       bc.postMessage({ type: 'updated', item_type: 'todo', id: updatedTodoId });
+      urlParams.delete('updated_todo_id');
+      needsUrlCleanup = true;
     }
     if (deletedNoteId) {
       bc.postMessage({ type: 'deleted', item_type: 'note', id: deletedNoteId });
+      urlParams.delete('deleted_note_id');
+      needsUrlCleanup = true;
     }
     if (deletedTodoId) {
       bc.postMessage({ type: 'deleted', item_type: 'todo', id: deletedTodoId });
+      urlParams.delete('deleted_todo_id');
+      needsUrlCleanup = true;
+    }
+
+    if (needsUrlCleanup) {
+      const newSearch = urlParams.toString();
+      const cleanPath = window.location.pathname + (newSearch ? "?" + newSearch : "");
+      window.history.replaceState({}, document.title, cleanPath);
     }
 
     // 2. Listen for update/delete messages on edit pages

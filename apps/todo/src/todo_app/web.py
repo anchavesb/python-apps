@@ -391,6 +391,14 @@ def new_todo():
     return render_template("todo_form.html", priorities=sorted(PRIORITIES), item=None)
 
 
+def _coerce_timestamp(val) -> str:
+    if val is None:
+        return ""
+    if hasattr(val, "strftime"):
+        return val.strftime("%Y-%m-%dT%H:%M:%SZ")
+    return str(val).strip()
+
+
 @web_bp.route("/todos/<tid>/edit", methods=["GET", "POST"])
 @login_required
 def edit_todo(tid):
@@ -404,7 +412,10 @@ def edit_todo(tid):
         db_updated_at = item.get("updated_at") if item else None
         force_save = request.form.get("force_save") == "true"
 
-        if db_updated_at and last_updated_at and db_updated_at != last_updated_at and not force_save:
+        db_ts = _coerce_timestamp(db_updated_at)
+        last_ts = _coerce_timestamp(last_updated_at)
+
+        if db_ts and db_ts != last_ts and not force_save:
             flash("Warning: This to-do has been updated in another tab or window since you loaded it. Saving now will overwrite those changes.", "warning")
             item_submitted = {
                 "id": tid,
@@ -488,7 +499,10 @@ def edit_note(nid):
         db_updated_at = item.get("updated_at") if item else None
         force_save = request.form.get("force_save") == "true"
 
-        if db_updated_at and last_updated_at and db_updated_at != last_updated_at and not force_save:
+        db_ts = _coerce_timestamp(db_updated_at)
+        last_ts = _coerce_timestamp(last_updated_at)
+
+        if db_ts and db_ts != last_ts and not force_save:
             flash("Warning: This note has been updated in another tab or window since you loaded it. Saving now will overwrite those changes.", "warning")
             item_submitted = {
                 "id": nid,
