@@ -31,6 +31,7 @@ class FLUXProvider(ImageGenProvider):
         """Load FLUX pipeline. Imports diffusers/torch inside to keep service importable without GPU deps."""
         import torch
         from diffusers import FluxPipeline
+
         from dolores_imagen.config import settings
 
         device_name = settings.device

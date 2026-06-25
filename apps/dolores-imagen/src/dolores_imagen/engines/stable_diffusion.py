@@ -31,6 +31,7 @@ class StableDiffusionProvider(ImageGenProvider):
         """Load Stable Diffusion pipeline. Imports diffusers/torch inside to keep service importable without GPU deps."""
         import torch
         from diffusers import StableDiffusionPipeline
+
         from dolores_imagen.config import settings
 
         device_name = settings.device
