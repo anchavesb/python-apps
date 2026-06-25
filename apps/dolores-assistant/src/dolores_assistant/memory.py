@@ -48,7 +48,7 @@ class MemoryStore:
         except aiosqlite.OperationalError:
             pass # column already exists
 
-        await self._db.execute("CREATE INDEX IF NOT EXISTS idx_memories_user ON memories(user_id)")
+        await self._db.execute("CREATE INDEX IF NOT EXISTS idx_memories_user_timestamp ON memories(user_id, timestamp DESC)")
         await self._db.commit()
 
         self._initialized = True

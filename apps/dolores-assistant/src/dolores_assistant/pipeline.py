@@ -15,6 +15,7 @@ from typing import Any, AsyncGenerator
 
 import httpx
 
+from dolores_common.auth import extract_user_id
 from dolores_common.logging import get_logger
 from dolores_common.prompts import get_system_prompt
 
@@ -40,20 +41,6 @@ def _is_jwt_expired(token: str) -> bool:
         return time.time() > exp
     except Exception:
         return False
-
-
-def _extract_user_id(token: str | None) -> str:
-    """Extract user sub or email claim from a JWT token without validation (signature checked at boundary)."""
-    if not token:
-        return "anonymous"
-    import base64
-    try:
-        payload = token.split(".")[1]
-        payload += "=" * (4 - len(payload) % 4)
-        data = json.loads(base64.urlsafe_b64decode(payload))
-        return data.get("sub") or data.get("email") or "anonymous"
-    except Exception:
-        return "anonymous"
 
 
 
@@ -653,7 +640,7 @@ async def run_tool_loop(
     tools = (get_tool_definitions(tool_filter) or None) if (tool_filter and token_ok) else None
 
     # 1. Search memories for context
-    user_id = _extract_user_id(token)
+    user_id = extract_user_id(token)
     memories = await client.memory.search_memories(initial_message, user_id=user_id, limit=3)
     memory_context = ""
     if memories:

@@ -156,3 +156,30 @@ async def require_oidc_user(request: Request) -> dict:
 
 OIDCUser = Annotated[dict, Depends(require_oidc_user)]
 
+
+def extract_user_id(token: str | None) -> str:
+    """Validate token and extract user claim (sub or email) if OIDC is enabled.
+
+    Falls back to unverified payload parsing in dev mode (OIDC_ENABLED=0).
+    """
+    if not token:
+        return "anonymous"
+
+    if os.environ.get("OIDC_ENABLED", "0") == "1":
+        payload = validate_oidc_token(token)
+        if not payload:
+            return "anonymous"
+        return payload.get("sub") or payload.get("email") or "anonymous"
+
+    # Dev fallback: decode without verification if OIDC is disabled
+    try:
+        import base64
+        import json
+        payload = token.split(".")[1]
+        payload += "=" * (4 - len(payload) % 4)
+        data = json.loads(base64.urlsafe_b64decode(payload))
+        return data.get("sub") or data.get("email") or "anonymous"
+    except Exception:
+        return "anonymous"
+
+
