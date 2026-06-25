@@ -384,6 +384,13 @@ async def conversation_ws(websocket: WebSocket) -> None:
 
             elif msg_type == "session.update_token":
                 new_token = data.get("user_token")
+                # Validate token signature if OIDC is enabled to prevent
+                # mid-session identity spoofing via a crafted JWT swap.
+                if new_token and os.environ.get("OIDC_ENABLED", "0") == "1":
+                    if not validate_oidc_token(new_token):
+                        await websocket.send_json({"type": "error", "message": "Invalid or expired user token"})
+                        await websocket.close(code=4403)
+                        return
                 current_user_token.set(new_token)
                 continue
 

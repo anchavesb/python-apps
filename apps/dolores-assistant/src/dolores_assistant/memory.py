@@ -1,3 +1,4 @@
+import asyncio
 import json
 import uuid
 from pathlib import Path
@@ -21,40 +22,46 @@ class MemoryStore:
         self.db_path = db_path or settings.memory_db_path
         self._initialized = False
         self._db: Optional[aiosqlite.Connection] = None
+        self._lock = asyncio.Lock()  # Prevent concurrent initialization races
 
     async def ensure_initialized(self):
         if self._initialized and self._db:
             return
 
-        db_dir = Path(self.db_path).parent
-        db_dir.mkdir(parents=True, exist_ok=True)
+        async with self._lock:
+            # Re-check inside the lock in case another coroutine already initialized
+            if self._initialized and self._db:
+                return
 
-        if not self._db:
-            self._db = await aiosqlite.connect(self.db_path)
+            db_dir = Path(self.db_path).parent
+            db_dir.mkdir(parents=True, exist_ok=True)
 
-        await self._db.execute("""
-            CREATE TABLE IF NOT EXISTS memories (
-                id TEXT PRIMARY KEY,
-                user_id TEXT NOT NULL DEFAULT 'anonymous',
-                text TEXT NOT NULL,
-                embedding BLOB NOT NULL,
-                timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
-                metadata TEXT
-            )
-        """)
-        # Migrations: Add user_id column if table already existed without it
-        try:
-            await self._db.execute("ALTER TABLE memories ADD COLUMN user_id TEXT NOT NULL DEFAULT 'anonymous'")
-        except aiosqlite.OperationalError:
-            pass # column already exists
+            if not self._db:
+                self._db = await aiosqlite.connect(self.db_path)
 
-        # Drop old single-column index if it exists (superseded by composite index below)
-        await self._db.execute("DROP INDEX IF EXISTS idx_memories_user")
-        await self._db.execute("CREATE INDEX IF NOT EXISTS idx_memories_user_timestamp ON memories(user_id, timestamp DESC)")
-        await self._db.commit()
+            await self._db.execute("""
+                CREATE TABLE IF NOT EXISTS memories (
+                    id TEXT PRIMARY KEY,
+                    user_id TEXT NOT NULL DEFAULT 'anonymous',
+                    text TEXT NOT NULL,
+                    embedding BLOB NOT NULL,
+                    timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    metadata TEXT
+                )
+            """)
+            # Migrations: Add user_id column if table already existed without it
+            try:
+                await self._db.execute("ALTER TABLE memories ADD COLUMN user_id TEXT NOT NULL DEFAULT 'anonymous'")
+            except aiosqlite.OperationalError:
+                pass # column already exists
 
-        self._initialized = True
-        log.info("memory_store_initialized", path=self.db_path)
+            # Drop old single-column index if it exists (superseded by composite index below)
+            await self._db.execute("DROP INDEX IF EXISTS idx_memories_user")
+            await self._db.execute("CREATE INDEX IF NOT EXISTS idx_memories_user_timestamp ON memories(user_id, timestamp DESC)")
+            await self._db.commit()
+
+            self._initialized = True
+            log.info("memory_store_initialized", path=self.db_path)
 
     async def close(self):
         """Close the database connection."""
