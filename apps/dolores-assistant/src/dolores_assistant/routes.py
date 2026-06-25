@@ -5,13 +5,14 @@ from __future__ import annotations
 import asyncio
 import base64
 import json
+import os
 import re
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile, WebSocket, WebSocketDisconnect
 from fastapi.responses import Response
 
-from dolores_common.auth import ClientAPIKey, validate_ws_token
+from dolores_common.auth import ClientAPIKey, validate_oidc_token, validate_ws_token
 from dolores_common.logging import get_logger
 
 from .config import settings
@@ -293,8 +294,15 @@ async def conversation_ws(websocket: WebSocket) -> None:
                 if "conversation_id" in data:
                     conversation_id = data["conversation_id"]
 
-                # Set active user token for isolated database and tool calls
+                # Set active user token for isolated database and tool calls.
+                # Validate the token signature if OIDC is enabled to prevent
+                # identity spoofing via crafted JWT payloads.
                 user_token = data.get("user_token") or websocket.query_params.get("token")
+                if user_token and os.environ.get("OIDC_ENABLED", "0") == "1":
+                    if not validate_oidc_token(user_token):
+                        await websocket.send_json({"type": "error", "message": "Invalid or expired user token"})
+                        await websocket.close(code=4403)
+                        return
                 current_user_token.set(user_token)
 
                 # Acknowledge session start and send IDs back to client

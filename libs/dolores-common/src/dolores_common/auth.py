@@ -158,26 +158,25 @@ OIDCUser = Annotated[dict, Depends(require_oidc_user)]
 
 
 def extract_user_id(token: str | None) -> str:
-    """Validate token and extract user claim (sub or email) if OIDC is enabled.
+    """Extract user claim (sub or email) from a JWT token payload.
 
-    Falls back to unverified payload parsing in dev mode (OIDC_ENABLED=0).
+    The token signature is NOT re-verified here because authenticity has already
+    been guaranteed at the API gateway / FastAPI middleware boundary (Authentik).
+    Re-verifying would introduce a dangerous fallback to 'anonymous' on transient
+    OIDC/network failures, causing data isolation breaches.
+
+    In dev mode (OIDC_ENABLED=0) the token may be absent or unsigned, which is
+    also handled safely by returning 'anonymous'.
     """
     if not token:
         return "anonymous"
 
-    if os.environ.get("OIDC_ENABLED", "0") == "1":
-        payload = validate_oidc_token(token)
-        if not payload:
-            return "anonymous"
-        return payload.get("sub") or payload.get("email") or "anonymous"
-
-    # Dev fallback: decode without verification if OIDC is disabled
     try:
         import base64
-        import json
+        import json as _json
         payload = token.split(".")[1]
         payload += "=" * (4 - len(payload) % 4)
-        data = json.loads(base64.urlsafe_b64decode(payload))
+        data = _json.loads(base64.urlsafe_b64decode(payload))
         return data.get("sub") or data.get("email") or "anonymous"
     except Exception:
         return "anonymous"

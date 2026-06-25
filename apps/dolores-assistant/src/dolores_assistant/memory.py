@@ -48,6 +48,8 @@ class MemoryStore:
         except aiosqlite.OperationalError:
             pass # column already exists
 
+        # Drop old single-column index if it exists (superseded by composite index below)
+        await self._db.execute("DROP INDEX IF EXISTS idx_memories_user")
         await self._db.execute("CREATE INDEX IF NOT EXISTS idx_memories_user_timestamp ON memories(user_id, timestamp DESC)")
         await self._db.commit()
 
