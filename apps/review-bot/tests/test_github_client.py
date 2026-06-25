@@ -19,6 +19,7 @@ from review_bot.github_client import (
     get_diff,
     get_pr_info,
     list_open_prs,
+    list_pr_comments,
     post_review,
     set_github_client,
 )
@@ -354,3 +355,21 @@ class TestRateLimitWarning:
 
         warning_events = [e for e in cap_logs if e.get("event") == "github_rate_limit_low"]
         assert len(warning_events) == 0
+
+
+class TestListPrComments:
+    async def test_list_pr_comments_success(self, _mock_client):
+        comments_data = [{"id": 123, "body": "some comment"}, {"id": 124, "body": "/review"}]
+        _mock_client.get.return_value = _make_response(json_data=comments_data)
+
+        res = await list_pr_comments("o", "r", 42, "tok")
+        assert res == comments_data
+        _mock_client.get.assert_called_once_with(
+            "https://api.github.com/repos/o/r/issues/42/comments",
+            params={"per_page": 100},
+            headers={
+                "Authorization": "Bearer tok",
+                "Accept": "application/vnd.github+json",
+                "X-GitHub-Api-Version": "2022-11-28",
+            },
+        )

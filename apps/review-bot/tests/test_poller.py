@@ -43,15 +43,18 @@ def _make_effective(token: str = "gh-token") -> MagicMock:
 @patch("review_bot.poller.run_review", new_callable=AsyncMock)
 @patch("review_bot.poller.resolve_effective_config")
 @patch("review_bot.poller.list_open_prs")
-async def test_new_pr_triggers_full_diff(mock_list_prs, mock_resolve, mock_run_review):
+@patch("review_bot.poller.list_pr_comments", new_callable=AsyncMock)
+async def test_new_pr_triggers_full_diff(mock_list_comments, mock_list_prs, mock_resolve, mock_run_review):
     """stored_sha is None → diff_type='full', before_sha=None."""
     effective = _make_effective()
     mock_resolve.return_value = effective
 
     mock_list_prs.return_value = [_pr(1, "abc")]
+    mock_list_comments.return_value = []
 
     store = AsyncMock()
     store.get_sha = AsyncMock(return_value=None)
+    store.get_last_comment_id = AsyncMock(return_value=None)
 
     config = MagicMock()
 
@@ -63,21 +66,25 @@ async def test_new_pr_triggers_full_diff(mock_list_prs, mock_resolve, mock_run_r
         head_sha="abc",
         diff_type="full",
         before_sha=None,
+        last_comment_id=None,
     )
 
 
 @patch("review_bot.poller.run_review", new_callable=AsyncMock)
 @patch("review_bot.poller.resolve_effective_config")
 @patch("review_bot.poller.list_open_prs")
-async def test_updated_pr_triggers_incremental_diff_with_correct_shas(mock_list_prs, mock_resolve, mock_run_review):
+@patch("review_bot.poller.list_pr_comments", new_callable=AsyncMock)
+async def test_updated_pr_triggers_incremental_diff_with_correct_shas(mock_list_comments, mock_list_prs, mock_resolve, mock_run_review):
     """stored_sha != head_sha → diff_type='incremental', before_sha=stored_sha."""
     effective = _make_effective()
     mock_resolve.return_value = effective
 
     mock_list_prs.return_value = [_pr(2, "new-sha")]
+    mock_list_comments.return_value = []
 
     store = AsyncMock()
     store.get_sha = AsyncMock(return_value="old-sha")
+    store.get_last_comment_id = AsyncMock(return_value=None)
 
     config = MagicMock()
 
@@ -89,24 +96,75 @@ async def test_updated_pr_triggers_incremental_diff_with_correct_shas(mock_list_
         head_sha="new-sha",
         diff_type="incremental",
         before_sha="old-sha",
+        last_comment_id=None,
     )
 
 
 @patch("review_bot.poller.run_review", new_callable=AsyncMock)
 @patch("review_bot.poller.resolve_effective_config")
 @patch("review_bot.poller.list_open_prs")
-async def test_unchanged_pr_is_skipped(mock_list_prs, mock_resolve, mock_run_review):
+@patch("review_bot.poller.list_pr_comments", new_callable=AsyncMock)
+async def test_unchanged_pr_is_skipped(mock_list_comments, mock_list_prs, mock_resolve, mock_run_review):
     """stored_sha == head_sha → no diff fetched, no review posted."""
     effective = _make_effective()
     mock_resolve.return_value = effective
 
     mock_list_prs.return_value = [_pr(3, "same-sha")]
+    mock_list_comments.return_value = []
 
     store = AsyncMock()
     store.get_sha = AsyncMock(return_value="same-sha")
+    store.get_last_comment_id = AsyncMock(return_value=None)
 
     config = MagicMock()
 
+    await _poll_repo(_repo_entry(), store, config)
+
+    mock_run_review.assert_not_called()
+
+
+@patch("review_bot.poller.run_review", new_callable=AsyncMock)
+@patch("review_bot.poller.resolve_effective_config")
+@patch("review_bot.poller.list_open_prs")
+@patch("review_bot.poller.list_pr_comments", new_callable=AsyncMock)
+async def test_unchanged_pr_with_trigger_comment_runs_review(mock_list_comments, mock_list_prs, mock_resolve, mock_run_review):
+    effective = _make_effective()
+    mock_resolve.return_value = effective
+    mock_list_prs.return_value = [_pr(3, "same-sha")]
+    mock_list_comments.return_value = [{"id": 101, "body": "/review"}]
+
+    store = AsyncMock()
+    store.get_sha = AsyncMock(return_value="same-sha")
+    store.get_last_comment_id = AsyncMock(return_value=None)
+
+    config = MagicMock()
+    await _poll_repo(_repo_entry(), store, config)
+
+    mock_run_review.assert_called_once_with(
+        repo="owner/repo",
+        pr_number=3,
+        head_sha="same-sha",
+        diff_type="full",
+        before_sha=None,
+        last_comment_id=101,
+    )
+
+
+@patch("review_bot.poller.run_review", new_callable=AsyncMock)
+@patch("review_bot.poller.resolve_effective_config")
+@patch("review_bot.poller.list_open_prs")
+@patch("review_bot.poller.list_pr_comments", new_callable=AsyncMock)
+async def test_unchanged_pr_with_old_trigger_comment_is_skipped(mock_list_comments, mock_list_prs, mock_resolve, mock_run_review):
+    effective = _make_effective()
+    mock_resolve.return_value = effective
+    mock_list_prs.return_value = [_pr(3, "same-sha")]
+    mock_list_comments.return_value = [{"id": 101, "body": "/review"}]
+
+    store = AsyncMock()
+    store.get_sha = AsyncMock(return_value="same-sha")
+    store.get_last_comment_id = AsyncMock(return_value=101)
+
+    config = MagicMock()
     await _poll_repo(_repo_entry(), store, config)
 
     mock_run_review.assert_not_called()
@@ -131,15 +189,18 @@ async def test_unregistered_repo_is_logged_and_not_polled(mock_list_prs, mock_re
 @patch("review_bot.poller.run_review", new_callable=AsyncMock)
 @patch("review_bot.poller.resolve_effective_config")
 @patch("review_bot.poller.list_open_prs")
-async def test_llm_failure_is_logged_and_does_not_call_set_sha(mock_list_prs, mock_resolve, mock_run_review):
-    """run_review raising means error is logged but SHA update never happens."""
+@patch("review_bot.poller.list_pr_comments", new_callable=AsyncMock)
+async def test_llm_failure_is_logged_and_does_not_call_set_sha(mock_list_comments, mock_list_prs, mock_resolve, mock_run_review):
+    """run_review raising means error is logged but SHA/state update never happens."""
     effective = _make_effective()
     mock_resolve.return_value = effective
 
     mock_list_prs.return_value = [_pr(4, "head")]
+    mock_list_comments.return_value = []
 
     store = AsyncMock()
     store.get_sha = AsyncMock(return_value=None)
+    store.get_last_comment_id = AsyncMock(return_value=None)
 
     mock_run_review.side_effect = RuntimeError("LLM down")
 
@@ -149,6 +210,7 @@ async def test_llm_failure_is_logged_and_does_not_call_set_sha(mock_list_prs, mo
     await _poll_repo(_repo_entry(), store, config)
 
     store.set_sha.assert_not_called()
+    store.set_state.assert_not_called()
 
 
 # ---------------------------------------------------------------------------
@@ -304,6 +366,9 @@ class TestPollerIntegration:
             # per-repo .github/review-bot.yml not present
             github_mock.get("https://api.github.com/repos/owner/repo/contents/.github/review-bot.yml").mock(
                 return_value=httpx.Response(404)
+            )
+            github_mock.get("https://api.github.com/repos/owner/repo/issues/1/comments").mock(
+                return_value=httpx.Response(200, json=[])
             )
             review_route = github_mock.post("https://api.github.com/repos/owner/repo/pulls/1/reviews").mock(
                 return_value=httpx.Response(200, json={"id": 1})

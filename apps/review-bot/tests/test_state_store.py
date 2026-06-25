@@ -22,6 +22,24 @@ async def test_get_sha_returns_none_for_unknown_key(store):
     assert result is None
 
 
+async def test_get_last_comment_id_returns_none_for_unknown_key(store):
+    result = await store.get_last_comment_id("owner/repo", 42)
+    assert result is None
+
+
+async def test_set_state_then_get_values(store):
+    await store.set_state("owner/repo", 1, "abc123", 999)
+    assert await store.get_sha("owner/repo", 1) == "abc123"
+    assert await store.get_last_comment_id("owner/repo", 1) == 999
+
+
+async def test_set_sha_preserves_last_comment_id(store):
+    await store.set_state("owner/repo", 1, "abc123", 999)
+    await store.set_sha("owner/repo", 1, "def456")
+    assert await store.get_sha("owner/repo", 1) == "def456"
+    assert await store.get_last_comment_id("owner/repo", 1) == 999
+
+
 async def test_set_sha_then_get_sha_returns_stored_value(store):
     await store.set_sha("owner/repo", 1, "abc123")
     result = await store.get_sha("owner/repo", 1)

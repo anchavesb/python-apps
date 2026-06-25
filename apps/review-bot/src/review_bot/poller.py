@@ -8,7 +8,7 @@ import time
 from dolores_common.logging import get_logger
 
 from .config import get_registry, get_settings, resolve_effective_config
-from .github_client import list_open_prs
+from .github_client import list_open_prs, list_pr_comments
 from .review_runner import run_review
 from .state_store import get_state_store
 
@@ -43,13 +43,22 @@ async def run_polling_loop() -> None:
         await asyncio.sleep(config.poll_interval_seconds)
 
 
+def _is_trigger_comment(body: str | None) -> bool:
+    if not body:
+        return False
+    body_lower = body.lower()
+    return "/review" in body_lower or "/re-review" in body_lower or "@review-bot review" in body_lower
+
+
 async def _poll_repo(repo_entry, store, config) -> None:
     """Check a single repository for new or updated open PRs and dispatch reviews.
 
-    SHA comparison logic:
+    SHA comparison and comment trigger logic:
     - ``stored_sha is None``        → new PR    → full diff
     - ``stored_sha != pr.head_sha`` → updated   → incremental diff
-    - ``stored_sha == pr.head_sha`` → unchanged → skip
+    - ``stored_sha == pr.head_sha`` → check for trigger comment
+      - New comment matching '/review' → retrigger full review
+      - Otherwise → skip
 
     Raises:
         RegistryError: if ``repo_entry.repo`` is not in the registry (caught by caller).
@@ -73,25 +82,62 @@ async def _poll_repo(repo_entry, store, config) -> None:
     review_tasks = []
     for pr in open_prs:
         stored_sha = await store.get_sha(repo_name_full, pr.number)
+        stored_comment_id = await store.get_last_comment_id(repo_name_full, pr.number)
 
-        if stored_sha == pr.head_sha:
+        # Check for trigger comments
+        comments = []
+        try:
+            comments = await list_pr_comments(owner, repo_name, pr.number, effective.github_token)
+        except Exception:
+            log.exception("github_list_comments_failed", repo=repo_name_full, pr_number=pr.number)
+
+        trigger_comments = [c for c in comments if _is_trigger_comment(c.get("body"))]
+        if trigger_comments:
+            latest_trigger = trigger_comments[-1]
+            trigger_comment_id = latest_trigger["id"]
+        else:
+            trigger_comment_id = None
+
+        max_comment_id = max((c["id"] for c in comments), default=None)
+
+        should_review = False
+        diff_type = "full"
+        before_sha = None
+        target_comment_id_to_store = max_comment_id
+
+        if stored_sha != pr.head_sha:
+            should_review = True
+            if stored_sha is None:
+                diff_type = "full"
+                before_sha = None
+                log.info("pr_detected_new", repo=repo_name_full, pr_number=pr.number, head_sha=pr.head_sha)
+            else:
+                diff_type = "incremental"
+                before_sha = stored_sha
+                log.info(
+                    "pr_detected_updated",
+                    repo=repo_name_full,
+                    pr_number=pr.number,
+                    head_sha=pr.head_sha,
+                    before_sha=stored_sha,
+                )
+        elif trigger_comment_id is not None:
+            if stored_comment_id is None or trigger_comment_id > stored_comment_id:
+                should_review = True
+                diff_type = "full"
+                before_sha = None
+                log.info(
+                    "pr_detected_comment_retrigger",
+                    repo=repo_name_full,
+                    pr_number=pr.number,
+                    head_sha=pr.head_sha,
+                    comment_id=trigger_comment_id,
+                )
+                target_comment_id_to_store = max(trigger_comment_id, max_comment_id or 0)
+
+        if not should_review:
             log.debug("pr_skipped_unchanged", repo=repo_name_full, pr_number=pr.number, sha=pr.head_sha)
             continue
-
-        if stored_sha is None:
-            diff_type = "full"
-            before_sha = None
-            log.info("pr_detected_new", repo=repo_name_full, pr_number=pr.number, head_sha=pr.head_sha)
-        else:
-            diff_type = "incremental"
-            before_sha = stored_sha
-            log.info(
-                "pr_detected_updated",
-                repo=repo_name_full,
-                pr_number=pr.number,
-                head_sha=pr.head_sha,
-                before_sha=stored_sha,
-            )
 
         review_tasks.append(
             run_review(
@@ -100,6 +146,7 @@ async def _poll_repo(repo_entry, store, config) -> None:
                 head_sha=pr.head_sha,
                 diff_type=diff_type,
                 before_sha=before_sha,
+                last_comment_id=target_comment_id_to_store,
             )
         )
 

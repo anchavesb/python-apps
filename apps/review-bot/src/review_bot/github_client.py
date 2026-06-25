@@ -297,6 +297,28 @@ async def fetch_file_contents(owner: str, repo: str, path: str, ref: str, token:
     return base64.b64decode(encoded).decode("utf-8")
 
 
+
+async def list_pr_comments(owner: str, repo: str, pr_number: int, token: str) -> list[dict]:
+    """Fetch comments on the PR thread (issue comments)."""
+    client = get_github_client()
+    url = f"{_GITHUB_API}/repos/{owner}/{repo}/issues/{pr_number}/comments"
+    try:
+        response = await client.get(
+            url,
+            params={"per_page": 100},
+            headers=_auth_headers(token),
+        )
+        _check_rate_limit(response)
+        response.raise_for_status()
+    except httpx.HTTPStatusError as exc:
+        log.error("github_list_comments_http_error", owner=owner, repo=repo, pr_number=pr_number, status=exc.response.status_code, error=str(exc))
+        raise HTTPException(status_code=502, detail=f"GitHub API error: {exc}") from exc
+    except httpx.RequestError as exc:
+        log.error("github_list_comments_network_error", owner=owner, repo=repo, pr_number=pr_number, error=str(exc))
+        raise HTTPException(status_code=502, detail=f"GitHub API network error: {exc}") from exc
+    return response.json()
+
+
 async def post_review(owner: str, repo: str, pr_number: int, result: ReviewResult, token: str) -> None:
     """Submit a GitHub Review with inline comments and a top-level summary body."""
     client = get_github_client()

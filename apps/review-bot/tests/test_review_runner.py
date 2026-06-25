@@ -209,7 +209,7 @@ async def test_run_review_calls_set_sha_with_head_sha_after_post_review(
     mock_get_diff.return_value = ("diff", diff_meta)
 
     store = AsyncMock()
-    store.set_sha = AsyncMock()
+    store.set_state = AsyncMock()
     mock_get_store.return_value = store
 
     mock_discover.return_value = []
@@ -219,7 +219,7 @@ async def test_run_review_calls_set_sha_with_head_sha_after_post_review(
 
     call_order = []
     mock_post_review.side_effect = lambda *a, **kw: call_order.append("post_review")
-    store.set_sha.side_effect = lambda *a, **kw: call_order.append("set_sha")
+    store.set_state.side_effect = lambda *a, **kw: call_order.append("set_state")
 
     await run_review(
         repo="owner/repo",
@@ -227,10 +227,11 @@ async def test_run_review_calls_set_sha_with_head_sha_after_post_review(
         head_sha="headsha",
         diff_type="full",
         before_sha=None,
+        last_comment_id=999,
     )
 
-    store.set_sha.assert_called_once_with("owner/repo", 1, "headsha")
-    assert call_order == ["post_review", "set_sha"], "set_sha must be called after post_review"
+    store.set_state.assert_called_once_with("owner/repo", 1, "headsha", 999)
+    assert call_order == ["post_review", "set_state"], "set_state must be called after post_review"
 
 
 # ---------------------------------------------------------------------------

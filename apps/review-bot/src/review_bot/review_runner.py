@@ -46,6 +46,7 @@ async def run_review(
     head_sha: str,
     diff_type: str,
     before_sha: str | None,
+    last_comment_id: int | None = None,
 ) -> None:
     """Execute the full PR review pipeline under the shared concurrency semaphore.
 
@@ -137,7 +138,7 @@ async def run_review(
                 final_result = parse_review(raw_verify, diff_meta, effective.model)
 
             await post_review(owner, name, pr_number, final_result, effective.github_token)
-            await store.set_sha(repo, pr_number, head_sha)
+            await store.set_state(repo, pr_number, head_sha, last_comment_id)
 
             elapsed = round(time.monotonic() - start, 3)
             log.info(
