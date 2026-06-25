@@ -124,6 +124,8 @@ class ServiceClient:
                 f"{ws_url}/v1/stream",
                 additional_headers=_auth_headers(),
                 open_timeout=10,
+                ping_interval=None,
+                ping_timeout=None,
             ) as ws:
                 # Send audio as binary
                 await ws.send(audio_data)

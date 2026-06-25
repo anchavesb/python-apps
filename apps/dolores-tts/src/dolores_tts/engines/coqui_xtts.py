@@ -128,9 +128,17 @@ class CoquiXTTSEngine(TTSEngine):
         if emotion:
             clip_path = self._resolve_emotion_clip(voice_id, emotion)
             if clip_path:
-                tts_kwargs["speaker_wav"] = clip_path
-                tts_kwargs.pop("speaker", None)
-                log.info("emotion_conditioning_applied", emotion=emotion, clip=clip_path)
+                is_shared_fallback = clip_path in self._shared_emotion_refs.values()
+                if voice_id == "default" or not is_shared_fallback:
+                    tts_kwargs["speaker_wav"] = clip_path
+                    tts_kwargs.pop("speaker", None)
+                    log.info("emotion_conditioning_applied", emotion=emotion, clip=clip_path)
+                else:
+                    log.info(
+                        "skipping_shared_emotion_fallback_for_custom_voice",
+                        voice_id=voice_id,
+                        emotion=emotion,
+                    )
             else:
                 log.warning("emotion_clip_unavailable", emotion=emotion, fallback="voice_default")
 
