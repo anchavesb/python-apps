@@ -245,9 +245,29 @@ async def stream_transcription(websocket: WebSocket) -> None:
 
                     language = data.get("language")
 
-                    for chunk in engine.transcribe_stream(
-                        audio_data, content_type="audio/webm", language=language
-                    ):
+                    queue = asyncio.Queue()
+                    loop = asyncio.get_running_loop()
+
+                    def _run_transcribe_stream() -> None:
+                        try:
+                            for chunk in engine.transcribe_stream(
+                                audio_data, content_type="audio/webm", language=language
+                            ):
+                                asyncio.run_coroutine_threadsafe(queue.put(chunk), loop)
+                            asyncio.run_coroutine_threadsafe(queue.put(None), loop)
+                        except Exception as ex:
+                            asyncio.run_coroutine_threadsafe(queue.put(ex), loop)
+
+                    # Run synchronous generator in background thread
+                    await loop.run_in_executor(None, _run_transcribe_stream)
+
+                    while True:
+                        chunk = await queue.get()
+                        if chunk is None:
+                            break
+                        if isinstance(chunk, Exception):
+                            raise chunk
+
                         await websocket.send_json(
                             StreamMessage(
                                 type=chunk["type"],

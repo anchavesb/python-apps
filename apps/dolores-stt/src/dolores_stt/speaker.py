@@ -83,7 +83,15 @@ class SpeakerIdentifier:
             device = "mps"
 
         log.info("loading_speaker_model", device=device)
-        self._encoder = VoiceEncoder(device)
+        try:
+            self._encoder = VoiceEncoder(device)
+        except Exception as e:
+            if device != "cpu":
+                log.warning("device_fallback_to_cpu", reason=str(e))
+                device = "cpu"
+                self._encoder = VoiceEncoder(device)
+            else:
+                raise
         self.store.open()
         log.info("speaker_model_loaded")
 

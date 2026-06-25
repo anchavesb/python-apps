@@ -17,6 +17,7 @@ dependencies = [
     "cloudscraper>=1.2.71",
     "brotli>=1.0.9",
     "pyopenssl>=24.0.0",
+    "pillow>=10.0.0",
 ]
 
 [project.scripts]

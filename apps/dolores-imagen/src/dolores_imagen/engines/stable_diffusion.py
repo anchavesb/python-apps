@@ -32,15 +32,22 @@ class StableDiffusionProvider(ImageGenProvider):
         import torch
         from diffusers import StableDiffusionPipeline
 
-        if torch.cuda.is_available():
-            device = torch.device("cuda")
-            dtype = torch.float16
-        elif torch.backends.mps.is_available():
-            device = torch.device("mps")
-            dtype = torch.float16
+        from dolores_imagen.config import settings
+
+        device_name = settings.device
+        if device_name == "auto":
+            if torch.cuda.is_available():
+                device = torch.device("cuda")
+                dtype = torch.float16
+            elif torch.backends.mps.is_available():
+                device = torch.device("mps")
+                dtype = torch.float16
+            else:
+                device = torch.device("cpu")
+                dtype = torch.float32
         else:
-            device = torch.device("cpu")
-            dtype = torch.float32
+            device = torch.device(device_name)
+            dtype = torch.float16 if device_name in ["cuda", "mps"] else torch.float32
 
         log.info("loading_sd_model", model_id=self._model_id, device=str(device))
         start = time.monotonic()

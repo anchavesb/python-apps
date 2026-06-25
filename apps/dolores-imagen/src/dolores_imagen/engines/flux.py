@@ -32,16 +32,23 @@ class FLUXProvider(ImageGenProvider):
         import torch
         from diffusers import FluxPipeline
 
-        if torch.cuda.is_available():
-            device = torch.device("cuda")
-            dtype = torch.bfloat16
-        elif torch.backends.mps.is_available():
-            device = torch.device("mps")
-            # bfloat16 is required for FLUX on MPS to avoid NaNs (black images)
-            dtype = torch.bfloat16
+        from dolores_imagen.config import settings
+
+        device_name = settings.device
+        if device_name == "auto":
+            if torch.cuda.is_available():
+                device = torch.device("cuda")
+                dtype = torch.bfloat16
+            elif torch.backends.mps.is_available():
+                device = torch.device("mps")
+                # bfloat16 is required for FLUX on MPS to avoid NaNs (black images)
+                dtype = torch.bfloat16
+            else:
+                device = torch.device("cpu")
+                dtype = torch.float32
         else:
-            device = torch.device("cpu")
-            dtype = torch.float32
+            device = torch.device(device_name)
+            dtype = torch.bfloat16 if device_name in ["cuda", "mps"] else torch.float32
 
         log.info("loading_flux_model", model_id=self._model_id, device=str(device))
         start = time.monotonic()
