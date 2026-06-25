@@ -42,6 +42,21 @@ def _is_jwt_expired(token: str) -> bool:
         return False
 
 
+def _extract_user_id(token: str | None) -> str:
+    """Extract user sub or email claim from a JWT token without validation (signature checked at boundary)."""
+    if not token:
+        return "anonymous"
+    import base64
+    try:
+        payload = token.split(".")[1]
+        payload += "=" * (4 - len(payload) % 4)
+        data = json.loads(base64.urlsafe_b64decode(payload))
+        return data.get("sub") or data.get("email") or "anonymous"
+    except Exception:
+        return "anonymous"
+
+
+
 # GPU concurrency: only one request at a time per GPU service
 _stt_semaphore = asyncio.Semaphore(1)
 _tts_semaphore = asyncio.Semaphore(1)
@@ -638,7 +653,8 @@ async def run_tool_loop(
     tools = (get_tool_definitions(tool_filter) or None) if (tool_filter and token_ok) else None
 
     # 1. Search memories for context
-    memories = await client.memory.search_memories(initial_message, limit=3)
+    user_id = _extract_user_id(token)
+    memories = await client.memory.search_memories(initial_message, user_id=user_id, limit=3)
     memory_context = ""
     if memories:
         # Truncate long facts to avoid context window pressure

@@ -293,6 +293,10 @@ async def conversation_ws(websocket: WebSocket) -> None:
                 if "conversation_id" in data:
                     conversation_id = data["conversation_id"]
 
+                # Set active user token for isolated database and tool calls
+                user_token = data.get("user_token") or websocket.query_params.get("token")
+                current_user_token.set(user_token)
+
                 # Acknowledge session start and send IDs back to client
                 # conversation_id might be None, in which case the frontend gets a placeholder
                 await websocket.send_json({

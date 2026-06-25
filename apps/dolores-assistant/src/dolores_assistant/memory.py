@@ -35,12 +35,20 @@ class MemoryStore:
         await self._db.execute("""
             CREATE TABLE IF NOT EXISTS memories (
                 id TEXT PRIMARY KEY,
+                user_id TEXT NOT NULL DEFAULT 'anonymous',
                 text TEXT NOT NULL,
                 embedding BLOB NOT NULL,
                 timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
                 metadata TEXT
             )
         """)
+        # Migrations: Add user_id column if table already existed without it
+        try:
+            await self._db.execute("ALTER TABLE memories ADD COLUMN user_id TEXT NOT NULL DEFAULT 'anonymous'")
+        except aiosqlite.OperationalError:
+            pass # column already exists
+
+        await self._db.execute("CREATE INDEX IF NOT EXISTS idx_memories_user ON memories(user_id)")
         await self._db.commit()
 
         self._initialized = True
@@ -53,7 +61,7 @@ class MemoryStore:
             self._db = None
             self._initialized = False
 
-    async def add_memory(self, text: str, metadata: Optional[dict] = None):
+    async def add_memory(self, text: str, user_id: str = "anonymous", metadata: Optional[dict] = None):
         """Store a new fact with its embedding."""
         await self.ensure_initialized()
         assert self._db is not None
@@ -63,14 +71,14 @@ class MemoryStore:
         embedding_blob = np.array(embedding, dtype=np.float32).tobytes()
 
         await self._db.execute(
-            "INSERT INTO memories (id, text, embedding, metadata) VALUES (?, ?, ?, ?)",
-            (memory_id, text, embedding_blob, json.dumps(metadata or {})),
+            "INSERT INTO memories (id, user_id, text, embedding, metadata) VALUES (?, ?, ?, ?, ?)",
+            (memory_id, user_id, text, embedding_blob, json.dumps(metadata or {})),
         )
         await self._db.commit()
 
-        log.info("memory_added", text=text[:50])
+        log.info("memory_added", user_id=user_id, text=text[:50])
 
-    async def search_memories(self, query: str, limit: int = 5, min_score: float = 0.5) -> List[dict]:
+    async def search_memories(self, query: str, user_id: str = "anonymous", limit: int = 5, min_score: float = 0.5) -> List[dict]:
         """Find relevant memories using cosine similarity.
 
         Optimized by limiting scan to most recent 500 entries to avoid Python overhead.
@@ -81,9 +89,10 @@ class MemoryStore:
         query_embedding = np.array(get_embedding(query), dtype=np.float32)
 
         memories = []
-        # Avoid full table scan as it grows - scan most recent first
+        # Avoid full table scan as it grows - scan most recent first for this user
         async with self._db.execute(
-            "SELECT text, embedding, metadata, timestamp FROM memories ORDER BY timestamp DESC LIMIT 500"
+            "SELECT text, embedding, metadata, timestamp FROM memories WHERE user_id = ? ORDER BY timestamp DESC LIMIT 500",
+            (user_id,)
         ) as cursor:
             async for row in cursor:
                 text, emb_blob, meta_json, ts = row
