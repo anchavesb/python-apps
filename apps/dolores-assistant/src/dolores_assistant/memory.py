@@ -22,11 +22,17 @@ class MemoryStore:
         self.db_path = db_path or settings.memory_db_path
         self._initialized = False
         self._db: Optional[aiosqlite.Connection] = None
-        self._lock = asyncio.Lock()  # Prevent concurrent initialization races
+        # Lazily created inside ensure_initialized to avoid RuntimeError when
+        # instantiated before the event loop starts (Python 3.11+).
+        self._lock: Optional[asyncio.Lock] = None
 
     async def ensure_initialized(self):
         if self._initialized and self._db:
             return
+
+        # Lazily create the lock the first time we reach here (inside the event loop).
+        if self._lock is None:
+            self._lock = asyncio.Lock()
 
         async with self._lock:
             # Re-check inside the lock in case another coroutine already initialized

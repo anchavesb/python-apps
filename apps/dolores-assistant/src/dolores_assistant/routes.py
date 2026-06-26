@@ -299,7 +299,9 @@ async def conversation_ws(websocket: WebSocket) -> None:
                 # identity spoofing via crafted JWT payloads.
                 user_token = data.get("user_token") or websocket.query_params.get("token")
                 if user_token and os.environ.get("OIDC_ENABLED", "0") == "1":
-                    if not validate_oidc_token(user_token):
+                    # validate_oidc_token may do synchronous HTTP I/O (JWKS fetch),
+                    # so run it in a thread to avoid blocking the event loop.
+                    if not await asyncio.to_thread(validate_oidc_token, user_token):
                         await websocket.send_json({"type": "error", "message": "Invalid or expired user token"})
                         await websocket.close(code=4403)
                         return
@@ -386,8 +388,9 @@ async def conversation_ws(websocket: WebSocket) -> None:
                 new_token = data.get("user_token")
                 # Validate token signature if OIDC is enabled to prevent
                 # mid-session identity spoofing via a crafted JWT swap.
+                # Run in a thread to avoid blocking the event loop on JWKS I/O.
                 if new_token and os.environ.get("OIDC_ENABLED", "0") == "1":
-                    if not validate_oidc_token(new_token):
+                    if not await asyncio.to_thread(validate_oidc_token, new_token):
                         await websocket.send_json({"type": "error", "message": "Invalid or expired user token"})
                         await websocket.close(code=4403)
                         return
