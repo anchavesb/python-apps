@@ -1,11 +1,12 @@
-from __future__ import annotations
-
+from dolores_common.auth import extract_user_id
 from dolores_common.logging import get_logger
 
 from ..memory import MemoryStore
 from .base import Tool
+from .openapi_discovery import current_user_token
 
 log = get_logger(__name__)
+
 
 class MemoryStoreTool(Tool):
     """Explicitly store a fact in long-term memory."""
@@ -42,5 +43,8 @@ class MemoryStoreTool(Tool):
         if not fact:
             return "No fact provided."
 
-        await self._memory.add_memory(fact)
+        user_id = extract_user_id(current_user_token.get())
+        await self._memory.add_memory(fact, user_id=user_id)
         return f"Fact stored in long-term memory: {fact}"
+
+

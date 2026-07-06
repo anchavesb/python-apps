@@ -15,6 +15,7 @@ from typing import Any, AsyncGenerator
 
 import httpx
 
+from dolores_common.auth import extract_user_id
 from dolores_common.logging import get_logger
 from dolores_common.prompts import get_system_prompt
 
@@ -40,6 +41,7 @@ def _is_jwt_expired(token: str) -> bool:
         return time.time() > exp
     except Exception:
         return False
+
 
 
 # GPU concurrency: only one request at a time per GPU service
@@ -638,7 +640,8 @@ async def run_tool_loop(
     tools = (get_tool_definitions(tool_filter) or None) if (tool_filter and token_ok) else None
 
     # 1. Search memories for context
-    memories = await client.memory.search_memories(initial_message, limit=3)
+    user_id = extract_user_id(token)
+    memories = await client.memory.search_memories(initial_message, user_id=user_id, limit=3)
     memory_context = ""
     if memories:
         # Truncate long facts to avoid context window pressure
