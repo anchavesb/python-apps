@@ -14,6 +14,8 @@ services:
       - DOLORES_BRAIN_URL=http://host.docker.internal:8003 # Native Brain
       - DOLORES_IMAGEN_URL=http://host.docker.internal:8005 # Native Imagen (Bare Metal)
       - DOLORES_INTEGRATIONS=[{"name":"todo","url":"http://todo:5000","spec_path":"/v1/openapi.json"}]
+      - DOLORES_SERVICE_TOKEN=ef0342b5a1cf398c8c279c7821034c56e098877bc12d345eefab78cd12345eab
+      - DOLORES_SERVICE_PSK
       - LOG_LEVEL=INFO
     extra_hosts:
       - "host.docker.internal:host-gateway"
@@ -27,6 +29,10 @@ services:
       - "5000:5000"
     environment:
       - DATABASE_URL=postgresql://postgres:postgres@todo-db:5432/postgres
+      - DOLORES_SERVICE_TOKEN=ef0342b5a1cf398c8c279c7821034c56e098877bc12d345eefab78cd12345eab
+      - DOLORES_DEFAULT_USER_ID=816f87de435d08c120e65149f4d9640e4dd3a126ceb31f7ef632d9a0560664c3
+      - DOLORES_DEFAULT_USER_EMAIL=anchavesb@hotmail.com
+      - DOLORES_DEFAULT_USER_NAME=Andy
     depends_on:
       - todo-db
 

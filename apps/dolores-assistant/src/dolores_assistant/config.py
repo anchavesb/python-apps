@@ -28,6 +28,9 @@ class AssistantConfig:
     default_provider: str = get_env("DEFAULT_PROVIDER", "ollama")
     default_model: str = get_env("DEFAULT_MODEL", "llama3.2")
 
+    default_user_token: str | None = get_env("DOLORES_SERVICE_TOKEN", None)
+    service_psk: str = get_env("DOLORES_SERVICE_PSK", "")
+
     # Logging
     log_level: str = get_env("LOG_LEVEL", "INFO")
     log_format: str = get_env("LOG_FORMAT", "console")
