@@ -15,6 +15,15 @@ OPENAPI_SPEC = {
             "get": {
                 "operationId": "list_todos",
                 "summary": "List all todos",
+                "parameters": [
+                    {
+                        "name": "done",
+                        "in": "query",
+                        "description": "Filter by completed status (true/false). Pass false to list only active/pending items.",
+                        "required": False,
+                        "schema": {"type": "boolean"}
+                    }
+                ],
                 "responses": {
                     "200": {
                         "description": "Array of todo objects",

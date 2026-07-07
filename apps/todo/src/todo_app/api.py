@@ -105,7 +105,11 @@ def require_auth():
 def api_list_todos():
     if err := require_auth():
         return err
-    return jsonify(store().list_todos(user_id=get_user_id()))
+    done_str = request.args.get("done")
+    done = None
+    if done_str is not None:
+        done = done_str.lower() in ("true", "1", "yes")
+    return jsonify(store().list_todos(user_id=get_user_id(), done=done))
 
 
 @api_bp.post("/todos")

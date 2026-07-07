@@ -95,11 +95,15 @@ class PostgresStore:
             return False, str(e)
 
     # ---------- Todos ----------
-    def list_todos(self, user_id: str | None = None) -> List[Dict[str, Any]]:
+    def list_todos(self, user_id: str | None = None, done: bool | None = None) -> List[Dict[str, Any]]:
         with self.get_session() as session:
             query = select(Todo)
             if user_id:
                 query = query.where(Todo.user_id == user_id)
+            if done is not None:
+                query = query.where(Todo.done == done)
+            # Sort by due_date ascending (nulls last), then created_at descending
+            query = query.order_by(Todo.due_date.asc().nullslast(), Todo.created_at.desc())
             todos = session.execute(query).scalars().all()
             return [t.to_dict() for t in todos]
 

@@ -262,8 +262,11 @@ class JsonStore:
     # Todos
     # Note: user_id parameter is accepted but ignored in single-user JSON mode
     # This allows the same calling convention as PostgresStore for multiuser mode
-    def list_todos(self, user_id: str | None = None) -> List[Dict[str, Any]]:
-        return list(self.state["todos"])  # shallow copy
+    def list_todos(self, user_id: str | None = None, done: bool | None = None) -> List[Dict[str, Any]]:
+        todos = list(self.state["todos"])
+        if done is not None:
+            todos = [t for t in todos if t["done"] == done]
+        return todos
 
     def get_todo(self, tid: str, user_id: str | None = None) -> Optional[Dict[str, Any]]:
         return next((t for t in self.state["todos"] if t["id"] == tid), None)

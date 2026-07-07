@@ -768,6 +768,11 @@ async def run_tool_loop(
             )
         elif intent == "weather":
             guidance += " Summarize the weather data clearly for the user, reflecting on its beauty. "
+        elif intent == "todo":
+            guidance += (
+                " List the items clearly using bullet points, including their due dates, completed status, and titles. "
+                "Do not summarize them into a single vague paragraph; preserve their specific titles and dates so the user can easily read them. "
+            )
 
         message = (
             "I have retrieved the following real-time information: \n" + "\n".join(tool_results) + "\n\n"
