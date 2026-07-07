@@ -796,7 +796,8 @@ async def run_tool_loop(
             guidance += " Summarize the weather data clearly for the user, reflecting on its beauty. "
         elif intent == "todo":
             guidance += (
-                " List the items clearly using bullet points, including their due dates, completed status, and titles. "
+                " List the active (uncompleted) todo items clearly using bullet points, including their due dates and titles. "
+                "Do NOT include completed tasks/todos in the list unless the user explicitly requested completed ones. "
                 "Do not summarize them into a single vague paragraph; preserve their specific titles and dates so the user can easily read them. "
             )
 

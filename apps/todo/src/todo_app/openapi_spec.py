@@ -19,7 +19,7 @@ OPENAPI_SPEC = {
                     {
                         "name": "done",
                         "in": "query",
-                        "description": "Filter by completed status (true/false). Pass false to list only active/pending items.",
+                        "description": "Filter by completed status (true/false). ALWAYS set this to false to retrieve only active/pending tasks when listing/reading the user's todo list.",
                         "required": False,
                         "schema": {"type": "boolean"},
                     }
