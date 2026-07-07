@@ -97,6 +97,17 @@ class ConversationStore:
         )
         await self._db.commit()
 
+    async def cleanup_intermediate_messages(self, conversation_id: str) -> None:
+        """Remove intermediate tool calls and tool results from the conversation history."""
+        await self._db.execute(
+            "DELETE FROM messages WHERE conversation_id = ? AND ("
+            "  tool_calls IS NOT NULL OR "
+            "  content LIKE 'I have retrieved the following real-time information%'"
+            ")",
+            (conversation_id,),
+        )
+        await self._db.commit()
+
     async def get_history(self, conversation_id: str) -> list[dict]:
         """Get all messages for a conversation in order."""
         cursor = await self._db.execute(
