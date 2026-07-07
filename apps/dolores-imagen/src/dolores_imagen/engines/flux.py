@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import io
+import os
 import time
 
 from dolores_common.logging import get_logger
@@ -10,6 +11,9 @@ from dolores_common.logging import get_logger
 from ..engine import ImageGenProvider
 
 log = get_logger(__name__)
+
+# Reduce CUDA memory fragmentation — must be set before torch initializes
+os.environ.setdefault("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")
 
 
 class FLUXProvider(ImageGenProvider):
@@ -53,24 +57,60 @@ class FLUXProvider(ImageGenProvider):
         log.info("loading_flux_model", model_id=self._model_id, device=str(device))
         start = time.monotonic()
 
-        self._pipeline = FluxPipeline.from_pretrained(self._model_id, torch_dtype=dtype)
-        self._pipeline = self._pipeline.to(device)
+        self._pipeline = FluxPipeline.from_pretrained(
+            self._model_id,
+            torch_dtype=dtype,
+        )
+
+        if device.type == "cuda":
+            # Sequential CPU offload: keep model weights in RAM, stream each
+            # sub-module to GPU only when needed. Largest VRAM saving available
+            # without quantisation — cuts peak usage by ~50% vs full on-GPU load.
+            self._pipeline.enable_sequential_cpu_offload()
+        else:
+            self._pipeline = self._pipeline.to(device)
+
+        # Slice attention computation to reduce peak VRAM during inference
+        self._pipeline.enable_attention_slicing()
+        # Decode the VAE in tiles to avoid a large VRAM spike at decode time
+        self._pipeline.enable_vae_slicing()
 
         log.info("flux_model_loaded", elapsed_seconds=round(time.monotonic() - start, 2))
 
     def generate(self, prompt: str, width: int = 512, height: int = 512) -> bytes:
         """Generate image synchronously. Intended to be called via asyncio.to_thread()."""
+        import torch
+
         if self._pipeline is None:
             raise RuntimeError("FLUXProvider not loaded; call load() first")
 
         log.info("generating_flux_image", width=width, height=height)
         start = time.monotonic()
-        image = self._pipeline(
-            prompt=prompt,
-            num_inference_steps=4,
-            height=height,
-            width=width,
-        ).images[0]
+        try:
+            image = self._pipeline(
+                prompt=prompt,
+                num_inference_steps=4,
+                height=height,
+                width=width,
+                guidance_scale=0.0,  # FLUX.1-schnell is guidance-distilled
+            ).images[0]
+        except torch.OutOfMemoryError:
+            # Free fragmented cache and retry once before propagating
+            log.warning("flux_oom_clearing_cache_and_retrying")
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+            image = self._pipeline(
+                prompt=prompt,
+                num_inference_steps=4,
+                height=height,
+                width=width,
+                guidance_scale=0.0,
+            ).images[0]
+        finally:
+            # Always free unreferenced CUDA tensors after generation
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+
         elapsed = time.monotonic() - start
         log.info("flux_image_generated", elapsed_seconds=round(elapsed, 2))
 

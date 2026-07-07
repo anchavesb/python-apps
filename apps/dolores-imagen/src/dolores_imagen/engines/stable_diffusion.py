@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import io
+import os
 import time
 
 from dolores_common.logging import get_logger
@@ -10,6 +11,9 @@ from dolores_common.logging import get_logger
 from ..engine import ImageGenProvider
 
 log = get_logger(__name__)
+
+# Reduce CUDA memory fragmentation — must be set before torch initializes
+os.environ.setdefault("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")
 
 
 class StableDiffusionProvider(ImageGenProvider):
@@ -53,20 +57,44 @@ class StableDiffusionProvider(ImageGenProvider):
         start = time.monotonic()
 
         self._pipeline = StableDiffusionPipeline.from_pretrained(self._model_id, torch_dtype=dtype)
-        self._pipeline = self._pipeline.to(device)
+
+        if device.type == "cuda":
+            # Sequential CPU offload keeps weights in RAM, streams to GPU on demand
+            self._pipeline.enable_sequential_cpu_offload()
+        else:
+            self._pipeline = self._pipeline.to(device)
+
+        # Slice attention and VAE to reduce peak VRAM during inference
+        self._pipeline.enable_attention_slicing()
+        self._pipeline.enable_vae_slicing()
 
         log.info("sd_model_loaded", elapsed_seconds=round(time.monotonic() - start, 2))
 
     def generate(self, prompt: str, width: int = 512, height: int = 512) -> bytes:
         """Generate image synchronously. Intended to be called via asyncio.to_thread()."""
+        import torch
+
         if self._pipeline is None:
             raise RuntimeError("StableDiffusionProvider not loaded; call load() first")
 
-        image = self._pipeline(
-            prompt=prompt,
-            height=height,
-            width=width,
-        ).images[0]
+        try:
+            image = self._pipeline(
+                prompt=prompt,
+                height=height,
+                width=width,
+            ).images[0]
+        except torch.OutOfMemoryError:
+            log.warning("sd_oom_clearing_cache_and_retrying")
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+            image = self._pipeline(
+                prompt=prompt,
+                height=height,
+                width=width,
+            ).images[0]
+        finally:
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
 
         buf = io.BytesIO()
         image.save(buf, format="PNG")
