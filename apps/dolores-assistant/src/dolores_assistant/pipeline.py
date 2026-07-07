@@ -544,6 +544,29 @@ def _heuristic_extract_text(data: Any) -> str | None:
                 pass
         return data
 
+    # Check if this is a list of structured items (or a dict containing one)
+    items = None
+    if isinstance(data, list):
+        items = data
+    elif isinstance(data, dict):
+        lists = [v for v in data.values() if isinstance(v, list)]
+        if len(lists) == 1:
+            items = lists[0]
+
+    if items and isinstance(items, list) and len(items) > 0:
+        # Check if items look like structured objects (dicts with keys like 'title', 'task', 'name')
+        if all(isinstance(item, dict) and any(k in item for k in ("title", "task", "name")) for item in items):
+            lines = []
+            for item in items:
+                title = item.get("title") or item.get("task") or item.get("name") or "Untitled"
+                due = item.get("due_date") or item.get("due") or item.get("date")
+                done = item.get("done") if item.get("done") is not None else item.get("completed", False)
+
+                status = "✅" if done else "⏳"
+                due_str = f" (Due: {due})" if due else ""
+                lines.append(f"- {status} {title}{due_str}")
+            return "\n".join(lines)
+
     if isinstance(data, dict):
         # 1. Check known content keys first
         for key in ["response", "text", "message", "content", "answer", "value"]:
