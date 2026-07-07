@@ -114,4 +114,3 @@ async def _poll_repo(repo_entry, store, config) -> None:
                     error=str(res),
                     exc_info=res,
                 )
-

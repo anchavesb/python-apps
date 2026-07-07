@@ -35,6 +35,7 @@ def _validate_uuid(value: str, label: str = "ID") -> None:
     except ValueError:
         raise HTTPException(status_code=400, detail=f"Invalid {label}: {value}")
 
+
 router = APIRouter(prefix="/v1", tags=["stt"])
 
 # Singleton engine — initialized at app startup via lifespan
@@ -147,9 +148,7 @@ async def enroll_speaker(
         raise HTTPException(status_code=400, detail="No valid audio data provided")
 
     try:
-        result = await asyncio.to_thread(
-            identifier.enroll, name, audio_samples, email
-        )
+        result = await asyncio.to_thread(identifier.enroll, name, audio_samples, email)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
@@ -227,18 +226,14 @@ async def stream_transcription(websocket: WebSocket) -> None:
                 try:
                     data = json.loads(message["text"])
                 except json.JSONDecodeError:
-                    await websocket.send_json(
-                        {"type": "error", "text": "", "error": "Invalid JSON"}
-                    )
+                    await websocket.send_json({"type": "error", "text": "", "error": "Invalid JSON"})
                     continue
 
                 if data.get("type") == "audio.end":
                     # Process accumulated audio
                     audio_data = audio_buffer.getvalue()
                     if not audio_data:
-                        await websocket.send_json(
-                            {"type": "error", "text": "", "error": "No audio data received"}
-                        )
+                        await websocket.send_json({"type": "error", "text": "", "error": "No audio data received"})
                         audio_buffer.close()
                         audio_buffer = io.BytesIO()
                         continue

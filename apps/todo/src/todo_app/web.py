@@ -34,13 +34,7 @@ def is_safe_url(url: str) -> bool:
             if "%" in ip_str:
                 ip_str = ip_str.split("%", 1)[0]
             ip = ipaddress.ip_address(ip_str)
-            if (
-                ip.is_private
-                or ip.is_loopback
-                or ip.is_link_local
-                or ip.is_reserved
-                or ip.is_multicast
-            ):
+            if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved or ip.is_multicast:
                 return False
         return True
     except Exception:
@@ -55,10 +49,12 @@ def get_user_id():
             return user.get("sub")
     return None
 
+
 # Optional Markdown/sanitizer; fall back gracefully if unavailable
 try:
     import bleach  # type: ignore
     import markdown as md  # type: ignore
+
     HAVE_MD = True
 except Exception:
     md = None  # type: ignore
@@ -71,8 +67,15 @@ PRIORITY_ORDER = {"urgent": 0, "high": 1, "medium": 2, "low": 3}
 
 if HAVE_MD:
     ALLOWED_TAGS = list(bleach.sanitizer.ALLOWED_TAGS) + [
-        "p", "pre", "code", "hr", "br",
-        "h1", "h2", "h3", "blockquote",
+        "p",
+        "pre",
+        "code",
+        "hr",
+        "br",
+        "h1",
+        "h2",
+        "h3",
+        "blockquote",
     ]
     ALLOWED_ATTRS = {
         **bleach.sanitizer.ALLOWED_ATTRIBUTES,
@@ -163,18 +166,20 @@ def fetch_feed_data(feed_id, url, title, user_id, item_states):
                 else:
                     content_clean = html_escape(content)
 
-                entries.append({
-                    "guid": guid,
-                    "title": entry.get("title") or "Untitled Article",
-                    "link": entry.get("link") or "",
-                    "pub_date": pub_date,
-                    "pub_parsed": pub_parsed,
-                    "content": content_clean,
-                    "read": state.get("read", False),
-                    "starred": state.get("starred", False),
-                    "feed_title": title,
-                    "feed_id": feed_id,
-                })
+                entries.append(
+                    {
+                        "guid": guid,
+                        "title": entry.get("title") or "Untitled Article",
+                        "link": entry.get("link") or "",
+                        "pub_date": pub_date,
+                        "pub_parsed": pub_parsed,
+                        "content": content_clean,
+                        "read": state.get("read", False),
+                        "starred": state.get("starred", False),
+                        "feed_title": title,
+                        "feed_id": feed_id,
+                    }
+                )
             return feed_id, entries, None
     except Exception as e:
         return feed_id, [], str(e)
@@ -209,8 +214,7 @@ def index():
     if tab == "rss" and feeds:
         with concurrent.futures.ThreadPoolExecutor(max_workers=min(len(feeds), 10)) as executor:
             futures = [
-                executor.submit(fetch_feed_data, f["id"], f["url"], f["title"], user_id, item_states)
-                for f in feeds
+                executor.submit(fetch_feed_data, f["id"], f["url"], f["title"], user_id, item_states) for f in feeds
             ]
             for fut in concurrent.futures.as_completed(futures):
                 fid, entries, err = fut.result()
@@ -220,10 +224,7 @@ def index():
                 rss_items.extend(entries)
 
         # Sort RSS items descending by parsed date
-        rss_items.sort(
-            key=lambda x: x.get("pub_parsed") or (0, 0, 0, 0, 0, 0, 0, 0, 0),
-            reverse=True
-        )
+        rss_items.sort(key=lambda x: x.get("pub_parsed") or (0, 0, 0, 0, 0, 0, 0, 0, 0), reverse=True)
 
         # Filter RSS items
         if rss_filter == "starred":
@@ -295,7 +296,7 @@ def index():
         pr = t.get("tags", {}).get("priority") or "low"
         pr_rank = PRIORITY_ORDER.get(pr, 99)
         dd = t.get("due_date")
-        dd_key = (date.max)  # default large
+        dd_key = date.max  # default large
         try:
             if dd:
                 dd_key = date.fromisoformat(str(dd)[:10])
@@ -340,15 +341,17 @@ def index():
             key = (updated, pr_rank, title)  # default: recent first (we may reverse)
         return key
 
-    reverse = (order == "desc")
+    reverse = order == "desc"
     notes_reverse = True if sort == "default" else reverse
 
     todos.sort(key=todo_sort_key, reverse=reverse)
     notes.sort(key=note_sort_key, reverse=notes_reverse)
 
     categories = sorted(
-        ({t["tags"].get("category") for t in todos if t.get("tags") and t["tags"].get("category")} |
-         {n["tags"].get("category") for n in notes if n.get("tags") and n["tags"].get("category")})
+        (
+            {t["tags"].get("category") for t in todos if t.get("tags") and t["tags"].get("category")}
+            | {n["tags"].get("category") for n in notes if n.get("tags") and n["tags"].get("category")}
+        )
     )
 
     return render_template(
@@ -416,7 +419,10 @@ def edit_todo(tid):
         last_ts = _coerce_timestamp(last_updated_at)
 
         if db_ts and db_ts != last_ts and not force_save:
-            flash("Warning: This to-do has been updated in another tab or window since you loaded it. Saving now will overwrite those changes.", "warning")
+            flash(
+                "Warning: This to-do has been updated in another tab or window since you loaded it. Saving now will overwrite those changes.",
+                "warning",
+            )
             item_submitted = {
                 "id": tid,
                 "title": request.form.get("title", "").strip(),
@@ -432,7 +438,7 @@ def edit_todo(tid):
                 priorities=sorted(PRIORITIES),
                 item=item_submitted,
                 tags_text=tags_text,
-                concurrency_warning=True
+                concurrency_warning=True,
             )
 
         data = {
@@ -503,7 +509,10 @@ def edit_note(nid):
         last_ts = _coerce_timestamp(last_updated_at)
 
         if db_ts and db_ts != last_ts and not force_save:
-            flash("Warning: This note has been updated in another tab or window since you loaded it. Saving now will overwrite those changes.", "warning")
+            flash(
+                "Warning: This note has been updated in another tab or window since you loaded it. Saving now will overwrite those changes.",
+                "warning",
+            )
             item_submitted = {
                 "id": nid,
                 "title": request.form.get("title", "").strip(),
@@ -517,7 +526,7 @@ def edit_note(nid):
                 priorities=sorted(PRIORITIES),
                 item=item_submitted,
                 tags_text=tags_text,
-                concurrency_warning=True
+                concurrency_warning=True,
             )
 
         data = {
@@ -541,6 +550,7 @@ def delete_note(nid):
     store().delete_note(nid, user_id=get_user_id())
     flash("Note deleted", "info")
     return redirect(url_for("web.index", tab="notes", deleted_note_id=nid))
+
 
 @web_bp.route("/rss/feed/add", methods=["POST"])
 @login_required
@@ -596,11 +606,7 @@ def update_item_state():
 
     try:
         state = store().update_rss_item_state(
-            user_id=get_user_id(),
-            feed_id=feed_id,
-            item_guid=item_guid,
-            read=read,
-            starred=starred
+            user_id=get_user_id(), feed_id=feed_id, item_guid=item_guid, read=read, starred=starred
         )
         return jsonify({"status": "ok", "state": state})
     except Exception as e:

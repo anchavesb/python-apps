@@ -121,7 +121,7 @@ class WeatherTool(Tool):
                 if feels_like is not None:
                     text += f" (feels like {feels_like}°C)"
                 text += "."
-            
+
             text += f" Today's forecast is {summary}."
             if min_temp is not None and max_temp is not None:
                 text += f" Temperatures will range from {min_temp}°C to {max_temp}°C."

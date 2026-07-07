@@ -1,4 +1,5 @@
 """SQLAlchemy models for the todo app with multiuser support."""
+
 from __future__ import annotations
 
 import uuid
@@ -114,7 +115,9 @@ class RssItemState(Base):
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_uuid)
     user_id: Mapped[str] = mapped_column(String(255), ForeignKey("users.id"), nullable=False, index=True)
-    feed_id: Mapped[str] = mapped_column(String(36), ForeignKey("rss_feeds.id", ondelete="CASCADE"), nullable=False, index=True)
+    feed_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("rss_feeds.id", ondelete="CASCADE"), nullable=False, index=True
+    )
     item_guid: Mapped[str] = mapped_column(String(1024), nullable=False, index=True)
     read: Mapped[bool] = mapped_column(Boolean, default=False)
     starred: Mapped[bool] = mapped_column(Boolean, default=False)

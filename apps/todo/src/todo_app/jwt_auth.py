@@ -5,6 +5,7 @@ can authenticate without browser session cookies.
 
 Supports multiple OIDC providers (e.g. web + mobile) via OIDC_JWT_ISSUERS.
 """
+
 from __future__ import annotations
 
 import hmac

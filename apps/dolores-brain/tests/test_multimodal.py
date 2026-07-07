@@ -117,7 +117,9 @@ def _make_mock_response(content: str = "OK"):
 
 class TestChatWithImageData:
     def test_chat_multimodal_returns_200(self, client):
-        with patch("dolores_brain.routes.litellm.acompletion", new=AsyncMock(return_value=_make_mock_response("Analysis."))):
+        with patch(
+            "dolores_brain.routes.litellm.acompletion", new=AsyncMock(return_value=_make_mock_response("Analysis."))
+        ):
             resp = client.post(
                 "/v1/chat",
                 json={"message": "What is this?", "image_data": "data:image/jpeg;base64,abc123"},

@@ -64,9 +64,7 @@ class SpeakerStore:
         """Validate and sanitize speaker name. Raises ValueError on bad input."""
         name = name.strip()
         if not _NAME_RE.match(name):
-            raise ValueError(
-                "Speaker name must be 1-32 characters, alphanumeric and spaces only"
-            )
+            raise ValueError("Speaker name must be 1-32 characters, alphanumeric and spaces only")
         return name
 
     def enroll(
@@ -106,9 +104,7 @@ class SpeakerStore:
         new_embedding: np.ndarray,
     ) -> bool:
         """Update speaker embedding with running average."""
-        row = self.conn.execute(
-            "SELECT embedding, samples_count FROM speakers WHERE id = ?", (speaker_id,)
-        ).fetchone()
+        row = self.conn.execute("SELECT embedding, samples_count FROM speakers WHERE id = ?", (speaker_id,)).fetchone()
         if not row:
             return False
 
@@ -144,14 +140,16 @@ class SpeakerStore:
         ).fetchall()
         result = []
         for r in rows:
-            result.append({
-                "id": r["id"],
-                "name": r["name"],
-                "email": r["email"],
-                "embedding": np.frombuffer(r["embedding"], dtype=np.float32),
-                "embedding_version": r["embedding_version"],
-                "samples_count": r["samples_count"],
-            })
+            result.append(
+                {
+                    "id": r["id"],
+                    "name": r["name"],
+                    "email": r["email"],
+                    "embedding": np.frombuffer(r["embedding"], dtype=np.float32),
+                    "embedding_version": r["embedding_version"],
+                    "samples_count": r["samples_count"],
+                }
+            )
         return result
 
     def get(self, speaker_id: str) -> dict | None:

@@ -35,6 +35,7 @@ async def lifespan(app: FastAPI):
 
     if settings.speaker_id_enabled:
         from .speaker import SpeakerIdentifier
+
         _speaker_id = SpeakerIdentifier(
             db_path=settings.speaker_db_path,
             threshold=settings.speaker_threshold,

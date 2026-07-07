@@ -6,12 +6,14 @@ from todo_app import create_app
 def client(tmp_path):
     data_file = tmp_path / "appdata.json"
     wal_file = tmp_path / "appdata.wal"
-    app = create_app({
-        "DATA_FILE": str(data_file),
-        "WAL_FILE": str(wal_file),
-        "DEBUG": False,
-        "TESTING": True,
-    })
+    app = create_app(
+        {
+            "DATA_FILE": str(data_file),
+            "WAL_FILE": str(wal_file),
+            "DEBUG": False,
+            "TESTING": True,
+        }
+    )
     with app.test_client() as c:
         yield c
 
@@ -68,9 +70,13 @@ def test_index_sort_todos_by_status(client):
 
 def test_index_sort_notes_by_priority(client):
     # Create notes with different priorities
-    r = client.post("/api/notes", json={"title": "Low Note", "note": "text", "tags": {"category": "c", "priority": "low"}})
+    r = client.post(
+        "/api/notes", json={"title": "Low Note", "note": "text", "tags": {"category": "c", "priority": "low"}}
+    )
     assert r.status_code == 201
-    r = client.post("/api/notes", json={"title": "Urgent Note", "note": "text", "tags": {"category": "c", "priority": "urgent"}})
+    r = client.post(
+        "/api/notes", json={"title": "Urgent Note", "note": "text", "tags": {"category": "c", "priority": "urgent"}}
+    )
     assert r.status_code == 201
 
     r = client.get("/?sort=priority&order=asc")
@@ -131,7 +137,9 @@ def test_note_redirects_to_notes_tab(client):
     assert r_detail.status_code == 200
     updated_at = r_detail.get_json()["updated_at"]
 
-    r = client.post(f"/notes/{nid}/edit", data={"title": "Edited Title", "note": "New Content", "last_updated_at": updated_at})
+    r = client.post(
+        f"/notes/{nid}/edit", data={"title": "Edited Title", "note": "New Content", "last_updated_at": updated_at}
+    )
     assert r.status_code == 302
     assert "/?tab=notes" in r.location
     assert f"updated_note_id={nid}" in r.location
@@ -160,6 +168,7 @@ def test_note_optimistic_locking(client):
 
     # 3. Simulate another tab updating the note
     import time
+
     time.sleep(1.1)
     r_api_update = client.put(f"/api/notes/{nid}", json={"title": "Locking Note", "note": "v2"})
     assert r_api_update.status_code == 200
@@ -168,12 +177,7 @@ def test_note_optimistic_locking(client):
 
     # 4. Try to save from the current tab with the stale original_updated_at
     r_save_stale = client.post(
-        f"/notes/{nid}/edit",
-        data={
-            "title": "Stale Edit",
-            "note": "v3",
-            "last_updated_at": original_updated_at
-        }
+        f"/notes/{nid}/edit", data={"title": "Stale Edit", "note": "v3", "last_updated_at": original_updated_at}
     )
     assert r_save_stale.status_code == 200  # returns the re-rendered form
     stale_html = r_save_stale.get_data(as_text=True)
@@ -187,12 +191,7 @@ def test_note_optimistic_locking(client):
     # 5. Save again with force_save=true
     r_save_force = client.post(
         f"/notes/{nid}/edit",
-        data={
-            "title": "Forced Edit",
-            "note": "v4",
-            "last_updated_at": original_updated_at,
-            "force_save": "true"
-        }
+        data={"title": "Forced Edit", "note": "v4", "last_updated_at": original_updated_at, "force_save": "true"},
     )
     assert r_save_force.status_code == 302
     assert f"updated_note_id={nid}" in r_save_force.location
@@ -200,4 +199,3 @@ def test_note_optimistic_locking(client):
     # Verify note in DB IS updated to "v4"
     r_check = client.get(f"/api/notes/{nid}")
     assert r_check.get_json()["note"] == "v4"
-

@@ -23,16 +23,21 @@ def _create_provider():
     """Create the appropriate image generation provider based on config."""
     # Monkeypatch transformers for diffusers compatibility if needed
     import transformers
+
     if not hasattr(transformers, "Dinov2WithRegistersConfig"):
         from transformers.configuration_utils import PretrainedConfig
+
         class Dinov2WithRegistersConfig(PretrainedConfig):
             model_type = "dinov2_with_registers"
+
         transformers.Dinov2WithRegistersConfig = Dinov2WithRegistersConfig
 
     if not hasattr(transformers, "Dinov2WithRegistersModel"):
         from transformers.modeling_utils import PreTrainedModel
+
         class Dinov2WithRegistersModel(PreTrainedModel):
             config_class = transformers.Dinov2WithRegistersConfig
+
         transformers.Dinov2WithRegistersModel = Dinov2WithRegistersModel
 
     if settings.provider == "stable_diffusion":

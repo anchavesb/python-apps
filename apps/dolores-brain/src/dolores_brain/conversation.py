@@ -100,8 +100,7 @@ class ConversationStore:
     async def get_history(self, conversation_id: str) -> list[dict]:
         """Get all messages for a conversation in order."""
         cursor = await self._db.execute(
-            "SELECT role, content, tool_call_id, tool_calls FROM messages "
-            "WHERE conversation_id = ? ORDER BY id",
+            "SELECT role, content, tool_call_id, tool_calls FROM messages WHERE conversation_id = ? ORDER BY id",
             (conversation_id,),
         )
         rows = await cursor.fetchall()
@@ -122,9 +121,7 @@ class ConversationStore:
 
     async def exists(self, conversation_id: str) -> bool:
         """Check if a conversation exists."""
-        cursor = await self._db.execute(
-            "SELECT 1 FROM conversations WHERE id = ?", (conversation_id,)
-        )
+        cursor = await self._db.execute("SELECT 1 FROM conversations WHERE id = ?", (conversation_id,))
         return await cursor.fetchone() is not None
 
     async def list_conversations(self, limit: int = 50) -> list[dict]:
@@ -134,7 +131,4 @@ class ConversationStore:
             (limit,),
         )
         rows = await cursor.fetchall()
-        return [
-            {"id": cid, "created_at": created, "updated_at": updated}
-            for cid, created, updated in rows
-        ]
+        return [{"id": cid, "created_at": created, "updated_at": updated} for cid, created, updated in rows]

@@ -46,5 +46,3 @@ class MemoryStoreTool(Tool):
         user_id = extract_user_id(current_user_token.get())
         await self._memory.add_memory(fact, user_id=user_id)
         return f"Fact stored in long-term memory: {fact}"
-
-

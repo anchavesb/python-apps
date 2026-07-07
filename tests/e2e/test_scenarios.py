@@ -25,10 +25,7 @@ def test_health_check(client: httpx.Client):
 
 def test_temperature_tool(client: httpx.Client):
     """Ask for the weather and verify the tool call flow."""
-    payload = {
-        "message": "What is the weather in Melbourne, AU?",
-        "user_id": "test-user"
-    }
+    payload = {"message": "What is the weather in Melbourne, AU?", "user_id": "test-user"}
     resp = client.post("/v1/chat", json=payload)
     assert resp.status_code == 200
     data = resp.json()
@@ -39,10 +36,7 @@ def test_temperature_tool(client: httpx.Client):
 
 def test_image_generation(client: httpx.Client):
     """Test the image generation pipeline."""
-    payload = {
-        "message": "Generate an image of a futuristic city.",
-        "user_id": "test-user"
-    }
+    payload = {"message": "Generate an image of a futuristic city.", "user_id": "test-user"}
     resp = client.post("/v1/chat", json=payload)
     assert resp.status_code == 200
     data = resp.json()
@@ -52,10 +46,7 @@ def test_image_generation(client: httpx.Client):
 
 def test_news_search(client: httpx.Client):
     """Test the web search / news tool."""
-    payload = {
-        "message": "What are the latest news about AI?",
-        "user_id": "test-user"
-    }
+    payload = {"message": "What are the latest news about AI?", "user_id": "test-user"}
     resp = client.post("/v1/chat", json=payload)
     assert resp.status_code == 200
     data = resp.json()
@@ -65,18 +56,12 @@ def test_news_search(client: httpx.Client):
 def test_todo_integration(client: httpx.Client):
     """Test the OpenAPI-discovered 'todo' tool."""
     # 1. Add a todo
-    payload = {
-        "message": "Add 'Buy milk' to my todo list.",
-        "user_id": "test-user"
-    }
+    payload = {"message": "Add 'Buy milk' to my todo list.", "user_id": "test-user"}
     resp = client.post("/v1/chat", json=payload)
     assert resp.status_code == 200
 
     # 2. Verify it was added by listing todos
-    payload = {
-        "message": "List my todos.",
-        "user_id": "test-user"
-    }
+    payload = {"message": "List my todos.", "user_id": "test-user"}
     resp = client.post("/v1/chat", json=payload)
     assert resp.status_code == 200
     msg = resp.json()["message"].lower()
@@ -90,12 +75,7 @@ def test_speaker_recognition_flow(client: httpx.Client):
     # 1. Enroll Alice using the sample WAV
     with open(SAMPLE_WAV, "rb") as f:
         files = [("files", ("alice.wav", f, "audio/wav"))]
-        resp = httpx.post(
-            "http://localhost:8001/v1/speakers",
-            params={"name": "Alice"},
-            files=files,
-            timeout=60
-        )
+        resp = httpx.post("http://localhost:8001/v1/speakers", params={"name": "Alice"}, files=files, timeout=60)
     assert resp.status_code == 200
 
     # 2. Identify the speaker from the same audio
@@ -111,10 +91,7 @@ def test_speaker_recognition_flow(client: httpx.Client):
 
 def test_voice_profile_tts(client: httpx.Client):
     """Verify TTS can generate audio."""
-    payload = {
-        "text": "Hello, I am testing my voice profile.",
-        "voice_id": "default"
-    }
+    payload = {"text": "Hello, I am testing my voice profile.", "voice_id": "default"}
     resp = httpx.post("http://localhost:8002/v1/synthesize", json=payload, timeout=60)
     assert resp.status_code == 200
     assert resp.headers["content-type"] == "audio/wav"

@@ -6,12 +6,14 @@ from todo_app import create_app
 def client(tmp_path):
     data_file = tmp_path / "appdata.json"
     wal_file = tmp_path / "appdata.wal"
-    app = create_app({
-        "DATA_FILE": str(data_file),
-        "WAL_FILE": str(wal_file),
-        "DEBUG": False,
-        "TESTING": True,
-    })
+    app = create_app(
+        {
+            "DATA_FILE": str(data_file),
+            "WAL_FILE": str(wal_file),
+            "DEBUG": False,
+            "TESTING": True,
+        }
+    )
     with app.test_client() as c:
         yield c
 
@@ -70,11 +72,7 @@ def test_rss_storage(client):
 
 def test_rss_web_routes(client):
     # Subscribe to feed via POST (fake HN RSS)
-    resp = client.post(
-        "/rss/feed/add",
-        data={"url": "https://news.ycombinator.com/rss"},
-        follow_redirects=False
-    )
+    resp = client.post("/rss/feed/add", data={"url": "https://news.ycombinator.com/rss"}, follow_redirects=False)
     assert resp.status_code in (302, 303)
 
     store = client.application.extensions["store"]
@@ -84,8 +82,7 @@ def test_rss_web_routes(client):
 
     # Toggle item state (read and star) via AJAX POST
     resp = client.post(
-        "/rss/item/state",
-        json={"feed_id": fid, "item_guid": "item-guid-123", "read": True, "starred": True}
+        "/rss/item/state", json={"feed_id": fid, "item_guid": "item-guid-123", "read": True, "starred": True}
     )
     assert resp.status_code == 200
     state = resp.get_json()["state"]
@@ -116,14 +113,9 @@ def test_rss_ssrf_mitigation(client):
     assert is_safe_url("invalid-url") is False
 
     # 3. Test route level rejection of unsafe URLs
-    resp = client.post(
-        "/rss/feed/add",
-        data={"url": "http://127.0.0.1"},
-        follow_redirects=False
-    )
+    resp = client.post("/rss/feed/add", data={"url": "http://127.0.0.1"}, follow_redirects=False)
     assert resp.status_code in (302, 303)
 
     # Verify that the feed was not added
     store = client.application.extensions["store"]
     assert len(store.list_rss_feeds()) == 0
-

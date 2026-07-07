@@ -309,11 +309,13 @@ async def conversation_ws(websocket: WebSocket) -> None:
 
                 # Acknowledge session start and send IDs back to client
                 # conversation_id might be None, in which case the frontend gets a placeholder
-                await websocket.send_json({
-                    "type": "session.created",
-                    "session_id": session_id,
-                    "conversation_id": conversation_id or str(uuid.uuid4())
-                })
+                await websocket.send_json(
+                    {
+                        "type": "session.created",
+                        "session_id": session_id,
+                        "conversation_id": conversation_id or str(uuid.uuid4()),
+                    }
+                )
                 continue
 
             elif msg_type == "audio.start":
@@ -364,7 +366,9 @@ async def conversation_ws(websocket: WebSocket) -> None:
                     brain_text = inject_speaker_context(user_text, speaker_result)
 
                     # Brain -> response
-                    await _process_and_respond(websocket, client, brain_text, conversation_id, provider, model, voice_id, mode)
+                    await _process_and_respond(
+                        websocket, client, brain_text, conversation_id, provider, model, voice_id, mode
+                    )
                 finally:
                     if not speaker_task.done():
                         speaker_task.cancel()
@@ -401,14 +405,18 @@ async def conversation_ws(websocket: WebSocket) -> None:
                 user_text = data.get("text", "").strip()
                 if not user_text:
                     continue
-                await _process_and_respond(websocket, client, user_text, conversation_id, provider, model, voice_id, mode)
+                await _process_and_respond(
+                    websocket, client, user_text, conversation_id, provider, model, voice_id, mode
+                )
 
             elif msg_type == "image.send":
                 user_text = data.get("text", "").strip() or "Describe this image."
                 image_data = data.get("image_data", "")
                 if not image_data:
                     continue
-                await _process_image_message(websocket, client, user_text, image_data, conversation_id, provider, model, voice_id, mode)
+                await _process_image_message(
+                    websocket, client, user_text, image_data, conversation_id, provider, model, voice_id, mode
+                )
 
     except WebSocketDisconnect:
         log.info("ws_disconnected", session_id=session_id)
@@ -454,6 +462,7 @@ def _sanitize_response(text: str) -> tuple[str | None, str]:
     if text.strip().startswith(("{", "[")):
         try:
             from .pipeline import _heuristic_extract_text, _parse_json_objects
+
             objs = _parse_json_objects(text)
             for data in objs:
                 extracted = _heuristic_extract_text(data)
@@ -508,7 +517,9 @@ async def _process_image_message(
         elif event.get("type") == "done":
             full_text = event.get("content", full_text)
         elif event.get("type") == "error":
-            await websocket.send_json({"type": "error", "code": "brain_error", "message": event.get("error", "Unknown error")})
+            await websocket.send_json(
+                {"type": "error", "code": "brain_error", "message": event.get("error", "Unknown error")}
+            )
             return
 
     await _synthesize_and_send(websocket, client, full_text, voice_id, None, mode)
@@ -538,7 +549,9 @@ async def _process_and_respond(
         image_bytes = await client.generate_image(user_text, width=512, height=512)
         if image_bytes:
             image_b64 = base64.b64encode(image_bytes).decode()
-            await websocket.send_json({"type": "response.image", "image_data": f"data:image/png;base64,{image_b64}", "prompt": user_text})
+            await websocket.send_json(
+                {"type": "response.image", "image_data": f"data:image/png;base64,{image_b64}", "prompt": user_text}
+            )
         else:
             await websocket.send_json({"type": "response.text", "content": "I wasn't able to generate the image."})
         await websocket.send_json({"type": "response.end", "full_text": ""})
@@ -549,7 +562,9 @@ async def _process_and_respond(
             try:
                 raw_data = json.loads(result)
                 results = raw_data.get("results") if isinstance(raw_data, dict) else raw_data
-                await websocket.send_json({"type": "response.web_results", "results": results, "query": args.get("query")})
+                await websocket.send_json(
+                    {"type": "response.web_results", "results": results, "query": args.get("query")}
+                )
             except Exception:
                 pass
         elif name == "web_browse_fetch":
@@ -557,15 +572,21 @@ async def _process_and_respond(
         elif name == "weather_get":
             try:
                 weather_data = json.loads(result)
-                await websocket.send_json({
-                    "type": "response.web_results",
-                    "results": [{
-                        "title": f"Weather for {weather_data.get('location')}",
-                        "snippet": weather_data.get("text"),
-                        "url": "https://www.bom.gov.au" if "Meteorology" in weather_data.get("source", "") else "https://openweathermap.org"
-                    }],
-                    "query": f"Weather in {args.get('location')}",
-                })
+                await websocket.send_json(
+                    {
+                        "type": "response.web_results",
+                        "results": [
+                            {
+                                "title": f"Weather for {weather_data.get('location')}",
+                                "snippet": weather_data.get("text"),
+                                "url": "https://www.bom.gov.au"
+                                if "Meteorology" in weather_data.get("source", "")
+                                else "https://openweathermap.org",
+                            }
+                        ],
+                        "query": f"Weather in {args.get('location')}",
+                    }
+                )
             except Exception:
                 pass
 
@@ -601,7 +622,9 @@ async def _process_and_respond(
 
     # No tools path - buffer response to ensure no technical tags are leaked
     full_text = ""
-    async for event in client.chat_stream(message=user_text, conversation_id=conversation_id, provider=provider, model=model):
+    async for event in client.chat_stream(
+        message=user_text, conversation_id=conversation_id, provider=provider, model=model
+    ):
         if event.get("type") == "token":
             full_text += event.get("content", "")
         elif event.get("type") == "done":

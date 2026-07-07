@@ -29,6 +29,7 @@ def create_app(test_config: dict | None = None) -> Flask:
     if backend == "postgres":
         # PostgreSQL with multiuser support
         from .db_store import PostgresStore
+
         database_url = app.config["DATABASE_URL"]
         if not database_url:
             raise ValueError("DATABASE_URL is required when STORAGE_BACKEND=postgres")
@@ -51,11 +52,13 @@ def create_app(test_config: dict | None = None) -> Flask:
 
     # Initialize OIDC authentication
     from .auth import auth_bp, init_oauth
+
     init_oauth(app)
     app.register_blueprint(auth_bp, url_prefix="/auth")
 
     # Initialize JWT bearer token validation (for mobile/API clients)
     from .jwt_auth import init_jwt_auth
+
     init_jwt_auth(app)
 
     from .api import api_bp

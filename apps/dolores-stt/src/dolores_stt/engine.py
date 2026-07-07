@@ -59,6 +59,7 @@ class STTEngine:
         if device == "auto":
             try:
                 import torch
+
                 if torch.cuda.is_available():
                     device = "cuda"
                 else:
