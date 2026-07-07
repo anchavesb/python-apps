@@ -102,7 +102,7 @@ class PostgresStore:
             if done is not None:
                 query = query.where(Todo.done == done)
             # Sort by due_date ascending (nulls last), then created_at descending
-            query = query.order_by(Todo.due_date.asc().nullslast(), Todo.created_at.desc())
+            query = query.order_by(Todo.due_date.asc().nulls_last(), Todo.created_at.desc())
             todos = session.execute(query).scalars().all()
             return [t.to_dict() for t in todos]
 
