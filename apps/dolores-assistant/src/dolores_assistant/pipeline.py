@@ -554,7 +554,11 @@ def _heuristic_extract_text(data: Any) -> str | None:
             items = lists[0]
 
     if items and isinstance(items, list) and len(items) > 0:
-        # Check if items look like structured objects (dicts with keys like 'title', 'task', 'name')
+        # Case A: List of strings (e.g. ["- item 1", "- item 2"])
+        if all(isinstance(item, str) for item in items):
+            return "\n".join(items)
+
+        # Case B: List of dicts (e.g. [{"title": "task 1", ...}])
         if all(isinstance(item, dict) and any(k in item for k in ("title", "task", "name")) for item in items):
             lines = []
             for item in items:
