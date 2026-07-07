@@ -605,6 +605,47 @@ def get_persona_guidance(model: str | None) -> str:
     return "Provide a helpful, conversational response as Dolores."
 
 
+def _format_tool_result(result_str: str) -> str:
+    """Format a tool result string (possibly JSON) into a human-readable non-JSON structure."""
+    if not result_str:
+        return result_str
+
+    # Check if it looks like JSON
+    stripped = result_str.strip()
+    if (stripped.startswith("{") and stripped.endswith("}")) or (stripped.startswith("[") and stripped.endswith("]")):
+        try:
+            data = json.loads(stripped)
+            return _format_json_data(data)
+        except Exception:
+            pass
+    return result_str
+
+
+def _format_json_data(data: Any, indent: int = 0) -> str:
+    """Recursively format JSON-like dict/list into clean key-value text lines without JSON formatting."""
+    padding = "  " * indent
+    if isinstance(data, dict):
+        lines = []
+        for k, v in data.items():
+            if isinstance(v, (dict, list)):
+                lines.append(f"{padding}{k}:")
+                lines.append(_format_json_data(v, indent + 1))
+            else:
+                lines.append(f"{padding}{k}: {v}")
+        return "\n".join(lines)
+    elif isinstance(data, list):
+        if not data:
+            return f"{padding}(empty list)"
+        if all(not isinstance(item, (dict, list)) for item in data):
+            return "\n".join([f"{padding}- {item}" for item in data])
+        lines = []
+        for i, item in enumerate(data):
+            lines.append(f"{padding}Item #{i+1}:")
+            lines.append(_format_json_data(item, indent + 1))
+        return "\n".join(lines)
+    return f"{padding}{data}"
+
+
 async def run_tool_loop(
     client: ServiceClient,
     initial_message: str,
@@ -717,7 +758,7 @@ async def run_tool_loop(
             else:
                 tool_result = f"Unknown tool: {tool_name}"
 
-            tool_results.append(f"[{tool_name}]: {tool_result}")
+            tool_results.append(f"[{tool_name}]:\n{_format_tool_result(tool_result)}")
 
         guidance = get_persona_guidance(model)
         if intent == "news":
