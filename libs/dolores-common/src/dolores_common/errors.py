@@ -21,9 +21,7 @@ def error_response(code: str, message: str, status_code: int = 500, retry_after:
     """Create a standardized error JSON response."""
     return JSONResponse(
         status_code=status_code,
-        content=ErrorResponse(
-            error=ErrorDetail(code=code, message=message, retry_after=retry_after)
-        ).model_dump(),
+        content=ErrorResponse(error=ErrorDetail(code=code, message=message, retry_after=retry_after)).model_dump(),
     )
 
 

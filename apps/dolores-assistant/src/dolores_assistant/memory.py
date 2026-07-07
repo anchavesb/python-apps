@@ -59,11 +59,13 @@ class MemoryStore:
             try:
                 await self._db.execute("ALTER TABLE memories ADD COLUMN user_id TEXT NOT NULL DEFAULT 'anonymous'")
             except aiosqlite.OperationalError:
-                pass # column already exists
+                pass  # column already exists
 
             # Drop old single-column index if it exists (superseded by composite index below)
             await self._db.execute("DROP INDEX IF EXISTS idx_memories_user")
-            await self._db.execute("CREATE INDEX IF NOT EXISTS idx_memories_user_timestamp ON memories(user_id, timestamp DESC)")
+            await self._db.execute(
+                "CREATE INDEX IF NOT EXISTS idx_memories_user_timestamp ON memories(user_id, timestamp DESC)"
+            )
             await self._db.commit()
 
             self._initialized = True
@@ -93,7 +95,9 @@ class MemoryStore:
 
         log.info("memory_added", user_id=user_id, text=text[:50])
 
-    async def search_memories(self, query: str, user_id: str = "anonymous", limit: int = 5, min_score: float = 0.5) -> List[dict]:
+    async def search_memories(
+        self, query: str, user_id: str = "anonymous", limit: int = 5, min_score: float = 0.5
+    ) -> List[dict]:
         """Find relevant memories using cosine similarity.
 
         Optimized by limiting scan to most recent 500 entries to avoid Python overhead.
@@ -107,7 +111,7 @@ class MemoryStore:
         # Avoid full table scan as it grows - scan most recent first for this user
         async with self._db.execute(
             "SELECT text, embedding, metadata, timestamp FROM memories WHERE user_id = ? ORDER BY timestamp DESC LIMIT 500",
-            (user_id,)
+            (user_id,),
         ) as cursor:
             async for row in cursor:
                 text, emb_blob, meta_json, ts = row

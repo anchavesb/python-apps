@@ -41,8 +41,16 @@ def _convert_to_wav(audio_data: bytes, content_type: str) -> Path:
         in_path.write_bytes(audio_data)
         subprocess.run(
             [
-                "ffmpeg", "-y", "-i", str(in_path),
-                "-ar", "16000", "-ac", "1", "-f", "wav",
+                "ffmpeg",
+                "-y",
+                "-i",
+                str(in_path),
+                "-ar",
+                "16000",
+                "-ac",
+                "1",
+                "-f",
+                "wav",
                 str(out_path),
             ],
             capture_output=True,
@@ -131,8 +139,7 @@ class SpeakerIdentifier:
         best_id, best_name, best_score = None, None, 0.0
         for p in profiles:
             score = float(
-                np.dot(embedding, p["embedding"])
-                / (np.linalg.norm(embedding) * np.linalg.norm(p["embedding"]))
+                np.dot(embedding, p["embedding"]) / (np.linalg.norm(embedding) * np.linalg.norm(p["embedding"]))
             )
             if score > best_score:
                 best_id, best_name, best_score = p["id"], p["name"], score

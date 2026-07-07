@@ -11,14 +11,12 @@ class MockSegment:
         self.avg_logprob = -0.1
         self.no_speech_prob = 0.01
 
+
 def test_transcribe_stream_yields_segments():
     engine = STTEngine()
     engine._model = MagicMock()
 
-    mock_segments = [
-        MockSegment("Hello", 0.0, 1.0),
-        MockSegment("world", 1.0, 2.0)
-    ]
+    mock_segments = [MockSegment("Hello", 0.0, 1.0), MockSegment("world", 1.0, 2.0)]
     mock_info = MagicMock()
     mock_info.language = "en"
 

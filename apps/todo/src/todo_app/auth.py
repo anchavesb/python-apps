@@ -1,4 +1,5 @@
 """OIDC authentication blueprint for Authentik integration."""
+
 import logging
 from functools import wraps
 
@@ -32,6 +33,7 @@ def init_oauth(app):
 
 def login_required(f):
     """Decorator to require authentication when OIDC is enabled."""
+
     @wraps(f)
     def decorated_function(*args, **kwargs):
         if not current_app.config.get("OIDC_ENABLED"):
@@ -41,6 +43,7 @@ def login_required(f):
             session["next_url"] = request.url
             return redirect(url_for("auth.login"))
         return f(*args, **kwargs)
+
     return decorated_function
 
 

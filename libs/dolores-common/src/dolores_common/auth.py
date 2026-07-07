@@ -13,7 +13,6 @@ logger = logging.getLogger(__name__)
 _jwks_clients: dict[str, PyJWKClient] = {}
 
 
-
 def _get_psk() -> str | None:
     """Get the service PSK from environment."""
     return os.environ.get("DOLORES_SERVICE_PSK")
@@ -174,11 +173,10 @@ def extract_user_id(token: str | None) -> str:
     try:
         import base64
         import json as _json
+
         payload = token.split(".")[1]
         payload += "=" * (4 - len(payload) % 4)
         data = _json.loads(base64.urlsafe_b64decode(payload))
         return data.get("sub") or data.get("email") or "anonymous"
     except Exception:
         return "anonymous"
-
-

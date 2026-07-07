@@ -254,7 +254,12 @@ async def chat_stream(
             # Store full response
             await store.append(conv_id, "assistant", full_text)
 
-            log.info("chat_stream_complete", provider=provider, model=model_str, message=full_text[:200] + ("..." if len(full_text) > 200 else ""))
+            log.info(
+                "chat_stream_complete",
+                provider=provider,
+                model=model_str,
+                message=full_text[:200] + ("..." if len(full_text) > 200 else ""),
+            )
 
             yield f"data: {json.dumps({'type': 'done', 'content': full_text, 'conversation_id': conv_id, 'provider': provider, 'model': model_str})}\n\n"
 
@@ -283,9 +288,8 @@ async def scrape(url: str, _auth: ServicePSK = None):
     """Bypasses Cloudflare using cloudscraper and returns the HTML content."""
     try:
         import cloudscraper
-        scraper = cloudscraper.create_scraper(
-            browser={"browser": "firefox", "platform": "linux", "desktop": True}
-        )
+
+        scraper = cloudscraper.create_scraper(browser={"browser": "firefox", "platform": "linux", "desktop": True})
         response = scraper.get(url)
         if response.status_code != 200:
             raise HTTPException(
@@ -303,9 +307,8 @@ async def scrape_post(req: ScrapeRequest, _auth: ServicePSK = None):
     """Generic Cloudflare bypass endpoint using cloudscraper for POST/GET."""
     try:
         import cloudscraper
-        scraper = cloudscraper.create_scraper(
-            browser={"browser": "firefox", "platform": "linux", "desktop": True}
-        )
+
+        scraper = cloudscraper.create_scraper(browser={"browser": "firefox", "platform": "linux", "desktop": True})
         method_upper = req.method.upper()
 
         if method_upper == "GET":

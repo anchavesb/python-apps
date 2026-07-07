@@ -133,7 +133,7 @@ class JsonStore:
         # keep up to self.backups copies: data_file.bak.1 .. .bak.N
         for i in range(self.backups, 0, -1):
             src = f"{self.data_file}.bak.{i}"
-            dst = f"{self.data_file}.bak.{i+1}"
+            dst = f"{self.data_file}.bak.{i + 1}"
             if os.path.exists(src):
                 if i == self.backups:
                     os.remove(src)
@@ -234,7 +234,9 @@ class JsonStore:
                 self.state["rss_feeds"] = []
             self.state["rss_feeds"] = [it for it in self.state["rss_feeds"] if it["id"] != e["id"]]
             if "rss_item_states" in self.state:
-                self.state["rss_item_states"] = [s for s in self.state["rss_item_states"] if s.get("feed_id") != e["id"]]
+                self.state["rss_item_states"] = [
+                    s for s in self.state["rss_item_states"] if s.get("feed_id") != e["id"]
+                ]
         elif t == "rss_item_state_update":
             if "rss_item_states" not in self.state:
                 self.state["rss_item_states"] = []
@@ -262,8 +264,11 @@ class JsonStore:
     # Todos
     # Note: user_id parameter is accepted but ignored in single-user JSON mode
     # This allows the same calling convention as PostgresStore for multiuser mode
-    def list_todos(self, user_id: str | None = None) -> List[Dict[str, Any]]:
-        return list(self.state["todos"])  # shallow copy
+    def list_todos(self, user_id: str | None = None, done: bool | None = None) -> List[Dict[str, Any]]:
+        todos = list(self.state["todos"])
+        if done is not None:
+            todos = [t for t in todos if t["done"] == done]
+        return todos
 
     def get_todo(self, tid: str, user_id: str | None = None) -> Optional[Dict[str, Any]]:
         return next((t for t in self.state["todos"] if t["id"] == tid), None)
@@ -358,6 +363,7 @@ class JsonStore:
             self._append_wal({"type": "note_delete", "id": nid})
             self._flush()
         return deleted
+
     # RSS Feeds
     def list_rss_feeds(self, user_id: str | None = None) -> List[Dict[str, Any]]:
         if "rss_feeds" not in self.state:
@@ -385,8 +391,7 @@ class JsonStore:
             self.state["rss_feeds"] = []
         before = len(self.state["rss_feeds"])
         self.state["rss_feeds"] = [
-            f for f in self.state["rss_feeds"]
-            if f["id"] != feed_id or (user_id and f.get("user_id") != user_id)
+            f for f in self.state["rss_feeds"] if f["id"] != feed_id or (user_id and f.get("user_id") != user_id)
         ]
         deleted = len(self.state["rss_feeds"]) < before
         if deleted:
@@ -409,11 +414,20 @@ class JsonStore:
             res = [s for s in res if s.get("feed_id") == feed_id]
         return res
 
-    def update_rss_item_state(self, user_id: str | None, feed_id: str, item_guid: str, read: bool | None = None, starred: bool | None = None) -> Dict[str, Any]:
+    def update_rss_item_state(
+        self, user_id: str | None, feed_id: str, item_guid: str, read: bool | None = None, starred: bool | None = None
+    ) -> Dict[str, Any]:
         if "rss_item_states" not in self.state:
             self.state["rss_item_states"] = []
 
-        state = next((s for s in self.state["rss_item_states"] if s.get("user_id") == user_id and s.get("feed_id") == feed_id and s.get("item_guid") == item_guid), None)
+        state = next(
+            (
+                s
+                for s in self.state["rss_item_states"]
+                if s.get("user_id") == user_id and s.get("feed_id") == feed_id and s.get("item_guid") == item_guid
+            ),
+            None,
+        )
 
         now = now_iso()
         if not state:

@@ -78,4 +78,3 @@ async def test_memory_multiuser_isolation():
 
     if os.path.exists(db_path):
         os.remove(db_path)
-

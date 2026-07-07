@@ -43,7 +43,6 @@ def _is_jwt_expired(token: str) -> bool:
         return False
 
 
-
 # GPU concurrency: only one request at a time per GPU service
 _stt_semaphore = asyncio.Semaphore(1)
 _tts_semaphore = asyncio.Semaphore(1)
@@ -461,8 +460,8 @@ def _parse_json_objects(text: str) -> list[dict | list]:
     idx = 0
     text = text.strip()
     while idx < len(text):
-        next_brace = text.find('{', idx)
-        next_bracket = text.find('[', idx)
+        next_brace = text.find("{", idx)
+        next_bracket = text.find("[", idx)
         if next_brace == -1 and next_bracket == -1:
             break
         if next_brace != -1 and next_bracket != -1:
@@ -640,7 +639,7 @@ def _format_json_data(data: Any, indent: int = 0) -> str:
             return "\n".join([f"{padding}- {item}" for item in data])
         lines = []
         for i, item in enumerate(data):
-            lines.append(f"{padding}Item #{i+1}:")
+            lines.append(f"{padding}Item #{i + 1}:")
             lines.append(_format_json_data(item, indent + 1))
         return "\n".join(lines)
     return f"{padding}{data}"
@@ -686,7 +685,7 @@ async def run_tool_loop(
     memory_context = ""
     if memories:
         # Truncate long facts to avoid context window pressure
-        facts = "\n".join([f"- {m['text'][:200]}..." if len(m['text']) > 200 else f"- {m['text']}" for m in memories])
+        facts = "\n".join([f"- {m['text'][:200]}..." if len(m["text"]) > 200 else f"- {m['text']}" for m in memories])
         memory_context = f"\n\nLONG-TERM MEMORY (RELEVANT FACTS):\n{facts}\n"
 
     current_message = initial_message
@@ -768,11 +767,18 @@ async def run_tool_loop(
             )
         elif intent == "weather":
             guidance += " Summarize the weather data clearly for the user, reflecting on its beauty. "
+        elif intent == "todo":
+            guidance += (
+                " List the items clearly using bullet points, including their due dates, completed status, and titles. "
+                "Do not summarize them into a single vague paragraph; preserve their specific titles and dates so the user can easily read them. "
+            )
 
         message = (
-            "I have retrieved the following real-time information: \n" + "\n".join(tool_results) + "\n\n"
-            + guidance +
-            "\nInclude relevant source URLs as plain clickable links (e.g. https://...). "
+            "I have retrieved the following real-time information: \n"
+            + "\n".join(tool_results)
+            + "\n\n"
+            + guidance
+            + "\nInclude relevant source URLs as plain clickable links (e.g. https://...). "
             "IMPORTANT: YOUR RESPONSE MUST BE NATURAL, POETIC LANGUAGE. DO NOT OUTPUT JSON. "
             "DO NOT USE TAGS LIKE [emotion:...] or [tool:...]. "
             "DO NOT USE PLACEHOLDERS. USE THE ACTUAL DATA RETRIEVED."

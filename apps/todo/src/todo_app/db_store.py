@@ -1,4 +1,5 @@
 """PostgreSQL storage backend with multiuser support."""
+
 from __future__ import annotations
 
 from typing import Any, Dict, List, Optional, Tuple
@@ -62,9 +63,7 @@ class PostgresStore:
         if not email:
             return None
         with self.get_session() as session:
-            return session.execute(
-                select(User).where(User.email == email)
-            ).scalar_one_or_none()
+            return session.execute(select(User).where(User.email == email)).scalar_one_or_none()
 
     def get_or_create_user(self, user_id: str, email: str | None = None, name: str | None = None) -> User:
         """Get existing user or create new one."""
@@ -95,11 +94,15 @@ class PostgresStore:
             return False, str(e)
 
     # ---------- Todos ----------
-    def list_todos(self, user_id: str | None = None) -> List[Dict[str, Any]]:
+    def list_todos(self, user_id: str | None = None, done: bool | None = None) -> List[Dict[str, Any]]:
         with self.get_session() as session:
             query = select(Todo)
             if user_id:
                 query = query.where(Todo.user_id == user_id)
+            if done is not None:
+                query = query.where(Todo.done == done)
+            # Sort by due_date ascending (nulls last), then created_at descending
+            query = query.order_by(Todo.due_date.asc().nulls_last(), Todo.created_at.desc())
             todos = session.execute(query).scalars().all()
             return [t.to_dict() for t in todos]
 
@@ -284,13 +287,13 @@ class PostgresStore:
             states = session.execute(query).scalars().all()
             return [s.to_dict() for s in states]
 
-    def update_rss_item_state(self, user_id: str, feed_id: str, item_guid: str, read: bool | None = None, starred: bool | None = None) -> Dict[str, Any]:
+    def update_rss_item_state(
+        self, user_id: str, feed_id: str, item_guid: str, read: bool | None = None, starred: bool | None = None
+    ) -> Dict[str, Any]:
         with self.get_session() as session:
             self.get_or_create_user(user_id)
             query = select(RssItemState).where(
-                RssItemState.user_id == user_id,
-                RssItemState.feed_id == feed_id,
-                RssItemState.item_guid == item_guid
+                RssItemState.user_id == user_id, RssItemState.feed_id == feed_id, RssItemState.item_guid == item_guid
             )
             state = session.execute(query).scalar_one_or_none()
 

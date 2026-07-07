@@ -57,7 +57,9 @@ def get_user_id():
             if existing and existing.id != bearer_sub:
                 logger.info(
                     "bearer sub=%s mapped to existing user sub=%s (same email=%s)",
-                    bearer_sub, existing.id, bearer_email,
+                    bearer_sub,
+                    existing.id,
+                    bearer_email,
                 )
                 return existing.id
 
@@ -105,7 +107,11 @@ def require_auth():
 def api_list_todos():
     if err := require_auth():
         return err
-    return jsonify(store().list_todos(user_id=get_user_id()))
+    done_str = request.args.get("done")
+    done = None
+    if done_str is not None:
+        done = done_str.lower() in ("true", "1", "yes")
+    return jsonify(store().list_todos(user_id=get_user_id(), done=done))
 
 
 @api_bp.post("/todos")
@@ -214,6 +220,3 @@ def api_delete_note(nid):
         return err
     ok = store().delete_note(nid, user_id=get_user_id())
     return ("", 204) if ok else (jsonify({"error": "not found"}), 404)
-
-
-

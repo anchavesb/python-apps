@@ -88,6 +88,18 @@ class WeatherTool(Tool):
             geohash = best["geohash"][:6]
             name = f"{best['name']}, {best['state']}"
 
+            # Get Current Observations
+            current_temp = None
+            feels_like = None
+            try:
+                obs_resp = await client.get(f"{_BOM_BASE_URL}/locations/{geohash}/observations")
+                obs_resp.raise_for_status()
+                obs_data = obs_resp.json().get("data", {})
+                current_temp = obs_data.get("temp")
+                feels_like = obs_data.get("temp_feels_like")
+            except Exception as e:
+                log.warning("bom_observations_failed", geohash=geohash, error=str(e))
+
             # Step 2: Get Daily Forecast
             forecast_resp = await client.get(f"{_BOM_BASE_URL}/locations/{geohash}/forecasts/daily")
             forecast_resp.raise_for_status()
@@ -103,7 +115,14 @@ class WeatherTool(Tool):
             rain_chance = today.get("rain", {}).get("chance")
 
             # Construct a human-readable sentence to help the LLM
-            text = f"In {name}, it is expected to be {summary}."
+            text = f"In {name},"
+            if current_temp is not None:
+                text += f" the current temperature is {current_temp}°C"
+                if feels_like is not None:
+                    text += f" (feels like {feels_like}°C)"
+                text += "."
+
+            text += f" Today's forecast is {summary}."
             if min_temp is not None and max_temp is not None:
                 text += f" Temperatures will range from {min_temp}°C to {max_temp}°C."
             elif max_temp is not None:
@@ -116,6 +135,8 @@ class WeatherTool(Tool):
                 "location": name,
                 "source": "Bureau of Meteorology",
                 "date": today.get("date"),
+                "current_temp": current_temp,
+                "feels_like": feels_like,
                 "summary": summary,
                 "min": min_temp,
                 "max": max_temp,

@@ -15,10 +15,23 @@ OPENAPI_SPEC = {
             "get": {
                 "operationId": "list_todos",
                 "summary": "List all todos",
+                "parameters": [
+                    {
+                        "name": "done",
+                        "in": "query",
+                        "description": "Filter by completed status (true/false). Pass false to list only active/pending items.",
+                        "required": False,
+                        "schema": {"type": "boolean"},
+                    }
+                ],
                 "responses": {
                     "200": {
                         "description": "Array of todo objects",
-                        "content": {"application/json": {"schema": {"type": "array", "items": {"$ref": "#/components/schemas/Todo"}}}},
+                        "content": {
+                            "application/json": {
+                                "schema": {"type": "array", "items": {"$ref": "#/components/schemas/Todo"}}
+                            }
+                        },
                     }
                 },
             },
@@ -27,11 +40,7 @@ OPENAPI_SPEC = {
                 "summary": "Create a new todo",
                 "requestBody": {
                     "required": True,
-                    "content": {
-                        "application/json": {
-                            "schema": {"$ref": "#/components/schemas/TodoCreate"}
-                        }
-                    },
+                    "content": {"application/json": {"schema": {"$ref": "#/components/schemas/TodoCreate"}}},
                 },
                 "responses": {
                     "201": {
@@ -47,7 +56,10 @@ OPENAPI_SPEC = {
                 "summary": "Get a single todo by ID",
                 "parameters": [{"name": "tid", "in": "path", "required": True, "schema": {"type": "string"}}],
                 "responses": {
-                    "200": {"description": "Todo object", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Todo"}}}},
+                    "200": {
+                        "description": "Todo object",
+                        "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Todo"}}},
+                    },
                     "404": {"description": "Not found"},
                 },
             },
@@ -60,7 +72,10 @@ OPENAPI_SPEC = {
                     "content": {"application/json": {"schema": {"$ref": "#/components/schemas/TodoUpdate"}}},
                 },
                 "responses": {
-                    "200": {"description": "Updated todo", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Todo"}}}},
+                    "200": {
+                        "description": "Updated todo",
+                        "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Todo"}}},
+                    },
                     "404": {"description": "Not found"},
                 },
             },
@@ -77,7 +92,10 @@ OPENAPI_SPEC = {
                 "summary": "Mark a todo as done",
                 "parameters": [{"name": "tid", "in": "path", "required": True, "schema": {"type": "string"}}],
                 "responses": {
-                    "200": {"description": "Updated todo", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Todo"}}}},
+                    "200": {
+                        "description": "Updated todo",
+                        "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Todo"}}},
+                    },
                     "404": {"description": "Not found"},
                 },
             }
@@ -89,7 +107,11 @@ OPENAPI_SPEC = {
                 "responses": {
                     "200": {
                         "description": "Array of note objects",
-                        "content": {"application/json": {"schema": {"type": "array", "items": {"$ref": "#/components/schemas/Note"}}}},
+                        "content": {
+                            "application/json": {
+                                "schema": {"type": "array", "items": {"$ref": "#/components/schemas/Note"}}
+                            }
+                        },
                     }
                 },
             },
@@ -101,7 +123,10 @@ OPENAPI_SPEC = {
                     "content": {"application/json": {"schema": {"$ref": "#/components/schemas/NoteCreate"}}},
                 },
                 "responses": {
-                    "201": {"description": "Created note", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Note"}}}},
+                    "201": {
+                        "description": "Created note",
+                        "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Note"}}},
+                    },
                 },
             },
         },
@@ -111,7 +136,10 @@ OPENAPI_SPEC = {
                 "summary": "Get a single note by ID",
                 "parameters": [{"name": "nid", "in": "path", "required": True, "schema": {"type": "string"}}],
                 "responses": {
-                    "200": {"description": "Note object", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Note"}}}},
+                    "200": {
+                        "description": "Note object",
+                        "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Note"}}},
+                    },
                     "404": {"description": "Not found"},
                 },
             },
@@ -124,7 +152,10 @@ OPENAPI_SPEC = {
                     "content": {"application/json": {"schema": {"$ref": "#/components/schemas/NoteUpdate"}}},
                 },
                 "responses": {
-                    "200": {"description": "Updated note", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Note"}}}},
+                    "200": {
+                        "description": "Updated note",
+                        "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Note"}}},
+                    },
                     "404": {"description": "Not found"},
                 },
             },
@@ -135,7 +166,6 @@ OPENAPI_SPEC = {
                 "responses": {"204": {"description": "Deleted"}, "404": {"description": "Not found"}},
             },
         },
-
     },
     "components": {
         "schemas": {
@@ -143,7 +173,10 @@ OPENAPI_SPEC = {
                 "type": "object",
                 "description": "Key-value tags. Must include 'category' (any string) and 'priority' (low|medium|high|urgent).",
                 "properties": {
-                    "category": {"type": "string", "description": "Category label, e.g. 'work', 'personal', 'shopping'"},
+                    "category": {
+                        "type": "string",
+                        "description": "Category label, e.g. 'work', 'personal', 'shopping'",
+                    },
                     "priority": {"type": "string", "enum": ["low", "medium", "high", "urgent"]},
                 },
                 "required": ["category", "priority"],
@@ -168,8 +201,15 @@ OPENAPI_SPEC = {
                 "properties": {
                     "title": {"type": "string"},
                     "description": {"type": "string"},
-                    "tags": {"$ref": "#/components/schemas/Tags", "description": "Optional. Defaults to category='general', priority='medium' if omitted."},
-                    "done": {"type": "boolean", "default": False, "description": "Always set to false when creating new todos."},
+                    "tags": {
+                        "$ref": "#/components/schemas/Tags",
+                        "description": "Optional. Defaults to category='general', priority='medium' if omitted.",
+                    },
+                    "done": {
+                        "type": "boolean",
+                        "default": False,
+                        "description": "Always set to false when creating new todos.",
+                    },
                     "due_date": {"type": "string", "description": "YYYY-MM-DD or ISO datetime"},
                 },
             },
@@ -200,7 +240,10 @@ OPENAPI_SPEC = {
                 "properties": {
                     "title": {"type": "string"},
                     "note": {"type": "string"},
-                    "tags": {"$ref": "#/components/schemas/Tags", "description": "Optional. Defaults to category='general', priority='medium' if omitted."},
+                    "tags": {
+                        "$ref": "#/components/schemas/Tags",
+                        "description": "Optional. Defaults to category='general', priority='medium' if omitted.",
+                    },
                 },
             },
             "NoteUpdate": {
@@ -211,7 +254,6 @@ OPENAPI_SPEC = {
                     "tags": {"$ref": "#/components/schemas/Tags"},
                 },
             },
-
         }
     },
 }

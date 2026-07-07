@@ -31,9 +31,7 @@ async def chat_loop(
         while True:
             with patch_stdout():
                 try:
-                    user_input = await asyncio.get_event_loop().run_in_executor(
-                        None, lambda: session.prompt("You: ")
-                    )
+                    user_input = await asyncio.get_event_loop().run_in_executor(None, lambda: session.prompt("You: "))
                 except (EOFError, KeyboardInterrupt):
                     break
 

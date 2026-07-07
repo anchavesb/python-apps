@@ -34,8 +34,7 @@ def retry_with_backoff(
                     # Check if this is a rate limit or overloaded error
                     error_str = str(exc).lower()
                     is_retryable = any(
-                        token in error_str
-                        for token in ["429", "rate limit", "overloaded", "503", "too many requests"]
+                        token in error_str for token in ["429", "rate limit", "overloaded", "503", "too many requests"]
                     )
 
                     if not is_retryable or attempt >= max_retries:
