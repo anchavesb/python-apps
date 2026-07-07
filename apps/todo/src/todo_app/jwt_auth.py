@@ -7,7 +7,9 @@ Supports multiple OIDC providers (e.g. web + mobile) via OIDC_JWT_ISSUERS.
 """
 from __future__ import annotations
 
+import hmac
 import logging
+import os
 from typing import Optional
 
 import jwt
@@ -17,6 +19,10 @@ logger = logging.getLogger(__name__)
 
 # List of trusted (jwks_client, audience, issuer) tuples
 _trusted_providers: list[tuple[PyJWKClient, str, str]] = []
+_service_token: str | None = None
+_default_user_id: str | None = None
+_default_user_email: str | None = None
+_default_user_name: str | None = None
 
 
 def init_jwt_auth(app) -> None:
@@ -25,8 +31,12 @@ def init_jwt_auth(app) -> None:
     Reads the primary OIDC_ISSUER/OIDC_CLIENT_ID, plus any additional
     issuers from OIDC_JWT_ISSUERS (comma-separated "issuer|client_id" pairs).
     """
-    global _trusted_providers
+    global _trusted_providers, _service_token, _default_user_id, _default_user_email, _default_user_name
     _trusted_providers = []
+    _service_token = os.environ.get("DOLORES_SERVICE_TOKEN")
+    _default_user_id = os.environ.get("DOLORES_DEFAULT_USER_ID", _default_user_id)
+    _default_user_email = os.environ.get("DOLORES_DEFAULT_USER_EMAIL", _default_user_email)
+    _default_user_name = os.environ.get("DOLORES_DEFAULT_USER_NAME", _default_user_name)
 
     if not app.config.get("OIDC_ENABLED"):
         logger.info("JWT auth disabled (OIDC not enabled)")
@@ -75,6 +85,15 @@ def validate_bearer_token(token: str) -> Optional[dict]:
     Returns a dict with keys: sub, email, name (matching session format)
     or None if validation fails against all providers.
     """
+    if _service_token and _default_user_id and hmac.compare_digest(token, _service_token):
+        logger.debug("auth via static service token")
+        return {
+            "sub": _default_user_id,
+            "email": _default_user_email or "",
+            "name": _default_user_name or "Dolores Service User",
+            "groups": [],
+        }
+
     if not _trusted_providers:
         return None
 

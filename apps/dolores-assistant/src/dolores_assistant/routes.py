@@ -100,7 +100,7 @@ async def text_chat(
     """Text-only chat endpoint (simpler alternative to WebSocket)."""
     # Forward user's OIDC JWT to downstream services (e.g. todo API).
     # Uses X-User-Token to avoid conflict with Authorization (used for API key auth).
-    user_jwt = request.headers.get("x-user-token", "")
+    user_jwt = request.headers.get("x-user-token", "") or settings.default_user_token
     token = current_user_token.set(user_jwt or None)
     try:
         intent_name, tool_filter, _ = classify_intent(req.message)
@@ -263,7 +263,7 @@ async def conversation_ws(websocket: WebSocket) -> None:
     log.info("ws_connected", session_id=session_id)
 
     audio_buffer = bytearray()
-    _initial_cv_token = current_user_token.set(None)
+    _initial_cv_token = current_user_token.set(settings.default_user_token)
 
     try:
         while True:
@@ -416,7 +416,10 @@ async def conversation_ws(websocket: WebSocket) -> None:
         log.error("ws_error", error=str(e))
     finally:
         if _initial_cv_token:
-            current_user_token.reset(_initial_cv_token)
+            try:
+                current_user_token.reset(_initial_cv_token)
+            except ValueError:
+                pass
 
 
 _EMOTION_TAG_RE = re.compile(r"\[emotion:(\w+)\]")

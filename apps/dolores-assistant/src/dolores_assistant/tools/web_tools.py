@@ -29,20 +29,6 @@ _DDG_HEADERS = {
     "User-Agent": _UA,
     "Accept-Language": "en-US,en;q=0.9",
 }
-_FETCH_HEADERS = {
-    "User-Agent": _UA,
-    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
-    "Accept-Language": "en-US,en;q=0.9",
-    "Accept-Encoding": "gzip, deflate, br",
-    "DNT": "1",
-    "Connection": "keep-alive",
-    "Upgrade-Insecure-Requests": "1",
-    "Sec-Fetch-Dest": "document",
-    "Sec-Fetch-Mode": "navigate",
-    "Sec-Fetch-Site": "none",
-    "Sec-Fetch-User": "?1",
-    "Cache-Control": "max-age=0",
-}
 _MAX_RESULTS = 6
 _MAX_PAGE_CHARS = 5000
 
@@ -179,10 +165,22 @@ class PageFetchTool(Tool):
         log.info("page_fetch", url=url[:200])
 
         try:
-            async with httpx.AsyncClient(headers=_FETCH_HEADERS, follow_redirects=True, timeout=20) as client:
-                resp = await client.get(url)
+            from dolores_assistant.config import settings
+
+            headers = {}
+            psk = settings.service_psk
+            if psk:
+                headers["Authorization"] = f"Bearer {psk}"
+
+            async with httpx.AsyncClient(follow_redirects=True, timeout=25) as client:
+                resp = await client.post(
+                    f"{settings.brain_url}/v1/scrape",
+                    json={"url": url, "method": "GET"},
+                    headers=headers,
+                )
                 resp.raise_for_status()
-                html = resp.text
+                data = resp.json()
+                html = data.get("data", "")
         except Exception as e:
             log.error("page_fetch_failed", url=url[:120], error=str(e))
             return f"Failed to fetch page: {e}"
