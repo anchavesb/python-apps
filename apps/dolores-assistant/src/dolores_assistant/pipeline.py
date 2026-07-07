@@ -558,9 +558,9 @@ def _heuristic_extract_text(data: Any) -> str | None:
         if all(isinstance(item, dict) and any(k in item for k in ("title", "task", "name")) for item in items):
             lines = []
             for item in items:
-                title = item.get("title") or item.get("task") or item.get("name")
+                title = item.get("title") or item.get("task") or item.get("name") or "Untitled"
                 due = item.get("due_date") or item.get("due") or item.get("date")
-                done = item.get("done") or item.get("completed")
+                done = item.get("done") if item.get("done") is not None else item.get("completed", False)
 
                 status = "✅" if done else "⏳"
                 due_str = f" (Due: {due})" if due else ""
