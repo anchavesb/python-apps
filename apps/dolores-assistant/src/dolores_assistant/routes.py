@@ -297,7 +297,9 @@ async def conversation_ws(websocket: WebSocket) -> None:
                 # Set active user token for isolated database and tool calls.
                 # Validate the token signature if OIDC is enabled to prevent
                 # identity spoofing via crafted JWT payloads.
-                user_token = data.get("user_token") or websocket.query_params.get("token")
+                user_token = (
+                    data.get("user_token") or websocket.query_params.get("token") or settings.default_user_token
+                )
                 if user_token and os.environ.get("OIDC_ENABLED", "0") == "1":
                     # validate_oidc_token may do synchronous HTTP I/O (JWKS fetch),
                     # so run it in a thread to avoid blocking the event loop.
@@ -389,7 +391,7 @@ async def conversation_ws(websocket: WebSocket) -> None:
                 continue
 
             elif msg_type == "session.update_token":
-                new_token = data.get("user_token")
+                new_token = data.get("user_token") or settings.default_user_token
                 # Validate token signature if OIDC is enabled to prevent
                 # mid-session identity spoofing via a crafted JWT swap.
                 # Run in a thread to avoid blocking the event loop on JWKS I/O.
