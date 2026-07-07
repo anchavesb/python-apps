@@ -39,7 +39,15 @@ DEFAULT_SYSTEM_PROMPT = (
 
 def get_system_prompt(model: str | None) -> str:
     """Return the system prompt with model-specific persona adjustments."""
+    import datetime
+
+    # Get current time based on local timezone of the container
+    now = datetime.datetime.now()
+    current_time_str = now.strftime("%A, %B %d, %Y %I:%M %p")
+
     prompt = DEFAULT_SYSTEM_PROMPT
+    prompt += f"\n\nCURRENT TIME: {current_time_str}\n"
+
     if not model:
         return prompt
 
