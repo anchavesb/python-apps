@@ -187,11 +187,7 @@ async def chat(
     await store.append(conv_id, "assistant", assistant_msg, tool_calls=tool_calls or None)
 
     if not tool_calls:
-        import inspect
-
-        res = store.cleanup_intermediate_messages(conv_id)
-        if inspect.isawaitable(res):
-            await res
+        await store.cleanup_intermediate_messages(conv_id)
 
     elapsed_ms = int((time.monotonic() - start) * 1000)
     usage = None
@@ -260,11 +256,7 @@ async def chat_stream(
 
             # Store full response
             await store.append(conv_id, "assistant", full_text)
-            import inspect
-
-            res = store.cleanup_intermediate_messages(conv_id)
-            if inspect.isawaitable(res):
-                await res
+            await store.cleanup_intermediate_messages(conv_id)
 
             log.info(
                 "chat_stream_complete",

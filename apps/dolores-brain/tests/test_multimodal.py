@@ -86,6 +86,7 @@ def mock_store():
     store.create = AsyncMock(return_value="test-conv-id")
     store.get_history = AsyncMock(return_value=[])
     store.append = AsyncMock()
+    store.cleanup_intermediate_messages = AsyncMock()
     return store
 
 

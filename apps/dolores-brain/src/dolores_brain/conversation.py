@@ -102,6 +102,8 @@ class ConversationStore:
         await self._db.execute(
             "DELETE FROM messages WHERE conversation_id = ? AND ("
             "  tool_calls IS NOT NULL OR "
+            "  tool_call_id IS NOT NULL OR "
+            "  role = 'tool' OR "
             "  content LIKE 'I have retrieved the following real-time information%'"
             ")",
             (conversation_id,),
