@@ -105,6 +105,23 @@ async def text_chat(
     try:
         intent_name, tool_filter, _ = classify_intent(req.message)
 
+        if intent_name == "generate_image":
+            try:
+                image_bytes = await client.generate_image(req.message, width=512, height=512)
+            except Exception as e:
+                log.error("generate_image_endpoint_failed", error=str(e))
+                image_bytes = None
+
+            if image_bytes:
+                image_b64 = base64.b64encode(image_bytes).decode()
+                full_text = f"Generating your image...\n\n![Generated Image](data:image/png;base64,{image_b64})"
+            else:
+                full_text = "I wasn't able to generate the image."
+            return TextChatResponse(
+                message=full_text,
+                conversation_id=req.conversation_id or str(uuid.uuid4()),
+            )
+
         require_token = intent_name not in _NO_TOKEN_INTENTS
 
         result = await run_tool_loop(
@@ -548,7 +565,12 @@ async def _process_and_respond(
 
     if intent_name == "generate_image":
         await websocket.send_json({"type": "response.text", "content": "Generating your image..."})
-        image_bytes = await client.generate_image(user_text, width=512, height=512)
+        try:
+            image_bytes = await client.generate_image(user_text, width=512, height=512)
+        except Exception as e:
+            log.error("ws_generate_image_failed", error=str(e))
+            image_bytes = None
+
         if image_bytes:
             image_b64 = base64.b64encode(image_bytes).decode()
             await websocket.send_json(

@@ -9,6 +9,7 @@ to INTENT_EXAMPLES.
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 import numpy as np
@@ -18,6 +19,21 @@ from tokenizers import Tokenizer
 from dolores_common.logging import get_logger
 
 log = get_logger(__name__)
+
+# Precompiled regex patterns for intent classification preprocessing & shortcuts
+_RE_PREFIX_DOLORES = re.compile(r"^(dolores)[,\s]+", re.IGNORECASE)
+_RE_PREFIX_CONV = re.compile(r"^(can\s+you|could\s+you|would\s+you|please)[,\s]+", re.IGNORECASE)
+
+_IMAGE_GEN_PATTERNS = [
+    re.compile(
+        r"^(generate|create|make)\s+(an?\s+)?(image|photo|picture|artwork|landscape|portrait|sketch|painting|illustration|drawing|visual|graphic|canvas|scene)(\s+of)?",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"^(draw|paint|illustrate|sketch)\s+(me\s+)?(an?\s+)?(image|photo|picture|artwork|sketch|painting|illustration|drawing|visual|graphic|canvas|scene)?(\s+of)?",
+        re.IGNORECASE,
+    ),
+]
 
 # Map: intent label → (tool_filter set, example phrases)
 INTENT_EXAMPLES: dict[str, tuple[set[str], list[str]]] = {
@@ -282,7 +298,17 @@ def classify_intent(message: str) -> tuple[str | None, set[str] | None, float]:
     _ensure_loaded()
     assert _intent_examples_embeddings is not None
 
-    msg_embedding = _encode([message])[0]
+    # Clean message by stripping common prefix wake-words
+    cleaned = message.strip()
+    cleaned = _RE_PREFIX_DOLORES.sub("", cleaned).strip()
+    cleaned = _RE_PREFIX_CONV.sub("", cleaned).strip()
+
+    # Direct regex check for image generation to avoid semantic similarity dilution
+    if any(p.match(cleaned) for p in _IMAGE_GEN_PATTERNS):
+        log.info("intent_classified_via_regex", message=message[:80], intent="generate_image")
+        return "generate_image", {"generate_image"}, 1.0
+
+    msg_embedding = _encode([cleaned])[0]
 
     # Collect top-K scores per intent, use their mean as the intent score
     best_intent = None
