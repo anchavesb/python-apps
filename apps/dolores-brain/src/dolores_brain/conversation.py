@@ -47,7 +47,8 @@ class ConversationStore:
 
     async def init(self) -> None:
         """Open the database and create tables."""
-        self._db = await aiosqlite.connect(self._db_path)
+        self._db = await aiosqlite.connect(self._db_path, timeout=30.0)
+        await self._db.execute("PRAGMA journal_mode=WAL;")
         await self._db.execute(_CREATE_TABLE)
         await self._db.execute(_CREATE_MESSAGES_TABLE)
         await self._db.execute(_CREATE_INDEX)

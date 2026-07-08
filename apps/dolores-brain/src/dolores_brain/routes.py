@@ -245,6 +245,8 @@ async def chat_stream(
         kwargs["tools"] = req.tools
 
     async def generate():
+        import asyncio
+
         full_text = ""
         try:
             response = await litellm.acompletion(**kwargs)
@@ -256,7 +258,6 @@ async def chat_stream(
 
             # Store full response
             await store.append(conv_id, "assistant", full_text)
-            await store.cleanup_intermediate_messages(conv_id)
 
             log.info(
                 "chat_stream_complete",
@@ -267,9 +268,15 @@ async def chat_stream(
 
             yield f"data: {json.dumps({'type': 'done', 'content': full_text, 'conversation_id': conv_id, 'provider': provider, 'model': model_str})}\n\n"
 
+        except asyncio.CancelledError:
+            if full_text:
+                await store.append(conv_id, "assistant", full_text + " [Disconnected]")
+            raise
         except Exception as e:
             log.error("stream_error", provider=provider, model=model_str, error=str(e))
             yield f"data: {json.dumps({'type': 'error', 'error': str(e)})}\n\n"
+        finally:
+            await store.cleanup_intermediate_messages(conv_id)
 
     return StreamingResponse(generate(), media_type="text/event-stream")
 
