@@ -65,9 +65,10 @@ class FLUXProvider(ImageGenProvider):
         )
 
         if device.type == "cuda":
-            # Model-level CPU offload: moves whole sub-models (text encoder, UNet, VAE)
-            # to CPU between steps. Preserves quality vs sequential offload, and is faster.
-            self._pipeline.enable_model_cpu_offload()
+            # Sequential CPU offload: keep model weights in RAM, stream each
+            # sub-module/layer to GPU only when needed. Required for FLUX (24 GB)
+            # to run on a 10.9 GB GPU, keeping VRAM usage under 4 GB.
+            self._pipeline.enable_sequential_cpu_offload()
         else:
             self._pipeline = self._pipeline.to(device)
 
