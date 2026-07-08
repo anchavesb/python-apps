@@ -63,17 +63,16 @@ class FLUXProvider(ImageGenProvider):
         )
 
         if device.type == "cuda":
-            # Sequential CPU offload: keep model weights in RAM, stream each
-            # sub-module to GPU only when needed. Largest VRAM saving available
-            # without quantisation — cuts peak usage by ~50% vs full on-GPU load.
-            self._pipeline.enable_sequential_cpu_offload()
+            # Model-level CPU offload: moves whole sub-models (text encoder, UNet, VAE)
+            # to CPU between steps. Preserves quality vs sequential offload, and is faster.
+            self._pipeline.enable_model_cpu_offload()
         else:
             self._pipeline = self._pipeline.to(device)
 
-        # Slice attention computation to reduce peak VRAM during inference
+        # Slice attention into chunks to reduce peak VRAM — no visible quality impact.
+        # VAE slicing is intentionally omitted: it decodes in strips which can
+        # produce seam artifacts at tile boundaries.
         self._pipeline.enable_attention_slicing()
-        # Decode the VAE in tiles to avoid a large VRAM spike at decode time
-        self._pipeline.enable_vae_slicing()
 
         log.info("flux_model_loaded", elapsed_seconds=round(time.monotonic() - start, 2))
 

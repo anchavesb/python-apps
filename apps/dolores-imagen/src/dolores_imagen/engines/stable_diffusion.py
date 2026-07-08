@@ -59,14 +59,17 @@ class StableDiffusionProvider(ImageGenProvider):
         self._pipeline = StableDiffusionPipeline.from_pretrained(self._model_id, torch_dtype=dtype)
 
         if device.type == "cuda":
-            # Sequential CPU offload keeps weights in RAM, streams to GPU on demand
-            self._pipeline.enable_sequential_cpu_offload()
+            # Model-level CPU offload: moves whole sub-models (text encoder, UNet, VAE)
+            # to CPU between steps rather than individual layers. Uses ~1 GB more VRAM
+            # than sequential offload but preserves output quality and is faster.
+            self._pipeline.enable_model_cpu_offload()
         else:
             self._pipeline = self._pipeline.to(device)
 
-        # Slice attention and VAE to reduce peak VRAM during inference
+        # Slice attention into chunks to reduce peak VRAM — no visible quality impact.
+        # VAE slicing is intentionally omitted: it decodes in strips which can
+        # produce seam artifacts at tile boundaries.
         self._pipeline.enable_attention_slicing()
-        self._pipeline.vae.enable_slicing()  # enable_vae_slicing() is deprecated in diffusers 0.40+
 
         log.info("sd_model_loaded", elapsed_seconds=round(time.monotonic() - start, 2))
 
