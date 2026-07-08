@@ -56,7 +56,12 @@ class StableDiffusionProvider(ImageGenProvider):
         log.info("loading_sd_model", model_id=self._model_id, device=str(device))
         start = time.monotonic()
 
-        self._pipeline = StableDiffusionPipeline.from_pretrained(self._model_id, torch_dtype=dtype)
+        local_files_only = os.environ.get("HF_HUB_OFFLINE", "0") == "1" or os.environ.get("TRANSFORMERS_OFFLINE", "0") == "1"
+        self._pipeline = StableDiffusionPipeline.from_pretrained(
+            self._model_id,
+            torch_dtype=dtype,
+            local_files_only=local_files_only,
+        )
 
         if device.type == "cuda":
             # Model-level CPU offload: moves whole sub-models (text encoder, UNet, VAE)

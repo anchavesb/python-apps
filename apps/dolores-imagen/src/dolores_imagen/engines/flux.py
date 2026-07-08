@@ -57,9 +57,11 @@ class FLUXProvider(ImageGenProvider):
         log.info("loading_flux_model", model_id=self._model_id, device=str(device))
         start = time.monotonic()
 
+        local_files_only = os.environ.get("HF_HUB_OFFLINE", "0") == "1" or os.environ.get("TRANSFORMERS_OFFLINE", "0") == "1"
         self._pipeline = FluxPipeline.from_pretrained(
             self._model_id,
             torch_dtype=dtype,
+            local_files_only=local_files_only,
         )
 
         if device.type == "cuda":
