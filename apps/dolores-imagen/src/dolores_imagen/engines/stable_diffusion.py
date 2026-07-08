@@ -66,7 +66,7 @@ class StableDiffusionProvider(ImageGenProvider):
 
         # Slice attention and VAE to reduce peak VRAM during inference
         self._pipeline.enable_attention_slicing()
-        self._pipeline.enable_vae_slicing()
+        self._pipeline.vae.enable_slicing()  # enable_vae_slicing() is deprecated in diffusers 0.40+
 
         log.info("sd_model_loaded", elapsed_seconds=round(time.monotonic() - start, 2))
 
