@@ -565,7 +565,12 @@ async def _process_and_respond(
 
     if intent_name == "generate_image":
         await websocket.send_json({"type": "response.text", "content": "Generating your image..."})
-        image_bytes = await client.generate_image(user_text, width=512, height=512)
+        try:
+            image_bytes = await client.generate_image(user_text, width=512, height=512)
+        except Exception as e:
+            log.error("ws_generate_image_failed", error=str(e))
+            image_bytes = None
+
         if image_bytes:
             image_b64 = base64.b64encode(image_bytes).decode()
             await websocket.send_json(
