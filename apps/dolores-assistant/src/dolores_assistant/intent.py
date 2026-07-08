@@ -282,7 +282,11 @@ def classify_intent(message: str) -> tuple[str | None, set[str] | None, float]:
     _ensure_loaded()
     assert _intent_examples_embeddings is not None
 
-    msg_embedding = _encode([message])[0]
+    import re
+
+    cleaned = re.sub(r"^(dolores)[,\s]+(please\s+)?", "", message, flags=re.IGNORECASE).strip()
+
+    msg_embedding = _encode([cleaned])[0]
 
     # Collect top-K scores per intent, use their mean as the intent score
     best_intent = None
