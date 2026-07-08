@@ -284,7 +284,19 @@ def classify_intent(message: str) -> tuple[str | None, set[str] | None, float]:
 
     import re
 
-    cleaned = re.sub(r"^(dolores)[,\s]+(please\s+)?", "", message, flags=re.IGNORECASE).strip()
+    # Clean message by stripping common prefix wake-words
+    cleaned = message.strip()
+    cleaned = re.sub(r"^(dolores)[,\s]+", "", cleaned, flags=re.IGNORECASE).strip()
+    cleaned = re.sub(r"^(can\s+you|could\s+you|would\s+you|please)[,\s]+", "", cleaned, flags=re.IGNORECASE).strip()
+
+    # Direct regex check for image generation to avoid semantic similarity dilution
+    gen_patterns = [
+        r"^(generate|create|make)\s+(an?\s+)?(image|photo|picture|artwork|landscape|portrait|sketch|painting|illustration|drawing|visual|graphic|canvas|scene)(\s+of)?",
+        r"^(draw|paint|illustrate|sketch)\s+(me\s+)?(an?\s+)?(image|photo|picture|artwork|sketch|painting|illustration|drawing|visual|graphic|canvas|scene)?(\s+of)?",
+    ]
+    if any(re.match(p, cleaned, re.IGNORECASE) for p in gen_patterns):
+        log.info("intent_classified_via_regex", message=message[:80], intent="generate_image")
+        return "generate_image", {"generate_image"}, 1.0
 
     msg_embedding = _encode([cleaned])[0]
 
