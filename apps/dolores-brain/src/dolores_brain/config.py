@@ -28,7 +28,7 @@ class BrainConfig:
     temperature: float = float(get_env("DEFAULT_TEMPERATURE", "0.7"))
 
     # Conversation history window (number of recent messages to send to LLM)
-    max_history_messages: int = get_env_int("MAX_HISTORY_MESSAGES", 20)
+    max_history_messages: int = get_env_int("MAX_HISTORY_MESSAGES", 10)
 
     # SQLite for conversations
     db_path: str = get_env("BRAIN_DB_PATH", "data/conversations.db")

@@ -47,7 +47,8 @@ class ConversationStore:
 
     async def init(self) -> None:
         """Open the database and create tables."""
-        self._db = await aiosqlite.connect(self._db_path)
+        self._db = await aiosqlite.connect(self._db_path, timeout=30.0)
+        await self._db.execute("PRAGMA journal_mode=WAL;")
         await self._db.execute(_CREATE_TABLE)
         await self._db.execute(_CREATE_MESSAGES_TABLE)
         await self._db.execute(_CREATE_INDEX)
@@ -94,6 +95,19 @@ class ConversationStore:
         await self._db.execute(
             "UPDATE conversations SET updated_at = ? WHERE id = ?",
             (now, conversation_id),
+        )
+        await self._db.commit()
+
+    async def cleanup_intermediate_messages(self, conversation_id: str) -> None:
+        """Remove intermediate tool calls and tool results from the conversation history."""
+        await self._db.execute(
+            "DELETE FROM messages WHERE conversation_id = ? AND ("
+            "  tool_calls IS NOT NULL OR "
+            "  tool_call_id IS NOT NULL OR "
+            "  role = 'tool' OR "
+            "  content LIKE 'I have retrieved the following real-time information%'"
+            ")",
+            (conversation_id,),
         )
         await self._db.commit()
 

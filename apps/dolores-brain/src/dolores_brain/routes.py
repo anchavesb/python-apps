@@ -186,6 +186,9 @@ async def chat(
     # Store assistant response
     await store.append(conv_id, "assistant", assistant_msg, tool_calls=tool_calls or None)
 
+    if not tool_calls:
+        await store.cleanup_intermediate_messages(conv_id)
+
     elapsed_ms = int((time.monotonic() - start) * 1000)
     usage = None
     if response.usage:
@@ -242,6 +245,8 @@ async def chat_stream(
         kwargs["tools"] = req.tools
 
     async def generate():
+        import asyncio
+
         full_text = ""
         try:
             response = await litellm.acompletion(**kwargs)
@@ -263,9 +268,15 @@ async def chat_stream(
 
             yield f"data: {json.dumps({'type': 'done', 'content': full_text, 'conversation_id': conv_id, 'provider': provider, 'model': model_str})}\n\n"
 
+        except asyncio.CancelledError:
+            if full_text:
+                await store.append(conv_id, "assistant", full_text + " [Disconnected]")
+            raise
         except Exception as e:
             log.error("stream_error", provider=provider, model=model_str, error=str(e))
             yield f"data: {json.dumps({'type': 'error', 'error': str(e)})}\n\n"
+        finally:
+            await store.cleanup_intermediate_messages(conv_id)
 
     return StreamingResponse(generate(), media_type="text/event-stream")
 
