@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import io
+import os
 import time
 
 from dolores_common.logging import get_logger
@@ -10,6 +11,9 @@ from dolores_common.logging import get_logger
 from ..engine import ImageGenProvider
 
 log = get_logger(__name__)
+
+# Reduce CUDA memory fragmentation — must be set before torch initializes
+os.environ.setdefault("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")
 
 
 class StableDiffusionProvider(ImageGenProvider):
@@ -52,21 +56,53 @@ class StableDiffusionProvider(ImageGenProvider):
         log.info("loading_sd_model", model_id=self._model_id, device=str(device))
         start = time.monotonic()
 
-        self._pipeline = StableDiffusionPipeline.from_pretrained(self._model_id, torch_dtype=dtype)
-        self._pipeline = self._pipeline.to(device)
+        local_files_only = os.environ.get("HF_HUB_OFFLINE", "0") == "1" or os.environ.get("TRANSFORMERS_OFFLINE", "0") == "1"
+        self._pipeline = StableDiffusionPipeline.from_pretrained(
+            self._model_id,
+            torch_dtype=dtype,
+            local_files_only=local_files_only,
+        )
+
+        if device.type == "cuda":
+            # Model-level CPU offload: moves whole sub-models (text encoder, UNet, VAE)
+            # to CPU between steps rather than individual layers. Uses ~1 GB more VRAM
+            # than sequential offload but preserves output quality and is faster.
+            self._pipeline.enable_model_cpu_offload()
+        else:
+            self._pipeline = self._pipeline.to(device)
+
+        # Slice attention into chunks to reduce peak VRAM — no visible quality impact.
+        # VAE slicing is intentionally omitted: it decodes in strips which can
+        # produce seam artifacts at tile boundaries.
+        self._pipeline.enable_attention_slicing()
 
         log.info("sd_model_loaded", elapsed_seconds=round(time.monotonic() - start, 2))
 
     def generate(self, prompt: str, width: int = 512, height: int = 512) -> bytes:
         """Generate image synchronously. Intended to be called via asyncio.to_thread()."""
+        import torch
+
         if self._pipeline is None:
             raise RuntimeError("StableDiffusionProvider not loaded; call load() first")
 
-        image = self._pipeline(
-            prompt=prompt,
-            height=height,
-            width=width,
-        ).images[0]
+        try:
+            image = self._pipeline(
+                prompt=prompt,
+                height=height,
+                width=width,
+            ).images[0]
+        except torch.OutOfMemoryError:
+            log.warning("sd_oom_clearing_cache_and_retrying")
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+            image = self._pipeline(
+                prompt=prompt,
+                height=height,
+                width=width,
+            ).images[0]
+        finally:
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
 
         buf = io.BytesIO()
         image.save(buf, format="PNG")
