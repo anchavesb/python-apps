@@ -58,8 +58,13 @@ def login():
         flash("Authentication is not enabled", "warning")
         return redirect(url_for("web.index"))
 
-    redirect_uri = url_for("auth.callback", _external=True)
-    return oauth.authentik.authorize_redirect(redirect_uri)
+    try:
+        redirect_uri = url_for("auth.callback", _external=True)
+        return oauth.authentik.authorize_redirect(redirect_uri)
+    except Exception as e:
+        current_app.logger.error(f"OIDC login error: {e}")
+        flash("Failed to connect to authentication server. Please check your connection to Authentik.", "danger")
+        return redirect(url_for("web.index"))
 
 
 @auth_bp.route("/callback")
