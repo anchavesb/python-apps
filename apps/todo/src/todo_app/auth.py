@@ -61,8 +61,8 @@ def login():
     try:
         redirect_uri = url_for("auth.callback", _external=True)
         return oauth.authentik.authorize_redirect(redirect_uri)
-    except Exception as e:
-        current_app.logger.error(f"OIDC login error: {e}")
+    except Exception:
+        current_app.logger.exception("OIDC login error")
         flash("Failed to connect to authentication server. Please check your connection to Authentik.", "danger")
         return redirect(url_for("web.index"))
 
@@ -89,8 +89,8 @@ def callback():
         next_url = session.pop("next_url", None)
         return redirect(next_url or url_for("web.index"))
 
-    except Exception as e:
-        current_app.logger.error(f"OIDC callback error: {e}")
+    except Exception:
+        current_app.logger.exception("OIDC callback error")
         flash("Authentication failed. Please try again.", "danger")
         return redirect(url_for("web.index"))
 
